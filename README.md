@@ -59,3 +59,12 @@ Chi tiết: `TASK.md` (wave/lane, test viết trước) và `RULES.md` §2 (quy�
 3. Lane chỉ sửa file thuộc phần "Sở hữu" (`scripts/lane-owners.json`) cộng factory bổ sung `apps/api/test/factories/<lane-id viết thường>.extra.ts` (chuẩn: `l-classes.extra.ts`; chấp nhận cả `classes.extra.ts`) cộng `TASK.md`, `docs/DECISIONS.md`, `docs/QUESTIONS.md`, `docs/contract-requests/**`. Cần đổi hợp đồng/dependency: viết `docs/contract-requests/<lane>-<n>.md`.
 4. Trước khi báo xong: rebase lên `main`, chạy `scripts/merge-gate.sh <lane>` (ownership + install/lint/typecheck/test/e2e). Chỉ kiểm tra ownership: `scripts/merge-gate.sh <lane> --ownership-only` (đổi nhánh gốc bằng `MERGE_BASE`).
 5. Lead review và merge; wave kế tiếp bắt đầu khi merge gate xanh.
+
+## Dữ liệu demo (chỉ dùng cho dev)
+
+```bash
+pnpm --filter api seed:demo          # tạo nếu chưa có
+pnpm --filter api seed:demo --reset  # xóa dữ liệu (giữ tài khoản ADMIN) rồi tạo lại
+```
+
+Mật khẩu chung `Password1`: `manager@center.local`, `staff1@center.local`, `staff2@center.local`, `teacher1..5@center.local`, học viên `HV202600001`…`HV202600060`. Gồm 3 khóa, 6 phòng, 8 lớp (đang học / chờ mở / đã kết thúc), ~200 buổi học, điểm danh và điểm cho buổi đã qua, hóa đơn đủ trạng thái, 15 lead, 1 đợt kiểm tra đầu vào, vài thông báo. Script ghi thẳng vào DB (không qua service); bản seed chính thức qua service là việc của W3-L3.

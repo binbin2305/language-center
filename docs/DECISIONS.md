@@ -83,3 +83,5 @@ Roles: A=ADMIN, M=MANAGER, S=ACADEMIC_STAFF, T=TEACHER, H=STUDENT. Lanes edit on
 | `/students/:id` | audit (Lịch sử thay đổi) | M, S | `students/components/student-audit-tab.tsx` |
 
 Notification `refType` -> target mapping lives in `features/notifications/notification-target.ts` (CLASS, SESSION, STUDENT, INVOICE, ASSESSMENT mapped; ENROLLMENT, PLACEMENT_TEST, PAYMENT and unknown values stay on the page). Lanes emit `NotificationRefType` values and add a route case there via contract request.
+
+- **Khóa CounterService (sinh mã):** `student:<YYYY>` → `HV<YYYY><5 số>`, `invoice:<YYYYMM>` → `HD<YYYYMM><4 số>`, `payment:<YYYYMM>` → `PT<YYYYMM><4 số>`. `seed:demo` nâng các bộ đếm này bằng `$max` để service tiếp tục sau mã demo.
