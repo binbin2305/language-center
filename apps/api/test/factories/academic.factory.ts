@@ -14,7 +14,7 @@ export async function makeClass(conn: Connection, p: Partial<Class> = {}): Promi
   const courseId = p.courseId ?? (await makeCourse(conn))._id;
   const teacherId = p.teacherId ?? (await makeTeacher(conn))._id;
   return models(conn).Class.create({
-    code: `CLS-${n}`,
+    code: `F-CLS-${n}`,
     name: `Class ${n}`,
     courseId,
     level: 'A1',

@@ -8,7 +8,7 @@ import { makeUser } from './user.factory';
 export async function makeCourse(conn: Connection, p: Partial<Course> = {}): Promise<CourseDoc> {
   const n = seq();
   return models(conn).Course.create({
-    code: `CRS-${n}`,
+    code: `F-CRS-${n}`,
     name: `Course ${n}`,
     language: 'Tiếng Anh',
     levels: ['A1', 'A2', 'B1'],
@@ -20,7 +20,7 @@ export async function makeCourse(conn: Connection, p: Partial<Course> = {}): Pro
 
 export async function makeRoom(conn: Connection, p: Partial<Room> = {}): Promise<RoomDoc> {
   const n = seq();
-  return models(conn).Room.create({ code: `R${n}`, name: `Room ${n}`, capacity: 20, ...p });
+  return models(conn).Room.create({ code: `F-R${n}`, name: `Room ${n}`, capacity: 20, ...p });
 }
 
 export async function makeLead(conn: Connection, p: Partial<Lead> = {}): Promise<LeadDoc> {

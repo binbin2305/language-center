@@ -11,7 +11,7 @@ export async function makeInvoice(conn: Connection, p: Partial<Invoice> = {}): P
   const n = seq();
   const kind = p.kind ?? InvoiceKind.TUITION;
   const studentId = p.studentId ?? (await makeStudent(conn))._id;
-  const base = { code: `HD202601${String(n).padStart(4, '0')}`, kind, studentId, dueDate: new Date('2026-01-12T00:00:00+07:00') };
+  const base = { code: `HD199901${String(n).padStart(4, '0')}`, kind, studentId, dueDate: new Date('2026-01-12T00:00:00+07:00') };
   if (kind === InvoiceKind.SURCHARGE) {
     const amountDue = p.amountDue ?? 200_000;
     const finalAmount = p.finalAmount ?? amountDue;
@@ -52,7 +52,7 @@ export async function makePayment(conn: Connection, p: Partial<Payment> = {}): P
   const invoice = p.invoiceId ? await models(conn).Invoice.findById(p.invoiceId) : await makeInvoice(conn);
   if (!invoice) throw new Error('makePayment: invoice not found');
   return models(conn).Payment.create({
-    code: `PT202601${String(n).padStart(4, '0')}`,
+    code: `PT199901${String(n).padStart(4, '0')}`,
     invoiceId: invoice._id,
     studentId: invoice.studentId,
     amount: 1_000_000,

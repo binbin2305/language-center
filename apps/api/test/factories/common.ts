@@ -15,7 +15,11 @@ import type { Session } from '../../src/database/schemas/session.schema';
 import type { Student } from '../../src/database/schemas/student.schema';
 import type { User } from '../../src/database/schemas/user.schema';
 
-/** Module-level counter used to generate unique codes, phones and emails. */
+/**
+ * Module-level counter used to generate unique codes, phones and emails.
+ * Factory codes live in a namespace services never generate (year 1999: HV1999…, HD199901…, PT199901…;
+ * class/course/room codes prefixed `F-`), so they cannot collide with CounterService codes.
+ */
 let counter = 0;
 export function seq(): number {
   return ++counter;

@@ -11,7 +11,7 @@ export async function makeStudent(
   const { withUser, ...rest } = p;
   const n = seq();
   const _id = new Types.ObjectId();
-  const code = rest.code ?? `HV2026${String(n).padStart(5, '0')}`;
+  const code = rest.code ?? `HV1999${String(n).padStart(5, '0')}`;
   const userId = rest.userId ?? (withUser ? new Types.ObjectId() : undefined);
   const student = await models(conn).Student.create({
     _id,
