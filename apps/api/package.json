@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "nest start --watch",
-    "build": "nest build",
+    "build": "pnpm --filter @lc/shared build && nest build",
     "start": "node dist/main",
     "test": "jest --passWithNoTests",
     "test:e2e": "jest --config jest-e2e.config.ts --runInBand",

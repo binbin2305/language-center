@@ -6,7 +6,10 @@
     "experimentalDecorators": true,
     "incremental": true,
     "noEmit": false,
-    "types": ["node", "jest"]
+    "types": ["node", "jest"],
+    "baseUrl": ".",
+    // Dev/test resolve @lc/shared from source; tsconfig.build.json resets this so `nest build` uses dist.
+    "paths": { "@lc/shared": ["../../packages/shared/src"] }
   },
   "include": ["src", "test", "scripts", "jest.config.ts", "jest-e2e.config.ts"]
 }

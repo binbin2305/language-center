@@ -1,1 +1,7 @@
-{ "extends": "./tsconfig.json", "include": ["src"], "exclude": ["node_modules", "dist", "test", "**/*spec.ts"] }
+{
+  "extends": "./tsconfig.json",
+  // No `paths`: the production build resolves @lc/shared through node_modules (its built dist), never inlining source.
+  "compilerOptions": { "paths": {} },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+}

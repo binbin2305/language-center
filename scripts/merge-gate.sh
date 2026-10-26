@@ -65,6 +65,7 @@ if [ "$OWNERSHIP_ONLY" = 1 ]; then exit 0; fi
 
 cd "$ROOT"
 pnpm i --frozen-lockfile
+pnpm --filter @lc/shared build
 pnpm lint
 pnpm typecheck
 pnpm test

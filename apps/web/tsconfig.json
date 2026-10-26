@@ -7,7 +7,7 @@
     "jsx": "react-jsx",
     "strict": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
+    "paths": { "@/*": ["src/*"], "@lc/shared": ["../../packages/shared/src"] },
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,

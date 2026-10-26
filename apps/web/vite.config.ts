@@ -5,7 +5,13 @@ import path from 'node:path';
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
+  resolve: {
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, 'src') },
+      // Bundle @lc/shared from source (dev, test and build) so a fresh checkout needs no prebuilt dist.
+      { find: /^@lc\/shared$/, replacement: path.resolve(__dirname, '../../packages/shared/src/index.ts') },
+    ],
+  },
   server: { port: 5173, proxy: { '/api': 'http://localhost:3000' } },
   test: {
     environment: 'jsdom',
