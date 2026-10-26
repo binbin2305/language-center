@@ -28,7 +28,7 @@ check_ownership() {
   cd "$ROOT"
   git rev-parse --verify -q "$ref" >/dev/null || { echo "branch $ref not found" >&2; exit 2; }
   git rev-parse --verify -q "$base" >/dev/null || { echo "base $base not found" >&2; exit 2; }
-  git diff --name-only "$base...$ref" | LANE="$LANE" OWNERS="$ROOT/scripts/lane-owners.json" node -e '
+  git diff --name-only --no-renames -z "$base...$ref" | LANE="$LANE" OWNERS="$ROOT/scripts/lane-owners.json" node -e '
     const fs = require("fs");
     const owners = JSON.parse(fs.readFileSync(process.env.OWNERS, "utf8"));
     const lane = process.env.LANE;
@@ -49,7 +49,7 @@ check_ownership() {
     };
     const pos = [...ALWAYS, ...globs.filter((g) => !g.startsWith("!"))].map(toRe);
     const neg = globs.filter((g) => g.startsWith("!")).map((g) => toRe(g.slice(1)));
-    const files = fs.readFileSync(0, "utf8").split("\n").filter(Boolean);
+    const files = fs.readFileSync(0, "utf8").split("\0").filter(Boolean);
     const bad = files.filter((f) => !pos.some((r) => r.test(f)) || neg.some((r) => r.test(f)));
     if (bad.length) {
       console.error("Ownership violations for " + lane + ":");

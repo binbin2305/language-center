@@ -17,15 +17,18 @@
     "apps/web/src/features/courses/**",
     "apps/web/src/features/rooms/**",
     "apps/web/src/features/settings/**",
-    "apps/api/test/factories/l-catalog.extra.ts"
+    "apps/api/test/factories/l-catalog.extra.ts",
+    "apps/api/test/factories/catalog.extra.ts"
   ],
   "L-ADMISSIONS": [
+    "apps/web/test/msw/students.handlers.ts",
     "apps/api/src/modules/admissions/**",
     "apps/api/test/e2e/admissions*.e2e-spec.ts",
     "apps/web/test/msw/admissions.handlers.ts",
     "apps/web/src/features/admissions/**",
     "apps/web/src/features/students/**",
     "apps/api/test/factories/l-admissions.extra.ts",
+    "apps/api/test/factories/admissions.extra.ts",
     "!apps/web/src/features/admissions/pages/placement-*"
   ],
   "L-CLASSES": [
@@ -33,14 +36,16 @@
     "apps/api/test/e2e/classes*.e2e-spec.ts",
     "apps/web/test/msw/classes.handlers.ts",
     "apps/web/src/features/classes/**",
-    "apps/api/test/factories/l-classes.extra.ts"
+    "apps/api/test/factories/l-classes.extra.ts",
+    "apps/api/test/factories/classes.extra.ts"
   ],
   "L-SCHEDULE": [
     "apps/api/src/modules/schedule/**",
     "apps/api/test/e2e/schedule*.e2e-spec.ts",
     "apps/web/test/msw/schedule.handlers.ts",
     "apps/web/src/features/schedule/**",
-    "apps/api/test/factories/l-schedule.extra.ts"
+    "apps/api/test/factories/l-schedule.extra.ts",
+    "apps/api/test/factories/schedule.extra.ts"
   ],
   "L-ENROLL": [
     "apps/api/src/modules/enrollments/**",
@@ -52,6 +57,7 @@
     "apps/web/src/features/enrollments/**",
     "apps/web/src/features/placement/**",
     "apps/api/test/factories/l-enroll.extra.ts",
+    "apps/api/test/factories/enroll.extra.ts",
     "apps/web/src/features/admissions/pages/placement-*"
   ],
   "L-ATTENDANCE": [
@@ -59,44 +65,52 @@
     "apps/api/test/e2e/attendance*.e2e-spec.ts",
     "apps/web/test/msw/attendance.handlers.ts",
     "apps/web/src/features/attendance/**",
-    "apps/api/test/factories/l-attendance.extra.ts"
+    "apps/api/test/factories/l-attendance.extra.ts",
+    "apps/api/test/factories/attendance.extra.ts"
   ],
   "L-GRADES": [
     "apps/api/src/modules/grades/**",
     "apps/api/test/e2e/grades*.e2e-spec.ts",
     "apps/web/test/msw/grades.handlers.ts",
     "apps/web/src/features/grades/**",
-    "apps/api/test/factories/l-grades.extra.ts"
+    "apps/api/test/factories/l-grades.extra.ts",
+    "apps/api/test/factories/grades.extra.ts"
   ],
   "L-FEES": [
     "apps/api/src/modules/fees/**",
     "apps/api/test/e2e/fees*.e2e-spec.ts",
     "apps/web/test/msw/fees.handlers.ts",
     "apps/web/src/features/fees/**",
-    "apps/api/test/factories/l-fees.extra.ts"
+    "apps/api/test/factories/l-fees.extra.ts",
+    "apps/api/test/factories/fees.extra.ts"
   ],
   "L-REPORTS": [
+    "apps/web/test/msw/dashboard.handlers.ts",
     "apps/api/src/modules/reports/**",
     "apps/api/test/e2e/reports*.e2e-spec.ts",
     "apps/web/test/msw/reports.handlers.ts",
     "apps/web/src/features/reports/**",
     "apps/web/src/features/dashboard/**",
-    "apps/api/test/factories/l-reports.extra.ts"
+    "apps/api/test/factories/l-reports.extra.ts",
+    "apps/api/test/factories/reports.extra.ts"
   ],
   "L-STUDENT-PORTAL": [
     "apps/web/src/features/home/**",
     "apps/web/test/msw/home.handlers.ts",
     "apps/api/test/factories/l-student-portal.extra.ts",
+    "apps/api/test/factories/student-portal.extra.ts",
     "!apps/web/src/features/home/home-router.tsx"
   ],
   "L-E2E": [
     "e2e/**",
-    "apps/api/test/factories/l-e2e.extra.ts"
+    "apps/api/test/factories/l-e2e.extra.ts",
+    "apps/api/test/factories/e2e.extra.ts"
   ],
   "L-HARDENING": [
     "apps/api/test/security/**",
     "apps/api/test/perf/**",
     "docs/**",
-    "apps/api/test/factories/l-hardening.extra.ts"
+    "apps/api/test/factories/l-hardening.extra.ts",
+    "apps/api/test/factories/hardening.extra.ts"
   ]
 }

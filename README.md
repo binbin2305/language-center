@@ -50,6 +50,6 @@ Chi tiết: `TASK.md` (wave/lane, test viết trước) và `RULES.md` §2 (quy�
 
 1. Lead hoàn tất Wave 0 (nền móng, hợp đồng, auth, khung FE).
 2. Mỗi lane: `scripts/lane-start.sh <lane>` (vd `L-CLASSES`) tạo worktree `../lc-<lane>` trên nhánh `lane/<lane>`.
-3. Lane chỉ sửa file thuộc phần "Sở hữu" (`scripts/lane-owners.json`) cộng `TASK.md`, `docs/DECISIONS.md`, `docs/QUESTIONS.md`, `docs/contract-requests/**`. Cần đổi hợp đồng/dependency: viết `docs/contract-requests/<lane>-<n>.md`.
+3. Lane chỉ sửa file thuộc phần "Sở hữu" (`scripts/lane-owners.json`) cộng factory bổ sung `apps/api/test/factories/<lane-id viết thường>.extra.ts` (chuẩn: `l-classes.extra.ts`; chấp nhận cả `classes.extra.ts`) cộng `TASK.md`, `docs/DECISIONS.md`, `docs/QUESTIONS.md`, `docs/contract-requests/**`. Cần đổi hợp đồng/dependency: viết `docs/contract-requests/<lane>-<n>.md`.
 4. Trước khi báo xong: rebase lên `main`, chạy `scripts/merge-gate.sh <lane>` (ownership + install/lint/typecheck/test/e2e). Chỉ kiểm tra ownership: `scripts/merge-gate.sh <lane> --ownership-only` (đổi nhánh gốc bằng `MERGE_BASE`).
 5. Lead review và merge; wave kế tiếp bắt đầu khi merge gate xanh.

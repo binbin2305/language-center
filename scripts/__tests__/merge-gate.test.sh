@@ -77,5 +77,66 @@ git checkout -q lane/L-CLASSES
 set +e; OUT="$(MERGE_BASE=lane/L-CLASSES bash scripts/merge-gate.sh L-CLASSES --ownership-only 2>&1)"; RC=$?; set -e
 assert "MERGE_BASE override (empty diff passes)" 0 "$RC"
 
+# 7. rename from Lead-only path into owned path -> rejected (old path listed)
+git checkout -q main
+git checkout -q -b lane/L-CLASSES-MV
+mkdir -p apps/api/src/modules/classes
+git mv packages/shared/src/enums.ts apps/api/src/modules/classes/enums.ts
+git commit -qm "rename"
+git branch -q -f lane/L-CLASSES lane/L-CLASSES-MV
+run L-CLASSES --ownership-only
+assert "rename out of Lead path rejected" 1 "$RC"
+assert_contains "rename old path listed" "$OUT" "packages/shared/src/enums.ts"
+
+# 8. deletion of Lead-only file -> rejected
+git checkout -q main
+git checkout -q -b lane/L-GRADES
+git rm -q packages/shared/src/enums.ts
+git commit -qm "delete"
+run L-GRADES --ownership-only
+assert "delete of Lead-only file rejected" 1 "$RC"
+
+# 9. "!" exclusions
+git checkout -q main
+mkdir -p apps/web/src/features/admissions/pages apps/web/src/features/home
+echo a > apps/web/src/features/admissions/pages/placement-page.tsx
+echo a > apps/web/src/features/admissions/pages/leads-page.tsx
+echo a > apps/web/src/features/home/home-router.tsx
+git add -A && git commit -qm "web files"
+git checkout -q -b lane/L-ADMISSIONS
+echo b >> apps/web/src/features/admissions/pages/leads-page.tsx
+git commit -qam "leads ok"
+run L-ADMISSIONS --ownership-only
+assert "admissions may edit leads page" 0 "$RC"
+echo b >> apps/web/src/features/admissions/pages/placement-page.tsx
+git commit -qam "placement"
+run L-ADMISSIONS --ownership-only
+assert "admissions editing placement page rejected" 1 "$RC"
+git checkout -q main
+git checkout -q -b lane/L-STUDENT-PORTAL
+echo b >> apps/web/src/features/home/home-router.tsx
+git commit -qam "router"
+run L-STUDENT-PORTAL --ownership-only
+assert "student-portal editing home-router rejected" 1 "$RC"
+
+# 10. glob semantics: classes*.e2e-spec.ts must not match classes/x
+git checkout -q main
+git checkout -q -b lane/L-CLASSES-GLOB
+mkdir -p apps/api/test/e2e/classes
+echo z > apps/api/test/e2e/classes-list.e2e-spec.ts
+echo z > apps/api/test/e2e/classes/x.e2e-spec.ts
+git add -A && git commit -qm "globs"
+git branch -q -f lane/L-CLASSES lane/L-CLASSES-GLOB
+run L-CLASSES --ownership-only
+assert "nested e2e path rejected" 1 "$RC"
+assert_contains "nested listed" "$OUT" "apps/api/test/e2e/classes/x.e2e-spec.ts"
+assert_not_contains "flat e2e accepted" "$OUT" "classes-list.e2e-spec.ts"
+
+# 11. missing lane branch / base -> exit 2
+run L-SCHEDULE --ownership-only
+assert "missing lane branch exits 2" 2 "$RC"
+set +e; OUT="$(MERGE_BASE=nope bash scripts/merge-gate.sh L-CLASSES --ownership-only 2>&1)"; RC=$?; set -e
+assert "missing base exits 2" 2 "$RC"
+
 if [ "$FAILS" -ne 0 ]; then echo "$FAILS assertion(s) failed"; exit 1; fi
 echo "all merge-gate assertions passed"

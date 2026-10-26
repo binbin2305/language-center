@@ -5,6 +5,7 @@ STRICT=0
 [ "${1:-}" = "--strict" ] && STRICT=1
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+[ -f PRD.md ] || { echo "PRD.md not found in $ROOT" >&2; exit 2; }
 
 ALL="$(grep -oE 'FR-[A-Z]+-[0-9]+' PRD.md | sort -u)"
 COVERED="$(find . \( -name node_modules -o -name dist -o -name .git -o -name .superpowers \) -prune -o -type f \

@@ -30,9 +30,12 @@ jobs:
         run: pnpm test:scripts
       - name: Lane ownership (PRs from lane/* branches)
         if: startsWith(github.head_ref, 'lane/')
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git branch -f main origin/${{ github.base_ref }}
-          git branch -f "${{ github.head_ref }}" HEAD
-          bash scripts/merge-gate.sh "${GITHUB_HEAD_REF#lane/}" --ownership-only
+          git branch -f main "origin/$BASE_REF"
+          git branch -f "$HEAD_REF" HEAD
+          bash scripts/merge-gate.sh "${HEAD_REF#lane/}" --ownership-only
       - name: Merge gate (install, lint, typecheck, test, e2e)
         run: bash scripts/merge-gate.sh
