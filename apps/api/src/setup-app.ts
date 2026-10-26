@@ -1,9 +1,11 @@
 import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { HttpErrorFilter } from './common/filters/http-exception.filter';
 
 export function setupApp(app: INestApplication): void {
   app.setGlobalPrefix('api/v1');
+  app.useGlobalFilters(new HttpErrorFilter());
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({
