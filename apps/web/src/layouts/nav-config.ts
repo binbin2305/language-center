@@ -24,7 +24,7 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   roles: Role[];
-  /** Shown in the bottom navigation on mobile (max 5 per role). */
+  /** Shown in the bottom navigation on mobile (max 4 per role; the 5th slot is "Thêm"). */
   mobile?: boolean;
 }
 
@@ -64,7 +64,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   { to: '/fees', label: 'Học phí', icon: Banknote, roles: STAFF },
   { to: '/fees', label: 'Tra cứu học phí', icon: Banknote, roles: [TEACHER] },
-  { to: '/me/fees', label: 'Học phí của tôi', icon: Banknote, roles: [STUDENT], mobile: true },
+  { to: '/me/fees', label: 'Học phí của tôi', icon: Banknote, roles: [STUDENT] },
 
   { to: '/reports', label: 'Báo cáo', icon: BarChart3, roles: STAFF },
 

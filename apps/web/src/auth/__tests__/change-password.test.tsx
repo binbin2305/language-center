@@ -63,3 +63,13 @@ describe('đổi mật khẩu', () => {
     expect(await screen.findByRole('heading', { name: 'Hôm nay của tôi' })).toBeInTheDocument();
   });
 });
+
+describe('thoát khỏi đổi mật khẩu bắt buộc', () => {
+  it('có nút Đăng xuất đưa về /login', async () => {
+    server.use(http.post('*/api/v1/auth/logout', () => new HttpResponse(null, { status: 204 })));
+    const user = userEvent.setup();
+    renderApp({ route: '/change-password', user: forced });
+    await user.click(await screen.findByRole('button', { name: 'Đăng xuất' }));
+    expect(await screen.findByLabelText('Email hoặc mã học viên')).toBeInTheDocument();
+  });
+});

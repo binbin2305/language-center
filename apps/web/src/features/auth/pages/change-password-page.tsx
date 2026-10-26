@@ -38,7 +38,7 @@ const FormSchema = z
 type FormValues = z.infer<typeof FormSchema>;
 
 export default function ChangePasswordPage() {
-  const { user, applySession } = useAuth();
+  const { user, applySession, logout } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const form = useForm<FormValues>({
@@ -108,6 +108,9 @@ export default function ChangePasswordPage() {
         ))}
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
           Đổi mật khẩu
+        </Button>
+        <Button type="button" variant="ghost" className="w-full" onClick={() => void logout()}>
+          Đăng xuất
         </Button>
       </form>
     </Form>

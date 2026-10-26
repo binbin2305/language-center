@@ -164,3 +164,42 @@ describe('bảo vệ route', () => {
     );
   });
 });
+
+describe('đăng nhập khi boot đang tải', () => {
+  it('LoginPage hiện skeleton, không hiện form, khi status=loading', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    server.use(
+      http.post('*/api/v1/auth/refresh', async () => {
+        await gate;
+        return HttpResponse.json({ error: { code: 'UNAUTHENTICATED', message: 'x' } }, { status: 401 });
+      }),
+    );
+    renderApp({ route: '/login' });
+    expect(screen.getByRole('status', { name: 'Đang tải' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email hoặc mã học viên')).not.toBeInTheDocument();
+    release();
+    expect(await screen.findByLabelText('Email hoặc mã học viên')).toBeInTheDocument();
+  });
+
+  it('refresh thất bại giữa phiên chuyển về /login kèm return-to', async () => {
+    let calls = 0;
+    server.use(
+      http.get('*/api/v1/notifications', () =>
+        calls++ === 0
+          ? HttpResponse.json({ error: { code: 'UNAUTHENTICATED', message: 'x' } }, { status: 401 })
+          : HttpResponse.json({ data: [], meta: { page: 1, limit: 20, total: 0 } }),
+      ),
+      unauthenticated(),
+      http.post('*/api/v1/auth/login', () =>
+        HttpResponse.json({ data: { accessToken: 'tok', user: makeUser('MANAGER') } }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp({ route: '/notifications', user: makeUser('MANAGER') });
+    await user.type(await screen.findByLabelText('Email hoặc mã học viên'), 'm@center.local');
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Passw0rdx');
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+    expect(await screen.findByRole('heading', { name: 'Thông báo' })).toBeInTheDocument();
+  });
+});

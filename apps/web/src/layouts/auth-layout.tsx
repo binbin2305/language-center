@@ -1,8 +1,12 @@
 import { Outlet } from 'react-router-dom';
 import { GraduationCap } from 'lucide-react';
+import { useAuth } from '@/auth/use-auth';
+import { FullPageSkeleton } from '@/auth/require-role';
 
 /** Centered card layout for login and forced password change (no navigation). */
 export function AuthLayout() {
+  const { status } = useAuth();
+  if (status === 'loading') return <FullPageSkeleton />;
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
       <div className="w-full max-w-sm space-y-6">

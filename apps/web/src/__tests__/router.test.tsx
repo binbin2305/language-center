@@ -1,3 +1,4 @@
+import { ALL_ROLES } from '@lc/shared';
 import { screen } from '@testing-library/react';
 import { APP_ROUTES } from '../router';
 import { renderApp } from '../../test/render';
@@ -24,5 +25,20 @@ describe('route table', () => {
     await screen.findByRole('heading', { level: 1, name: 'Hồ sơ học viên' });
     expect(screen.queryByRole('tab', { name: 'Học phí' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Chuyên cần' })).toBeInTheDocument();
+  });
+});
+
+describe('phân quyền route: APP_ROUTES x mọi vai trò', () => {
+  const cases = APP_ROUTES.flatMap((r) =>
+    ALL_ROLES.map((role) => [r.path, role, r.roles.includes(role)] as const),
+  );
+  it.each(cases)('/%s với %s -> cho phép=%s', async (path, role, allowed) => {
+    renderApp({ route: `/${path.replace(':id', '650000000000000000000009')}`, user: makeUser(role) });
+    if (allowed) {
+      expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+      expect(screen.queryByText('Bạn không có quyền truy cập trang này')).not.toBeInTheDocument();
+    } else {
+      expect(await screen.findByText('Bạn không có quyền truy cập trang này')).toBeInTheDocument();
+    }
   });
 });

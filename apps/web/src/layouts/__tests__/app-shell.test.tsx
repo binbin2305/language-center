@@ -41,9 +41,9 @@ describe('NAV_ITEMS theo DESIGN §3', () => {
   it('ADMIN chỉ có Tài khoản và Thông báo', () => {
     expect(labelsFor('ADMIN')).toEqual(['Tài khoản', 'Thông báo']);
   });
-  it('mỗi vai trò có tối đa 5 mục mobile', () => {
+  it('mỗi vai trò có tối đa 4 mục mobile (mục thứ 5 là Thêm)', () => {
     for (const r of ALL_ROLES) {
-      expect(NAV_ITEMS.filter((i) => i.mobile && i.roles.includes(r)).length).toBeLessThanOrEqual(5);
+      expect(NAV_ITEMS.filter((i) => i.mobile && i.roles.includes(r)).length).toBeLessThanOrEqual(4);
     }
   });
 });
@@ -72,5 +72,20 @@ describe('AppShell responsive', () => {
     await user.click(await screen.findByRole('button', { name: 'Mở menu' }));
     const nav = await screen.findByRole('navigation', { name: 'Menu chính' });
     expect(within(nav).getByRole('link', { name: 'Báo cáo' })).toBeInTheDocument();
+  });
+});
+
+describe('nút Thêm trên bottom nav', () => {
+  it.each([
+    ['TEACHER', 'Lớp của tôi'],
+    ['TEACHER', 'Học viên lớp tôi'],
+    ['STUDENT', 'Hồ sơ của tôi'],
+  ] as const)('%s vào được "%s" qua Thêm ở 375px', async (role, label) => {
+    mockViewport(375);
+    const user = userEvent.setup();
+    renderApp({ route: '/', user: makeUser(role) });
+    await user.click(await screen.findByRole('button', { name: 'Thêm' }));
+    const nav = await screen.findByRole('navigation', { name: 'Menu chính' });
+    expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
   });
 });

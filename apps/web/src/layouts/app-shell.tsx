@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { GraduationCap, KeyRound, LogOut, Menu, UserRound } from 'lucide-react';
+import { Ellipsis, GraduationCap, KeyRound, LogOut, Menu, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -46,7 +46,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function BottomNav() {
+function BottomNav({ onMore }: { onMore: () => void }) {
   const { user } = useAuth();
   if (!user) return null;
   return (
@@ -70,6 +70,14 @@ function BottomNav() {
           <span className="truncate">{item.label}</span>
         </NavLink>
       ))}
+      <button
+        type="button"
+        onClick={onMore}
+        className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px] font-medium text-muted-foreground"
+      >
+        <Ellipsis className="h-5 w-5" aria-hidden />
+        <span>Thêm</span>
+      </button>
     </nav>
   );
 }
@@ -141,7 +149,7 @@ export function AppShell() {
             <SidebarNav />
           </aside>
         )}
-        {drawer && (
+        {(drawer || bottomNav) && (
           <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
             <SheetContent side="left" className="w-64 p-0">
               <SheetTitle className="px-4 pt-4">{CENTER_NAME}</SheetTitle>
@@ -156,7 +164,7 @@ export function AppShell() {
           </Suspense>
         </main>
       </div>
-      {bottomNav && <BottomNav />}
+      {bottomNav && <BottomNav onMore={() => setDrawerOpen(true)} />}
     </div>
   );
 }
