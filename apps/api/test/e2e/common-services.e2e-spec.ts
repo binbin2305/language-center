@@ -248,4 +248,24 @@ describe('common services', () => {
       }
     });
   });
+
+  describe('Student.fullNameSearch', () => {
+    it('được tính lại khi cập nhật fullName qua findOneAndUpdate / updateOne ($set hoặc dạng phẳng)', async () => {
+      const Student = models(t.conn).Student;
+      const st = await makeStudent(t.conn, { fullName: 'Nguyễn Văn An' });
+      expect(st.fullNameSearch).toBe('nguyen van an');
+
+      await Student.findOneAndUpdate({ _id: st._id }, { $set: { fullName: 'Trần Thị Bích' } });
+      expect((await Student.findById(st._id))?.fullNameSearch).toBe('tran thi bich');
+
+      await Student.updateOne({ _id: st._id }, { fullName: 'Lê Đức Mạnh' });
+      expect((await Student.findById(st._id))?.fullNameSearch).toBe('le duc manh');
+
+      await Student.findByIdAndUpdate(st._id, { fullName: 'Phạm Ánh' }, { new: true });
+      expect((await Student.findById(st._id))?.fullNameSearch).toBe('pham anh');
+
+      await Student.updateOne({ _id: st._id }, { $set: { note: 'không đổi tên' } });
+      expect((await Student.findById(st._id))?.fullNameSearch).toBe('pham anh');
+    });
+  });
 });

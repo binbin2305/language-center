@@ -61,8 +61,18 @@ export const StudentSchema = new Schema<Student>(
   },
   { timestamps: clockTimestamps, collection: 'students' },
 );
+const toSearch = (fullName: string) => removeVietnameseTones(fullName).toLowerCase().trim();
+
 StudentSchema.pre('validate', function () {
-  if (this.fullName) this.fullNameSearch = removeVietnameseTones(this.fullName).toLowerCase().trim();
+  if (this.fullName) this.fullNameSearch = toSearch(this.fullName);
+});
+// Keep fullNameSearch in sync when fullName changes through query updates (plain or $set).
+StudentSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], function () {
+  const update = this.getUpdate();
+  if (!update || Array.isArray(update)) return;
+  const $set = update.$set as Record<string, unknown> | undefined;
+  if (typeof $set?.fullName === 'string') $set.fullNameSearch = toSearch($set.fullName);
+  if (typeof update.fullName === 'string') update.fullNameSearch = toSearch(update.fullName);
 });
 StudentSchema.index({ code: 1 }, { unique: true });
 StudentSchema.index({ leadId: 1 }, { unique: true, partialFilterExpression: { leadId: { $type: 'objectId' } } });
