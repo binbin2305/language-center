@@ -12,3 +12,12 @@ afterEach(() => {
   server.resetHandlers();
 });
 afterAll(() => server.close());
+
+// jsdom lacks these; Radix popovers / cmdk call them.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
+Element.prototype.scrollIntoView ??= () => undefined;
