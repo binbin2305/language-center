@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { EnrollmentStatus, ErrorCode, Role } from '@lc/shared';
 import { AuthUser } from '../../src/common/auth/auth-user';
 import { EnrollmentsService } from '../../src/modules/enrollments/enrollments.service';
-import { INVOICE_CREATOR } from '../../src/modules/enrollments/invoice-creator';
+import { INVOICE_CREATOR } from '../../src/common/contracts';
 import { makeCourse, makeEnrollment, makeStudent, models } from '../factories';
 import { createTestApp, TestApp } from '../helpers/test-app';
 

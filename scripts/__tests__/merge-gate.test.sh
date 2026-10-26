@@ -138,5 +138,16 @@ assert "missing lane branch exits 2" 2 "$RC"
 set +e; OUT="$(MERGE_BASE=nope bash scripts/merge-gate.sh L-CLASSES --ownership-only 2>&1)"; RC=$?; set -e
 assert "missing base exits 2" 2 "$RC"
 
+# 12. cross-lane DI contracts (apps/api/src/common/contracts/**) are Lead-only, even for the implementing lane
+git checkout -q main
+git checkout -q -b lane/L-FEES-CONTRACT
+mkdir -p apps/api/src/common/contracts
+echo c > apps/api/src/common/contracts/invoice-creator.ts
+git add -A && git commit -qm "contract edit"
+git branch -q -f lane/L-FEES lane/L-FEES-CONTRACT
+run L-FEES --ownership-only
+assert "lane editing common/contracts rejected" 1 "$RC"
+assert_contains "contract offender listed" "$OUT" "apps/api/src/common/contracts/invoice-creator.ts"
+
 if [ "$FAILS" -ne 0 ]; then echo "$FAILS assertion(s) failed"; exit 1; fi
 echo "all merge-gate assertions passed"

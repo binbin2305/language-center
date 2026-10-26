@@ -3,6 +3,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthCoreModule } from './common/auth/auth-core.module';
 import { CommonModule } from './common/common.module';
+import { ContractsModule } from './common/contracts';
 import { loadEnv } from './config/env';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -25,6 +26,7 @@ import { HealthController } from './health/health.controller';
 @Module({
   imports: [
     CommonModule,
+    ContractsModule,
     AuthCoreModule,
     MongooseModule.forRootAsync({ useFactory: () => ({ uri: loadEnv().MONGODB_URI }) }),
     DatabaseModule,

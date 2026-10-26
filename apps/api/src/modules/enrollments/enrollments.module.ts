@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { FeesModule } from '../fees/fees.module';
 import { EnrollmentsService } from './enrollments.service';
 
-@Module({ imports: [FeesModule], providers: [EnrollmentsService], exports: [EnrollmentsService] })
+// INVOICE_CREATOR comes from common/contracts (global no-op until FeesModule is imported here at merge).
+@Module({ providers: [EnrollmentsService], exports: [EnrollmentsService] })
 export class EnrollmentsModule {}

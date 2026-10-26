@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { INVOICE_CREATOR } from '../enrollments/invoice-creator';
 import { FeesController } from './fees.controller';
 import { FeesService } from './fees.service';
-import { NoopInvoiceCreator } from './noop-invoice-creator';
 
+// INVOICE_CREATOR / OUTSTANDING_CHECKER: global no-ops live in common/contracts (ContractsModule).
+// L-FEES provides the real ones here (providers + exports); see ContractsModule for the merge wiring.
 @Module({
   controllers: [FeesController],
-  providers: [FeesService, { provide: INVOICE_CREATOR, useClass: NoopInvoiceCreator }],
-  exports: [FeesService, INVOICE_CREATOR],
+  providers: [FeesService],
+  exports: [FeesService],
 })
 export class FeesModule {}
