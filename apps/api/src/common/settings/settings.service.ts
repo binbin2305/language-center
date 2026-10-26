@@ -14,6 +14,8 @@ export type SettingsPatch = Partial<Omit<Settings, '_id'>>;
 @Injectable()
 export class SettingsService {
   private cache: Settings | null = null;
+  /** Bumped by every update; a get() whose read began under an older version must not cache. */
+  private cacheVersion = 0;
 
   constructor(
     @InjectModel(Models.Settings) private readonly settings: Model<Settings>,
@@ -23,6 +25,7 @@ export class SettingsService {
   /** Returns the single settings document, creating it with defaults on first use. */
   async get(): Promise<Settings> {
     if (this.cache) return { ...this.cache };
+    const version = this.cacheVersion;
     const doc = await this.settings
       .findOneAndUpdate({ _id: SETTINGS_ID }, { $setOnInsert: { _id: SETTINGS_ID } }, { upsert: true, new: true, setDefaultsOnInsert: true })
       .lean()
@@ -32,7 +35,7 @@ export class SettingsService {
         return this.settings.findById(SETTINGS_ID).lean();
       });
     if (!doc) throw new Error('settings document missing');
-    this.cache = doc;
+    if (version === this.cacheVersion) this.cache = doc;
     return { ...doc };
   }
 
@@ -42,7 +45,8 @@ export class SettingsService {
       .findOneAndUpdate({ _id: SETTINGS_ID }, { $set: patch }, { new: true, runValidators: true })
       .lean();
     if (!after) throw new Error('settings document missing');
-    // Set the cache from the written document, after the write (a concurrent get() cannot re-cache stale data).
+    // Bump the version first so any get() read started before this write cannot re-cache stale data.
+    this.cacheVersion++;
     this.cache = after;
     await this.audit.log({ actor, action: 'update', entity: 'Settings', entityId: SETTINGS_AUDIT_ID, before, after });
     return { ...after };

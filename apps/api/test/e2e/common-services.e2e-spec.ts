@@ -9,6 +9,7 @@ import { paginate } from '../../src/common/pagination';
 import { ScopeService } from '../../src/common/scope/scope.service';
 import { SettingsService } from '../../src/common/settings/settings.service';
 import { Models } from '../../src/database/models';
+import { Settings } from '../../src/database/schemas/settings.schema';
 import { AuditLog } from '../../src/database/schemas/audit-log.schema';
 import { makeClass, makeEnrollment, makeSession, makeStudent, makeTeacher, makeUser, models } from '../factories';
 import { createTestApp, TestApp } from '../helpers/test-app';
@@ -135,6 +136,28 @@ describe('common services', () => {
       expect(updated.gradeLockDays).toBe(30);
       expect((await s.get()).gradeLockDays).toBe(30);
       expect(await t.conn.model(Models.AuditLog).countDocuments({ entity: 'Settings', action: 'update' })).toBe(1);
+    });
+  });
+
+  describe('SettingsService cache race', () => {
+    it('get() bắt đầu trước update nhưng resolve sau không ghi đè cache bằng dữ liệu cũ', async () => {
+      const svc = t.app.get(SettingsService);
+      const model = t.conn.model<Settings>(Models.Settings);
+      await svc.get();
+      const stale = await model.findById('center').lean();
+      (svc as unknown as { cache: Settings | null }).cache = null;
+      let release!: (v: Settings | null) => void;
+      const deferred = new Promise<Settings | null>((r) => (release = r));
+      const spy = jest
+        .spyOn(model, 'findOneAndUpdate')
+        .mockImplementationOnce((() => ({ lean: () => ({ catch: () => deferred }) })) as unknown as typeof model.findOneAndUpdate);
+      const pending = svc.get();
+      spy.mockRestore();
+      const admin = await makeUser(t.conn);
+      await svc.update({ gradeLockDays: 99 }, { id: admin._id, role: Role.ADMIN });
+      release(stale);
+      await pending;
+      expect((await svc.get()).gradeLockDays).toBe(99);
     });
   });
 
