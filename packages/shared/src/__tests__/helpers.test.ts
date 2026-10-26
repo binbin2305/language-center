@@ -89,6 +89,11 @@ describe('grading', () => {
   it('weightedAverage', () => {
     expect(weightedAverage([{ score: 8, weight: 30 }, { score: null, weight: 30 }, { score: 6, weight: 40 }])).toBe(6.86);
     expect(weightedAverage([{ score: null, weight: 100 }])).toBeNull();
+    expect(weightedAverage([{ score: 0, weight: 30 }, { score: 6.75, weight: 70 }])).toBe(4.73);
+    expect(weightedAverage([{ score: 0.25, weight: 50 }, { score: 3, weight: 50 }])).toBe(1.63);
+    expect(weightedAverage([{ score: 0.25, weight: 30 }, { score: 3, weight: 70 }])).toBe(2.18);
+    expect(weightedAverage([{ score: 0.25, weight: 30 }, { score: 7, weight: 70 }])).toBe(4.98);
+    expect(weightedAverage([{ score: 7.3, weight: 1 }, { score: 6, weight: 1.5 }])).toBe(6.52);
     expect(weightedAverage([])).toBeNull();
     expect(weightedAverage([{ score: 5, weight: 0 }])).toBeNull();
   });
