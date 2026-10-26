@@ -24,7 +24,7 @@ W4  ┌ L-E2E ┬ L-HARDENING ┐                                   (song song)
 
 ## Wave 0 — Nền móng (Lead, tuần tự)
 
-### [ ] W0-01 Khởi tạo monorepo
+### [x] W0-01 Khởi tạo monorepo
 - pnpm workspace: `apps/api` (Nest CLI), `apps/web` (Vite react-ts), `packages/shared` (tsup build, export ESM+CJS, alias `@lc/shared`).
 - TS strict ở mọi package; ESLint + Prettier gốc; scripts gốc `dev`, `test`, `lint`, `typecheck`, `e2e`.
 - `docker-compose.yml`: `mongo:7` với `--replSet rs0` + healthcheck chạy `rs.initiate()`.
@@ -32,7 +32,7 @@ W4  ┌ L-E2E ┬ L-HARDENING ┐                                   (song song)
 - **Test viết trước:** smoke test `GET /api/v1/health → 200 {status:'ok', db:'up'}`; smoke test FE render `<App/>` không lỗi.
 - **Xong khi:** `pnpm i && pnpm lint && pnpm typecheck && pnpm test` xanh từ clone sạch.
 
-### [ ] W0-02 `packages/shared` — hợp đồng cho TẤT CẢ module
+### [x] W0-02 `packages/shared` — hợp đồng cho TẤT CẢ module
 - `enums.ts`, `errors.ts` (ErrorCode + HTTP status mặc định), `events.ts`, `permissions.ts` (ma trận PRD §3 dạng `permission → Role[]` + `can(user, permission)`), `time.ts` (`vnDay`, `startOfVnDay`, `addVnDays`, `isSameVnDay`), `money.ts` (`applyDiscount`, `formatVnd`), `grading.ts` (`weightedAverage`, `classify`), `text.ts` (`removeVietnameseTones`).
 - `schemas/*.ts`: zod input + response cho mọi endpoint BACKEND_SCHEMA §3 (auth, users, courses, rooms, settings, leads, students, enrollments, placement, classes, sessions, attendance, assessments, grades, results, invoices, payments, reports, notifications). `zObjectId`, `zVnPhone`, `zScore`, `zMoney`, `Paginated<T>`.
 - **Test viết trước:**
@@ -46,25 +46,25 @@ W4  ┌ L-E2E ┬ L-HARDENING ┐                                   (song song)
   - `ENROLLMENT_TRANSITIONS`, `CLASS_TRANSITIONS` (bảng chuyển trạng thái BACKEND_SCHEMA) + `canTransition(from,to)`: test toàn bộ cặp.
 - **Xong khi:** coverage shared ≥ 95%.
 
-### [ ] W0-03 API common + database + test harness
+### [x] W0-03 API common + database + test harness
 - `config` (zod env), `AppError` + `HttpExceptionFilter` (định dạng lỗi BACKEND_SCHEMA §3.1, map lỗi zod → `VALIDATION_FAILED` + `details.fields`, lỗi duplicate key Mongo → 409), `ZodValidationPipe`, `JwtAuthGuard`, `RolesGuard` (fail-closed), `@Roles`, `@CurrentUser`, `ClockService`, `withTransaction`, `CounterService`, `AuditService`, `NotificationsService.notify(userIds, payload)`, `SettingsService` (cache + invalidate), pagination helper, **`ScopeService`** (`teacherClassIds`, `teacherCanTakeAttendance`, `studentClassIds(user,'current'|'history')`, `teacherStudentIds` — ARCHITECTURE §4.6).
 - `database/schemas/*`: toàn bộ collection BACKEND_SCHEMA §2 với index.
 - Test harness: `createTestApp()` (MongoMemoryReplSet, DB riêng mỗi file, `FakeClock`), `loginAs(role, overrides?)`, factories cho mọi collection (`makeCourse`, `makeClass`, `makeStudent({withUser})`, `makeEnrollment`, `makeSession`, `makeInvoice`, ...).
 - **Test viết trước:** ScopeService: trợ giảng có lớp trong `teacherClassIds`; GV dạy thay một buổi được `teacherCanTakeAttendance` buổi đó nhưng không có lớp trong `teacherClassIds`; HV có enrollment TRANSFERRED thấy lớp cũ ở `history` nhưng không ở `current`; route không có `@Roles` → 403; lỗi zod → 400 với `details.fields.email`; `AppError('CLASS_FULL',422)` → đúng body; duplicate key → 409; `withTransaction` rollback khi throw; `CounterService` 50 lần gọi song song → 50 số khác nhau liên tiếp; mọi index unique tồn tại sau `syncIndexes`.
 
-### [ ] W0-04 Auth & Users core
+### [x] W0-04 Auth & Users core
 - FR-AUTH-01, FR-AUTH-02, model users, refresh token xoay vòng, khóa sau 5 lần sai, rate limit (`@nestjs/throttler`), seed ADMIN.
 - `UsersService.createStudentAccount(studentId, code, session)` → `{ userId, tempPassword }` (username = mã HV, không lưu email) — dùng bởi admissions.
 - **Test viết trước:** login đúng → access + cookie; sai mật khẩu → 401 INVALID_CREDENTIALS (thông điệp không phân biệt sai user/sai pass); lần sai thứ 5 → 423/ACCOUNT_LOCKED, sau 15 phút (FakeClock) đăng nhập được; refresh dùng lại token cũ → 401 và thu hồi cả chuỗi; logout → refresh 401; `mustChangePassword` → mọi route trừ `/auth/*` trả 403 PASSWORD_CHANGE_REQUIRED; đổi mật khẩu sai policy → 400; response không bao giờ có `passwordHash` (assert trên mọi endpoint auth/users); STUDENT đăng nhập bằng mã HV.
 
-### [ ] W0-05 Khung module API
+### [x] W0-05 Khung module API
 - Tạo module rỗng (module + controller + service, chưa route) cho: users, courses, rooms, settings, admissions, enrollments, placement, classes, schedule, attendance, grades, fees, reports, notifications; đăng ký trong `app.module.ts`.
 - `enrollments`: hiện thực sẵn `EnrollmentsService.createPending(studentId, courseId, session)` (FR-ADM-05) — chặn trùng enrollment hoạt động → 409 ENROLLMENT_EXISTS.
 - Token DI `INVOICE_CREATOR` (interface `createForEnrollment(enrollmentId, session)`, `voidForEnrollment(enrollmentId, reason, session)`), mặc định do fees module cung cấp bản no-op cho tới W2.
 - Notifications API đầy đủ (FR-NTF-01): list, unread-count, read, read-all.
 - **Test viết trước:** createPending tạo `PENDING_PLACEMENT` + history; trùng → 409; notifications chỉ trả của user hiện tại (user khác → không thấy, đánh dấu đọc của người khác → 404).
 
-### [ ] W0-06 Khung Web
+### [x] W0-06 Khung Web
 - Tailwind + shadcn/ui + theme token DESIGN §2 + font Be Vietnam Pro + dark mode.
 - `lib/api.ts` (ky, refresh 1 lần khi 401), `lib/queryClient.ts`, `lib/format.ts`, `lib/status.ts`, `lib/error-messages.ts` (đủ mọi ErrorCode), `auth/AuthProvider`, `auth/RequireRole`, `layouts/AppShell` (sidebar theo role DESIGN §3, bottom nav mobile, chuông thông báo), `router.tsx` với **mọi route DESIGN §4** trỏ tới page placeholder trong `features/<m>/pages`.
 - Trang: Login, Change password, Notifications (đầy đủ), 404, 403.
@@ -73,7 +73,7 @@ W4  ┌ L-E2E ┬ L-HARDENING ┐                                   (song song)
 - `test/`: setup Vitest + RTL + MSW server, `renderWithProviders(ui, {user, route})`.
 - **Test viết trước:** login sai → hiện "Sai thông tin đăng nhập"; login đúng role TEACHER → sidebar đúng mục; `mustChangePassword` → bị chuyển tới `/change-password`; 401 → gọi refresh rồi retry đúng 1 lần, refresh fail → về `/login`; `RequireRole` chặn route; `DataTable` hiển thị EmptyState khi rỗng; `MoneyInput` gõ `1500000` hiển thị `1.500.000`, giá trị form là số nguyên; `formatVnd(1500000) === '1.500.000 ₫'`.
 
-### [ ] W0-07 CI & quy trình swarm
+### [x] W0-07 CI & quy trình swarm
 - Script `scripts/lane-start.sh <lane>`: tạo worktree `../lc-<lane>` nhánh `lane/<lane>` từ `main`.
 - Script `scripts/merge-gate.sh`: `pnpm i --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test` + kiểm tra ownership (`git diff --name-only main...lane/x` chỉ chứa đường dẫn của lane).
 - GitHub Actions (nếu có remote) chạy merge-gate.

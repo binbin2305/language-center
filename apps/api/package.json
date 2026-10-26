@@ -9,6 +9,7 @@
     "test": "jest --passWithNoTests",
     "test:e2e": "jest --config jest-e2e.config.ts --runInBand",
     "seed": "ts-node scripts/seed.ts",
+    "dev:mongo": "ts-node scripts/dev-mongo.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

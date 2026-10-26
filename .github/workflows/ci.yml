@@ -1,0 +1,38 @@
+name: ci
+on:
+  push:
+    branches: [main, wave0]
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/.mongoms
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      - name: Cache mongodb-memory-server binary
+        uses: actions/cache@v4
+        with:
+          path: .mongoms
+          key: mongoms-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: mongoms-${{ runner.os }}-
+      - name: Script tests
+        run: pnpm test:scripts
+      - name: Lane ownership (PRs from lane/* branches)
+        if: startsWith(github.head_ref, 'lane/')
+        run: |
+          git branch -f main origin/${{ github.base_ref }}
+          git branch -f "${{ github.head_ref }}" HEAD
+          bash scripts/merge-gate.sh "${GITHUB_HEAD_REF#lane/}" --ownership-only
+      - name: Merge gate (install, lint, typecheck, test, e2e)
+        run: bash scripts/merge-gate.sh
