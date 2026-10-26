@@ -20,6 +20,14 @@
 - Notification `refType` is the closed `NotificationRefType` enum in `@lc/shared` (CLASS, SESSION, STUDENT, INVOICE, ASSESSMENT, ENROLLMENT, PLACEMENT_TEST, PAYMENT).
 
 
+### Installed for lanes
+
+Lanes cannot edit package.json / pnpm-lock.yaml, so these are pre-installed (all load under ts-jest CJS / Vitest; checked with a smoke import):
+
+- web: `@fullcalendar/core|react|daygrid|timegrid|list|interaction` ^6.1.22 (MIT packages only; v7 is ESM-only with a temporal-polyfill peer and its plugins are not released at 7), `recharts` ^3.10.1 (+ `react-is` ^18.3.1 peer; 2.x is deprecated upstream).
+- api: `exceljs` ^4.4.0, `pdfmake` ^0.3.13 (+ `@types/pdfmake` ^0.3.3), `multer` ^2.5.0 (+ `@types/multer` ^2.3.0; `@nestjs/platform-express` already present), `@nestjs/swagger` ^11.4.7 (12.x requires Nest 12).
+- root dev: `@playwright/test` ^1.64.1 — browsers are not downloaded; run `pnpm exec playwright install chromium` when needed.
+
 ## Web route -> owning feature map (Task 12)
 
 Roles: A=ADMIN, M=MANAGER, S=ACADEMIC_STAFF, T=TEACHER, H=STUDENT. Lanes edit only the files listed under their own `apps/web/src/features/<m>/`; `router.tsx`, `layouts/*`, `auth/*` are Lead-owned. Every page is a lazy default export (placeholder until the lane fills it). Routes outside `AppShell`: `/login`, `/change-password` (`features/auth`, Lead). `/` -> `features/home/home-router.tsx` (Lead) -> `dashboard/pages/staff-dashboard` (M/S, reports lane), `home/pages/teacher-home` (T) and `home/pages/student-home` (H) (student-portal lane); ADMIN is redirected to `/settings/users`. `*` -> 404, 403 page rendered by `RequireRole`.
