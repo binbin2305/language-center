@@ -4,11 +4,13 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { z } from 'zod';
 import { CreateLeadInput } from '@lc/shared';
+import { Public } from '../../src/common/auth/public.decorator';
 import { AppError } from '../../src/common/errors/app-error';
 import { ZodValidationPipe } from '../../src/common/pipes/zod-validation.pipe';
 import { ClockService } from '../../src/common/clock/clock.service';
 import { createTestApp, TestApp } from '../helpers/test-app';
 
+@Public()
 @Controller('t')
 class TestController {
   constructor(@InjectConnection() private readonly conn: Connection) {}
