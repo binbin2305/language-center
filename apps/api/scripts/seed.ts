@@ -1,3 +1,4 @@
+import '../src/config/load-dotenv';
 import 'reflect-metadata';
 import { connect, Connection, connection, disconnect } from 'mongoose';
 import { Role, zPassword } from '@lc/shared';
