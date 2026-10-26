@@ -19,7 +19,7 @@ export interface User {
   deletedAt: Date | null;
 }
 
-// email/studentId have NO default: a sparse unique index only skips missing fields, not null.
+// Unique indexes are partial ($type) so both missing and null values are skipped.
 export const UserSchema = new Schema<User>(
   {
     email: { type: String, lowercase: true, trim: true },
@@ -49,8 +49,8 @@ export const UserSchema = new Schema<User>(
   { timestamps: true, collection: 'users' },
 );
 UserSchema.index({ username: 1 }, { unique: true });
-UserSchema.index({ email: 1 }, { unique: true, sparse: true });
-UserSchema.index({ studentId: 1 }, { unique: true, sparse: true });
+UserSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } } });
+UserSchema.index({ studentId: 1 }, { unique: true, partialFilterExpression: { studentId: { $type: 'objectId' } } });
 UserSchema.index({ role: 1, status: 1 });
 
 export type UserDoc = HydratedDocument<User>;

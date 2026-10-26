@@ -166,3 +166,19 @@ export const GradeClass = {
 } as const;
 export type GradeClass = (typeof GradeClass)[keyof typeof GradeClass];
 export const ALL_GRADE_CLASSES: GradeClass[] = Object.values(GradeClass);
+
+export const RoomStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+} as const;
+export type RoomStatus = (typeof RoomStatus)[keyof typeof RoomStatus];
+export const ALL_ROOM_STATUSES: RoomStatus[] = Object.values(RoomStatus);
+
+export const AuditAction = {
+  CREATE: 'create',
+  UPDATE: 'update',
+  DELETE: 'delete',
+  STATUS: 'status',
+} as const;
+export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
+export const ALL_AUDIT_ACTIONS: AuditAction[] = Object.values(AuditAction);

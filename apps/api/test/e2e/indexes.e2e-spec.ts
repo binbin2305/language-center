@@ -39,10 +39,28 @@ describe('schema indexes & factories', () => {
     expect(find(await indexes(t.conn, col), key)?.unique).toBe(true);
   });
 
-  it('users.email unique sparse; users.studentId unique sparse', async () => {
-    const list = await indexes(t.conn, 'users');
-    expect(find(list, { email: 1 })).toMatchObject({ unique: true, sparse: true });
-    expect(find(list, { studentId: 1 })).toMatchObject({ unique: true, sparse: true });
+  it('users.email / users.studentId / students.leadId unique partial ($type)', async () => {
+    const users = await indexes(t.conn, 'users');
+    expect(find(users, { email: 1 })).toMatchObject({
+      unique: true,
+      partialFilterExpression: { email: { $type: 'string' } },
+    });
+    expect(find(users, { studentId: 1 })).toMatchObject({
+      unique: true,
+      partialFilterExpression: { studentId: { $type: 'objectId' } },
+    });
+    expect(find(await indexes(t.conn, 'students'), { leadId: 1 })).toMatchObject({
+      unique: true,
+      partialFilterExpression: { leadId: { $type: 'objectId' } },
+    });
+  });
+
+  it('hai user email null cùng tồn tại; hai student leadId null cùng tồn tại', async () => {
+    const nul = null as unknown as undefined;
+    await makeUser(t.conn, { role: Role.TEACHER, email: nul, username: 'null-email-1' });
+    await makeUser(t.conn, { role: Role.TEACHER, email: nul, username: 'null-email-2' });
+    await makeStudent(t.conn, { leadId: nul });
+    await makeStudent(t.conn, { leadId: nul });
   });
 
   it('invoices.enrollmentId unique partial kind=TUITION', async () => {

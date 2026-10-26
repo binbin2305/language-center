@@ -1,8 +1,6 @@
 import { z } from 'zod';
+import { RoomStatus } from '../enums';
 import { zDtoBase, zPagination } from './common';
-
-export const RoomStatus = { ACTIVE: 'ACTIVE', INACTIVE: 'INACTIVE' } as const;
-export type RoomStatus = (typeof RoomStatus)[keyof typeof RoomStatus];
 
 export const CreateRoomInput = z.object({
   code: z.string().trim().min(1).max(30).toUpperCase(),

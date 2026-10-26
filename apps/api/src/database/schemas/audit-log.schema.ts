@@ -1,9 +1,6 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
-import { ALL_ROLES, Role } from '@lc/shared';
+import { ALL_AUDIT_ACTIONS, ALL_ROLES, AuditAction, Role } from '@lc/shared';
 import { Models } from '../models';
-
-export const AuditAction = { CREATE: 'create', UPDATE: 'update', DELETE: 'delete', STATUS: 'status' } as const;
-export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 
 export interface AuditLog {
   actorId: Types.ObjectId;
@@ -21,7 +18,7 @@ export const AuditLogSchema = new Schema<AuditLog>(
   {
     actorId: { type: Schema.Types.ObjectId, ref: Models.User, required: true },
     actorRole: { type: String, enum: ALL_ROLES, required: true },
-    action: { type: String, enum: Object.values(AuditAction), required: true },
+    action: { type: String, enum: ALL_AUDIT_ACTIONS, required: true },
     entity: { type: String, required: true },
     entityId: { type: Schema.Types.ObjectId, required: true },
     before: { type: Schema.Types.Mixed },

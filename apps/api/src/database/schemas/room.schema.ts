@@ -1,7 +1,5 @@
 import { HydratedDocument, Schema } from 'mongoose';
-
-export const RoomStatus = { ACTIVE: 'ACTIVE', INACTIVE: 'INACTIVE' } as const;
-export type RoomStatus = (typeof RoomStatus)[keyof typeof RoomStatus];
+import { ALL_ROOM_STATUSES, RoomStatus } from '@lc/shared';
 
 export interface Room {
   code: string;
@@ -20,7 +18,7 @@ export const RoomSchema = new Schema<Room>(
       min: 1,
       validate: { validator: Number.isInteger, message: '{PATH} must be an integer' },
     },
-    status: { type: String, enum: Object.values(RoomStatus), default: RoomStatus.ACTIVE },
+    status: { type: String, enum: ALL_ROOM_STATUSES, default: RoomStatus.ACTIVE },
   },
   { timestamps: true, collection: 'rooms' },
 );

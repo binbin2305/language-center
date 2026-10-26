@@ -40,7 +40,7 @@ const DocumentSchema = new Schema<StudentDocument>({
   uploadedBy: { type: Schema.Types.ObjectId, ref: Models.User, required: true },
 });
 
-// leadId has NO default: sparse unique index only skips missing fields, not null.
+// leadId unique index is partial ($type) so missing and null values are skipped.
 export const StudentSchema = new Schema<Student>(
   {
     code: { type: String, required: true },
@@ -65,7 +65,7 @@ StudentSchema.pre('validate', function () {
   if (this.fullName) this.fullNameSearch = removeVietnameseTones(this.fullName).toLowerCase().trim();
 });
 StudentSchema.index({ code: 1 }, { unique: true });
-StudentSchema.index({ leadId: 1 }, { unique: true, sparse: true });
+StudentSchema.index({ leadId: 1 }, { unique: true, partialFilterExpression: { leadId: { $type: 'objectId' } } });
 StudentSchema.index({ phone: 1 });
 StudentSchema.index({ fullNameSearch: 1 });
 StudentSchema.index({ email: 1 });
