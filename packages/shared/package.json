@@ -7,9 +7,17 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": { "zod": "^3.24.1" },
-  "devDependencies": { "tsup": "^8.3.5", "vitest": "^2.1.8" }
+  "dependencies": {
+    "date-fns": "^4.4.0",
+    "date-fns-tz": "^3.2.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.8",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8"
+  }
 }
