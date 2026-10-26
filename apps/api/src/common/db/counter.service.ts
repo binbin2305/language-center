@@ -21,7 +21,12 @@ export class CounterService {
       } catch (e) {
         // Concurrent first upserts can race on the _id; the loser simply retries as an update.
         const code = (e as { code?: number }).code;
-        if (code !== DUPLICATE_KEY || attempt >= 5 || s) throw e;
+        if (code === DUPLICATE_KEY && s) {
+          // Inside a transaction a lost upsert race is transient: label it so withTransaction retries.
+          (e as { addErrorLabel?: (l: string) => void }).addErrorLabel?.('TransientTransactionError');
+          throw e;
+        }
+        if (code !== DUPLICATE_KEY || attempt >= 5) throw e;
       }
     }
   }

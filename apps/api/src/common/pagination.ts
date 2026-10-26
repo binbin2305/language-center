@@ -29,7 +29,11 @@ export async function paginate<T>(
   q: PaginationQuery,
   projection?: ProjectionType<T>,
 ): Promise<Page<T>> {
-  const sort = { ...parseSort(q.sort ?? '-createdAt'), _id: -1 as const };
+  // Callers MUST validate q.sort keys against an allow-list; they are passed to Mongo as-is.
+  const sortSpec = parseSort(q.sort ?? '-createdAt');
+  const dirs = Object.values(sortSpec);
+  // Stable tiebreaker follows the direction of the last sort key.
+  const sort = { ...sortSpec, _id: dirs[dirs.length - 1] ?? -1 };
   const [data, total] = await Promise.all([
     model
       .find(filter, projection)

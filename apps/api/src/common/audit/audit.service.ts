@@ -16,6 +16,21 @@ export interface AuditEntry {
   after?: unknown;
 }
 
+const SECRET_KEYS = new Set(['passwordHash', 'tokenHash']);
+
+/** Deep copy without secret keys; leaves non-plain values (ObjectId, Date) untouched. */
+function redact(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(redact);
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>)
+        .filter(([k]) => !SECRET_KEYS.has(k))
+        .map(([k, x]) => [k, redact(x)]),
+    );
+  }
+  return v;
+}
+
 @Injectable()
 export class AuditService {
   constructor(
@@ -32,8 +47,8 @@ export class AuditService {
           action: e.action,
           entity: e.entity,
           entityId: e.entityId,
-          before: e.before,
-          after: e.after,
+          before: redact(e.before),
+          after: redact(e.after),
           at: this.clock.now(),
         },
       ],

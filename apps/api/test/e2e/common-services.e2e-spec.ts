@@ -50,6 +50,17 @@ describe('common services', () => {
       const out = await Promise.all(Array.from({ length: 50 }, () => c.next('student:2026')));
       expect(new Set(out)).toEqual(new Set(Array.from({ length: 50 }, (_, i) => i + 1)));
     });
+    it('20 transaction song song, key mới -> {1..20}', async () => {
+      const c = t.app.get(CounterService);
+      const out = await Promise.all(Array.from({ length: 20 }, () => withTransaction(t.conn, (s) => c.next('txfresh:key', s))));
+      expect(new Set(out)).toEqual(new Set(Array.from({ length: 20 }, (_, i) => i + 1)));
+    });
+    it('20 transaction song song, key đã có sẵn -> {2..21}', async () => {
+      const c = t.app.get(CounterService);
+      await c.next('txseed:key');
+      const out = await Promise.all(Array.from({ length: 20 }, () => withTransaction(t.conn, (s) => c.next('txseed:key', s))));
+      expect(new Set(out)).toEqual(new Set(Array.from({ length: 20 }, (_, i) => i + 2)));
+    });
     it('formatCode', () => {
       expect(t.app.get(CounterService).formatCode('HV', '2026', 42, 5)).toBe('HV202600042');
     });
@@ -76,6 +87,20 @@ describe('common services', () => {
       expect(row).toMatchObject({ action: 'create', entity: 'Room', actorRole: Role.ADMIN, after: { a: 1 } });
       expect(String(row?.actorId)).toBe(String(admin._id));
       expect(row?.at.toISOString()).toBe(t.clock.now().toISOString());
+    });
+  });
+
+  describe('AuditService redaction', () => {
+    it('loại passwordHash/tokenHash khỏi before/after', async () => {
+      const admin = await makeUser(t.conn);
+      const entityId = new Types.ObjectId();
+      await t.app.get(AuditService).log({
+        actor: { id: admin._id, role: Role.ADMIN }, action: 'update', entity: 'User', entityId,
+        before: { passwordHash: 'x', n: { tokenHash: 'y', k: 1 } }, after: { passwordHash: 'z', a: 1 },
+      });
+      const row = await t.conn.model<AuditLog>(Models.AuditLog).findOne({ entityId }).lean();
+      expect(row?.before).toEqual({ n: { k: 1 } });
+      expect(row?.after).toEqual({ a: 1 });
     });
   });
 

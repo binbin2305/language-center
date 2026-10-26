@@ -7,7 +7,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth-user';
 
 /** AuditLog.entityId is an ObjectId but the settings _id is the string 'center': use a fixed stand-in. */
-const SETTINGS_AUDIT_ID = new Types.ObjectId(Buffer.from('settings_ctr'));
+export const SETTINGS_AUDIT_ID = new Types.ObjectId(Buffer.from('settings_ctr'));
 
 export type SettingsPatch = Partial<Omit<Settings, '_id'>>;
 
@@ -38,12 +38,13 @@ export class SettingsService {
 
   async update(patch: SettingsPatch, actor: AuthUser): Promise<Settings> {
     const before = await this.get();
-    this.cache = null;
     const after = await this.settings
       .findOneAndUpdate({ _id: SETTINGS_ID }, { $set: patch }, { new: true, runValidators: true })
       .lean();
     if (!after) throw new Error('settings document missing');
+    // Set the cache from the written document, after the write (a concurrent get() cannot re-cache stale data).
+    this.cache = after;
     await this.audit.log({ actor, action: 'update', entity: 'Settings', entityId: SETTINGS_AUDIT_ID, before, after });
-    return this.get();
+    return { ...after };
   }
 }

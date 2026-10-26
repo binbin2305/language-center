@@ -7,6 +7,7 @@ export interface AuditLog {
   actorRole: Role;
   action: AuditAction;
   entity: string;
+  /** Exception: Settings (string _id 'center') is logged with SETTINGS_AUDIT_ID from SettingsService. */
   entityId: Types.ObjectId;
   before?: unknown;
   after?: unknown;
