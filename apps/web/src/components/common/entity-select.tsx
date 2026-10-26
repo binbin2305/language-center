@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -40,12 +40,16 @@ export interface EntitySelectProps {
   placeholder?: string;
   disabled?: boolean;
   'aria-label'?: string;
+  id?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
   debounceMs?: number;
 }
 
 export function EntitySelect({
   entity, value, onChange, filter, renderLabel = defaultEntityLabel, selectedLabel,
-  placeholder = 'Chọn...', disabled, 'aria-label': ariaLabel, debounceMs = 300,
+  placeholder = 'Chọn...', disabled, 'aria-label': ariaLabel, id,
+  'aria-describedby': describedBy, 'aria-invalid': invalid, debounceMs = 300,
 }: EntitySelectProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -62,20 +66,33 @@ export function EntitySelect({
     queryKey: ['entity-select', entity, q, filterKey],
     queryFn: () => apiGetPage<EntityItem>(PATHS[entity], { ...filter, q, limit: 20 }),
     enabled: open,
+    placeholderData: keepPreviousData,
   });
 
   const shownPicked = picked && picked.id === value ? picked : undefined;
   const triggerText = shownPicked ? renderLabel(shownPicked) : value ? (selectedLabel ?? 'Đã chọn') : placeholder;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) {
+          setInput('');
+          setQ('');
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          id={id}
           aria-label={ariaLabel}
+          aria-describedby={describedBy}
+          aria-invalid={invalid}
           disabled={disabled}
           className={cn('w-full justify-between font-normal', !value && 'text-muted-foreground')}
         >

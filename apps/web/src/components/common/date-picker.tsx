@@ -15,6 +15,8 @@ export interface DatePickerProps {
   disabled?: boolean;
   'aria-label'?: string;
   id?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
 }
 
 export function DatePicker({
@@ -22,8 +24,10 @@ export function DatePicker({
   onChange,
   placeholder = 'Chọn ngày',
   disabled,
-  'aria-label': ariaLabel = 'Chọn ngày',
+  'aria-label': ariaLabel,
   id,
+  'aria-describedby': describedBy,
+  'aria-invalid': invalid,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const selected = parseYmd(value);
@@ -36,6 +40,8 @@ export function DatePicker({
           variant="outline"
           disabled={disabled}
           aria-label={ariaLabel}
+          aria-describedby={describedBy}
+          aria-invalid={invalid}
           className={cn('w-full justify-start font-normal', !selected && 'text-muted-foreground')}
         >
           <CalendarIcon className="mr-2 h-4 w-4" aria-hidden="true" />

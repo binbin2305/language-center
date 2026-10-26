@@ -18,6 +18,9 @@ export interface DateRangePickerProps {
   placeholder?: string;
   disabled?: boolean;
   'aria-label'?: string;
+  id?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
 }
 
 export function DateRangePicker({
@@ -25,7 +28,10 @@ export function DateRangePicker({
   onChange,
   placeholder = 'Chọn khoảng ngày',
   disabled,
-  'aria-label': ariaLabel = 'Chọn khoảng ngày',
+  'aria-label': ariaLabel,
+  id,
+  'aria-describedby': describedBy,
+  'aria-invalid': invalid,
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const from = parseYmd(value.from);
@@ -38,7 +44,10 @@ export function DateRangePicker({
           type="button"
           variant="outline"
           disabled={disabled}
+          id={id}
           aria-label={ariaLabel}
+          aria-describedby={describedBy}
+          aria-invalid={invalid}
           className={cn('w-full justify-start font-normal', !from && 'text-muted-foreground')}
         >
           <CalendarIcon className="mr-2 h-4 w-4" aria-hidden="true" />

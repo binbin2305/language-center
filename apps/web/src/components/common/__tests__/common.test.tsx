@@ -42,6 +42,60 @@ describe('DataTable', () => {
   });
 });
 
+describe('DataTable sort/select/mobile/busy', () => {
+  const sortCols: ColumnDef<Row>[] = [
+    { accessorKey: 'name', header: 'Tên', enableSorting: true },
+    { accessorKey: 'name', id: 'note', header: 'Ghi chú', enableSorting: false, meta: { hideOnMobile: true } },
+  ];
+  it('sort: click chu kỳ asc -> desc, aria-sort', async () => {
+    const onSortChange = vi.fn();
+    const { rerender } = renderWithProviders(<DataTable {...base} columns={sortCols} data={[{ name: 'An' }]} total={1} sort="" onSortChange={onSortChange} />);
+    const th = screen.getByRole('columnheader', { name: /Tên/ });
+    expect(th).toHaveAttribute('aria-sort', 'none');
+    await userEvent.click(screen.getByRole('button', { name: /Tên/ }));
+    expect(onSortChange).toHaveBeenLastCalledWith('name');
+    rerender(<DataTable {...base} columns={sortCols} data={[{ name: 'An' }]} total={1} sort="name" onSortChange={onSortChange} />);
+    expect(screen.getByRole('columnheader', { name: /Tên/ })).toHaveAttribute('aria-sort', 'ascending');
+    await userEvent.click(screen.getByRole('button', { name: /Tên/ }));
+    expect(onSortChange).toHaveBeenLastCalledWith('-name');
+    expect(screen.queryByRole('button', { name: /Ghi chú/ })).not.toBeInTheDocument();
+  });
+  it('selection: chọn hàng và chọn tất cả', async () => {
+    const onSel = vi.fn();
+    const data = [{ name: 'An' }, { name: 'Bình' }];
+    renderWithProviders(<DataTable {...base} data={data} total={2} getRowId={(r) => r.name} rowSelection={{}} onRowSelectionChange={onSel} />);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Chọn tất cả' }));
+    expect(onSel).toHaveBeenLastCalledWith({ An: true, 'Bình': true });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Chọn hàng An' }));
+    expect(onSel).toHaveBeenLastCalledWith({ An: true });
+  });
+  it('không có checkbox khi thiếu onRowSelectionChange', () => {
+    renderWithProviders(<DataTable {...base} data={[{ name: 'An' }]} total={1} />);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+  it('hideOnMobile gắn class ẩn dưới md', () => {
+    renderWithProviders(<DataTable {...base} columns={sortCols} data={[{ name: 'An' }]} total={1} />);
+    expect(screen.getByRole('columnheader', { name: 'Ghi chú' }).className).toMatch(/hidden md:table-cell/);
+  });
+  it('loading: aria-busy và phân trang disabled', () => {
+    renderWithProviders(<DataTable {...base} data={[]} total={45} page={2} isLoading />);
+    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
+  });
+});
+
+describe('FormField wiring', () => {
+  it('DatePicker/EntitySelect nhận id và aria', () => {
+    renderWithProviders(<>
+      <FormField label="Ngày sinh" error="Sai">{(p) => <DatePicker {...p} value={null} onChange={() => undefined} />}</FormField>
+      <FormField label="Lớp">{(p) => <EntitySelect {...p} entity="class" value={null} onChange={() => undefined} />}</FormField>
+    </>);
+    expect(screen.getByLabelText('Ngày sinh')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Ngày sinh').getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Lớp' })).toBeInTheDocument();
+  });
+});
+
 describe('MoneyInput', () => {
   it('gõ 1500000 hiển thị 1.500.000 và onChange nhận number', async () => {
     const onChange = vi.fn();
