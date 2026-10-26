@@ -110,22 +110,64 @@ async function send(path: string, options: Options, token: string | null): Promi
   }
 }
 
-// ---- refresh (single-flight) -------------------------------------------------
+// ---- refresh (single-flight, coordinated across tabs) ---------------------------
+
+const REFRESH_LOCK = 'lc-refresh';
+const AUTH_CHANNEL = 'lc-auth';
+
+interface RefreshedMessage {
+  type: 'refreshed';
+  result: AuthResultDto;
+}
+
+let channel: BroadcastChannel | null = null;
+/** Bumped on every token broadcast from another tab; `latestFromOtherTab` holds its payload. */
+let broadcastSeq = 0;
+let latestFromOtherTab: AuthResultDto | null = null;
+
+function authChannel(): BroadcastChannel | null {
+  if (channel || typeof BroadcastChannel === 'undefined') return channel;
+  channel = new BroadcastChannel(AUTH_CHANNEL);
+  channel.onmessage = (e: MessageEvent<RefreshedMessage>) => {
+    if (e.data?.type === 'refreshed' && e.data.result?.accessToken) {
+      latestFromOtherTab = e.data.result;
+      broadcastSeq++;
+    }
+  };
+  // Node (tests) would otherwise keep the process alive for an open channel.
+  (channel as { unref?: () => void }).unref?.();
+  return channel;
+}
+
+/** Runs fn under the cross-tab Web Lock when available, so two tabs never rotate the cookie at once. */
+function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = (globalThis.navigator as Navigator | undefined)?.locks;
+  return locks ? (locks.request(REFRESH_LOCK, fn) as Promise<T>) : fn();
+}
 
 let refreshing: Promise<AuthResultDto> | null = null;
 
 /**
  * Exchanges the refresh cookie for a new access token. Concurrent callers share one
- * in-flight request. A rejected refresh (4xx) clears the token and fires onAuthFailure once.
+ * in-flight request; across tabs a Web Lock serialises refreshes and a tab that obtained a
+ * new token while we waited shares it over BroadcastChannel, so we reuse it instead of
+ * rotating again. A rejected refresh (4xx) clears the token and fires onAuthFailure once.
  */
 export function refreshSession(): Promise<AuthResultDto> {
   refreshing ??= (async () => {
+    const ch = authChannel();
+    const seqAtStart = broadcastSeq;
     try {
-      const res = await send('auth/refresh', { method: 'POST' }, null);
-      if (!res.ok) throw await toApiError(res);
-      const body = (await res.json()) as { data: AuthResultDto };
-      tokenStore.set(body.data.accessToken);
-      return body.data;
+      const result = await withRefreshLock(async () => {
+        if (broadcastSeq !== seqAtStart && latestFromOtherTab) return latestFromOtherTab;
+        const res = await send('auth/refresh', { method: 'POST' }, null);
+        if (!res.ok) throw await toApiError(res);
+        const body = (await res.json()) as { data: AuthResultDto };
+        ch?.postMessage({ type: 'refreshed', result: body.data } satisfies RefreshedMessage);
+        return body.data;
+      });
+      tokenStore.set(result.accessToken);
+      return result;
     } catch (e) {
       if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
         tokenStore.clear();

@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import { server } from '../../../test/msw/server';
-import { ApiError, apiGet, apiGetPage, apiPost, setOnAuthFailure, tokenStore } from '../api';
+import { ApiError, apiGet, apiGetPage, apiPost, refreshSession, setOnAuthFailure, tokenStore } from '../api';
 
 const user = { id: 'u1', username: 'a', fullName: 'A', role: 'ADMIN', mustChangePassword: false };
 
@@ -218,5 +218,64 @@ describe('api client', () => {
   it('body không phải envelope -> ApiError INTERNAL giữ status', async () => {
     server.use(http.get('*/api/v1/bad', () => new HttpResponse('oops', { status: 502 })));
     await expect(apiGet('bad')).rejects.toMatchObject({ code: 'INTERNAL', status: 502 });
+  });
+});
+
+describe('refresh giữa nhiều tab (navigator.locks + BroadcastChannel lc-auth)', () => {
+  const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
+  let otherTab: BroadcastChannel;
+  let release: () => void = () => undefined;
+  let lockNames: string[] = [];
+
+  beforeEach(() => {
+    otherTab = new BroadcastChannel('lc-auth');
+    lockNames = [];
+    const gate = new Promise<void>((r) => (release = r));
+    // Fake Web Locks: the callback runs only once the test releases the lock held by "another tab".
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      locks: {
+        request: async (name: string, cb: () => Promise<unknown>) => {
+          lockNames.push(name);
+          await gate;
+          return cb();
+        },
+      },
+    });
+  });
+  afterEach(() => {
+    otherTab.close();
+    vi.unstubAllGlobals();
+  });
+
+  it('tab khác đã refresh trong lúc chờ khóa → dùng token đó, không gọi /auth/refresh', async () => {
+    tokenStore.set('old');
+    let refreshes = 0;
+    server.use(
+      http.post('*/api/v1/auth/refresh', () => {
+        refreshes++;
+        return HttpResponse.json({ data: { accessToken: 'mine', user } });
+      }),
+    );
+    const p = refreshSession();
+    await tick();
+    otherTab.postMessage({ type: 'refreshed', result: { accessToken: 'from-other-tab', user } });
+    await tick();
+    release();
+    const r = await p;
+    expect(lockNames).toEqual(['lc-refresh']);
+    expect(r.accessToken).toBe('from-other-tab');
+    expect(tokenStore.get()).toBe('from-other-tab');
+    expect(refreshes).toBe(0);
+  });
+
+  it('tự refresh thành công → phát token mới cho các tab khác', async () => {
+    const received: unknown[] = [];
+    otherTab.onmessage = (e: MessageEvent) => received.push(e.data);
+    server.use(http.post('*/api/v1/auth/refresh', () => HttpResponse.json({ data: { accessToken: 'mine', user } })));
+    release();
+    expect((await refreshSession()).accessToken).toBe('mine');
+    await tick();
+    expect(received).toEqual([{ type: 'refreshed', result: { accessToken: 'mine', user } }]);
   });
 });
