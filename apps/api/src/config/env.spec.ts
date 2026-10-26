@@ -29,4 +29,16 @@ describe('loadEnv', () => {
     expect(env.PORT).toBe(4000);
     expect(env.BCRYPT_COST).toBe(10);
   });
+  it('JWT_REFRESH_SECRET là tuỳ chọn (dự phòng, không dùng)', () => {
+    const rest: Record<string, string | undefined> = { ...base, JWT_REFRESH_SECRET: undefined };
+    expect(loadEnv(rest).JWT_REFRESH_SECRET).toBeUndefined();
+  });
+  it('TRUST_PROXY: mặc định false; nhận true/false, số hop, hoặc danh sách', () => {
+    expect(loadEnv(base).TRUST_PROXY).toBe(false);
+    expect(loadEnv({ ...base, TRUST_PROXY: '' }).TRUST_PROXY).toBe(false);
+    expect(loadEnv({ ...base, TRUST_PROXY: 'false' }).TRUST_PROXY).toBe(false);
+    expect(loadEnv({ ...base, TRUST_PROXY: 'true' }).TRUST_PROXY).toBe(true);
+    expect(loadEnv({ ...base, TRUST_PROXY: '1' }).TRUST_PROXY).toBe(1);
+    expect(loadEnv({ ...base, TRUST_PROXY: 'loopback, 10.0.0.0/8' }).TRUST_PROXY).toBe('loopback, 10.0.0.0/8');
+  });
 });

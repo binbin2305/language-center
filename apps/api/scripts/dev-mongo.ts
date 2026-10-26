@@ -8,7 +8,7 @@ async function main(): Promise<void> {
   mkdirSync(dbPath, { recursive: true });
   const rs = await MongoMemoryReplSet.create({
     replSet: { count: 1, storageEngine: 'wiredTiger', dbName: 'language-center' },
-    instanceOpts: [{ port: Number(process.env.MONGO_DEV_PORT ?? 27017), dbPath, storageEngine: 'wiredTiger' }],
+    instanceOpts: [{ port: Number(process.env.MONGO_DEV_PORT || 27017), dbPath, storageEngine: 'wiredTiger' }],
   });
   const uri = rs.getUri('language-center');
   console.log(`MongoDB ready. Set in apps/api/.env:\nMONGODB_URI=${uri}`);

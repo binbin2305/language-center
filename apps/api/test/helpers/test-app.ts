@@ -1,5 +1,6 @@
 import { INestApplication, Module, Type } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { randomBytes } from 'crypto';
 import { Connection } from 'mongoose';
@@ -46,7 +47,7 @@ export async function createTestApp(opts: CreateTestAppOptions = {}): Promise<Te
   for (const o of opts.overrides ?? []) builder = builder.overrideProvider(o.provide).useValue(o.useValue);
 
   const moduleRef = await builder.compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication<NestExpressApplication>();
   setupApp(app);
   await app.init();
 

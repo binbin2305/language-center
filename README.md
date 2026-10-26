@@ -11,8 +11,10 @@ Tài liệu gốc: `PRD.md`, `ARCHITECTURE.md`, `BACKEND_SCHEMA.md`, `DESIGN.md`
 
 ```bash
 pnpm install
-cp apps/api/.env.example apps/api/.env   # đổi JWT secret (>= 32 ký tự)
+cp apps/api/.env.example apps/api/.env   # đổi JWT_ACCESS_SECRET (>= 32 ký tự)
 ```
+
+`pnpm install` tự build `packages/shared` (script `prepare`). Dev, typecheck và test đọc `@lc/shared` thẳng từ `packages/shared/src`; chỉ bản build API (`pnpm --filter api build`) dùng `dist`.
 
 ## Lệnh
 
@@ -32,7 +34,11 @@ cp apps/api/.env.example apps/api/.env   # đổi JWT secret (>= 32 ký tự)
 pnpm --filter api dev:mongo     # MongoMemoryReplSet bền vững, dữ liệu ở .mongo-data/
 ```
 
-Lệnh in `MONGODB_URI=...`; dán vào `apps/api/.env`. Giữ terminal đó chạy, rồi `pnpm dev` ở terminal khác. (Có Docker thì dùng `docker compose up -d` với `docker-compose.yml`: mongo 7 replica set `rs0`.)
+Cổng mặc định 27017; đổi bằng `MONGO_DEV_PORT=27018 pnpm --filter api dev:mongo` (để trống cũng dùng 27017). Lệnh in `MONGODB_URI=...`; dán vào `apps/api/.env`. Giữ terminal đó chạy, rồi `pnpm dev` ở terminal khác. (Có Docker thì dùng `docker compose up -d` với `docker-compose.yml`: mongo 7 replica set `rs0`.)
+
+## Chạy sau reverse proxy
+
+Đặt `TRUST_PROXY` trong `apps/api/.env` (mặc định `false`) để Express lấy IP client từ `X-Forwarded-For` — cần cho giới hạn tần suất đăng nhập theo IP. Giá trị: `true`/`false`, số proxy tin cậy (vd. `1`, nên dùng), hoặc danh sách địa chỉ/subnet (vd. `loopback, 10.0.0.0/8`). Đừng đặt `true` nếu API nhận request trực tiếp từ Internet: client có thể giả mạo IP.
 
 ## Tài khoản admin đầu tiên (seed)
 
