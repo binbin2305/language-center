@@ -1,0 +1,23 @@
+export const Models = {
+  User: 'User',
+  RefreshToken: 'RefreshToken',
+  Course: 'Course',
+  Room: 'Room',
+  Lead: 'Lead',
+  Student: 'Student',
+  Counter: 'Counter',
+  Enrollment: 'Enrollment',
+  PlacementTest: 'PlacementTest',
+  Class: 'Class',
+  Session: 'Session',
+  Attendance: 'Attendance',
+  AttendanceWarning: 'AttendanceWarning',
+  Assessment: 'Assessment',
+  Grade: 'Grade',
+  Invoice: 'Invoice',
+  Payment: 'Payment',
+  Notification: 'Notification',
+  AuditLog: 'AuditLog',
+  Settings: 'Settings',
+} as const;
+export type ModelName = (typeof Models)[keyof typeof Models];
