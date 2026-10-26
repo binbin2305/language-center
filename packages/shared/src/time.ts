@@ -38,3 +38,16 @@ export function vnDateTime(day: string, hhmm: string): Date {
   if (!HHMM_RE.test(hhmm)) throw new RangeError(`Invalid time: ${hhmm}`);
   return fromZonedTime(`${day}T${hhmm}:00`, VN_TZ);
 }
+
+/**
+ * Date-only fields (dob, startDate, dueDate, heldOn, …) are stored as VN midnight of that day.
+ * Serialize with toDateOnly — never `toISOString().slice(0, 10)`, which yields the previous day.
+ */
+export function toDateOnly(d: Date): string {
+  return vnDay(d);
+}
+
+/** 'YYYY-MM-DD' -> the stored instant for a date-only field (VN midnight). */
+export function fromDateOnly(day: string): Date {
+  return startOfVnDay(day);
+}

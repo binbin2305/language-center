@@ -9,12 +9,14 @@ import {
   canTransition,
   classify,
   formatVnd,
+  fromDateOnly,
   isPass,
   isSameVnDay,
   isValidDiscount,
   isValidScore,
   removeVietnameseTones,
   startOfVnDay,
+  toDateOnly,
   vnDateTime,
   vnDay,
   weightedAverage,
@@ -28,6 +30,17 @@ describe('time', () => {
   it('vnDateTime / startOfVnDay', () => {
     expect(vnDateTime('2026-01-05', '18:00').toISOString()).toBe('2026-01-05T11:00:00.000Z');
     expect(startOfVnDay('2026-01-05').toISOString()).toBe('2026-01-04T17:00:00.000Z');
+  });
+  it('toDateOnly / fromDateOnly: lưu ngày thuần = 0h giờ VN, round-trip', () => {
+    const stored = fromDateOnly('2026-01-05');
+    expect(stored.toISOString()).toBe('2026-01-04T17:00:00.000Z');
+    // toISOString().slice(0, 10) would give the previous day here.
+    expect(toDateOnly(stored)).toBe('2026-01-05');
+    expect(toDateOnly(new Date('2026-01-05T16:59:59Z'))).toBe('2026-01-05');
+    for (const day of ['2026-01-01', '2026-02-28', '2026-12-31', '2028-02-29']) {
+      expect(toDateOnly(fromDateOnly(day))).toBe(day);
+    }
+    expect(() => fromDateOnly('2026-02-30')).toThrow(RangeError);
   });
   it('addVnDays', () => {
     expect(addVnDays('2026-01-31', 1)).toBe('2026-02-01');
