@@ -39,7 +39,7 @@ GradeClass      = EXCELLENT | GOOD | FAIR | AVERAGE | FAIL   # Xuất sắc/Gi�
 ### 2.1 `users`
 | Field | Type | Ràng buộc |
 |---|---|---|
-| email | string \| null | unique sparse (lowercase); bắt buộc với mọi role trừ STUDENT. Tài khoản STUDENT **không lưu email** ở users (email nằm ở `students`) để tránh đụng unique khi anh chị em dùng chung email |
+| email | string \| null | unique partial `{email:{$type:"string"}}` (lowercase); bắt buộc với mọi role trừ STUDENT. Tài khoản STUDENT **không lưu email** ở users (email nằm ở `students`) để tránh đụng unique khi anh chị em dùng chung email |
 | username | string | unique; STUDENT = mã HV; khác = email |
 | passwordHash | string | `select: false` |
 | fullName | string | required |
@@ -51,10 +51,10 @@ GradeClass      = EXCELLENT | GOOD | FAIR | AVERAGE | FAIL   # Xuất sắc/Gi�
 | failedLoginWindowStart | Date \| null | |
 | lockedUntil | Date \| null | |
 | teacherProfile | `{ languages: string[], levels: string[], specialization?: string }` | chỉ TEACHER |
-| studentId | ObjectId → students | chỉ STUDENT, unique sparse |
+| studentId | ObjectId → students | chỉ STUDENT, unique partial `{$type:"objectId"}` |
 | deletedAt | Date \| null | |
 
-Index: `{username:1}` unique · `{email:1}` unique sparse · `{role:1, status:1}`.
+Index: `{username:1}` unique · `{email:1}` unique partial (`$type: string` — không bao giờ ghi null) · `{role:1, status:1}`.
 
 ### 2.2 `refresh_tokens`
 `{ userId, tokenHash (sha256), expiresAt, revokedAt, replacedBy }` · TTL index trên `expiresAt`.
@@ -99,7 +99,7 @@ Index: `{phone:1}` · `{email:1}` · `{status:1, createdAt:-1}`.
 | fullName, dob, gender, phone, email, address | như leads | **không unique** (anh chị em dùng chung SĐT phụ huynh) — trùng chỉ cảnh báo qua DUPLICATE_PERSON |
 | fullNameSearch | string | bỏ dấu + lowercase, tự sinh (pre-save) |
 | status | StudentStatus | default ACTIVE |
-| leadId | ObjectId → leads | unique sparse |
+| leadId | ObjectId → leads | unique partial `{$type:"objectId"}` |
 | userId | ObjectId → users | |
 | documents | `[{ _id, fileName, mimeType, size, path, uploadedAt, uploadedBy }]` | ≤ 5MB/file, png/jpg/pdf |
 | note | string | |
