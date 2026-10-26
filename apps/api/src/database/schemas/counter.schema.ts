@@ -1,4 +1,5 @@
 import { HydratedDocument, Schema } from 'mongoose';
+import { clockTimestamps } from './helpers';
 
 export interface Counter {
   _id: string;
@@ -7,7 +8,7 @@ export interface Counter {
 
 export const CounterSchema = new Schema<Counter>(
   { _id: { type: String, required: true }, seq: { type: Number, default: 0 } },
-  { timestamps: true, collection: 'counters' },
+  { timestamps: clockTimestamps, collection: 'counters' },
 );
 
 export type CounterDoc = HydratedDocument<Counter>;

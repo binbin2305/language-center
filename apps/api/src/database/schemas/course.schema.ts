@@ -1,6 +1,6 @@
 import { HydratedDocument, Schema } from 'mongoose';
 import { ALL_COURSE_STATUSES, CourseStatus } from '@lc/shared';
-import { money } from './helpers';
+import { clockTimestamps, money } from './helpers';
 
 export interface Course {
   code: string;
@@ -32,7 +32,7 @@ export const CourseSchema = new Schema<Course>(
     baseFee: money({ required: true }),
     status: { type: String, enum: ALL_COURSE_STATUSES, default: CourseStatus.ACTIVE },
   },
-  { timestamps: true, collection: 'courses' },
+  { timestamps: clockTimestamps, collection: 'courses' },
 );
 CourseSchema.index({ code: 1 }, { unique: true });
 

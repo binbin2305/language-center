@@ -1,5 +1,6 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { Models } from '../models';
+import { clockTimestamps } from './helpers';
 
 export interface RefreshToken {
   userId: Types.ObjectId;
@@ -17,7 +18,7 @@ export const RefreshTokenSchema = new Schema<RefreshToken>(
     revokedAt: { type: Date, default: null },
     replacedBy: { type: Schema.Types.ObjectId, ref: Models.RefreshToken, default: null },
   },
-  { timestamps: true, collection: 'refresh_tokens' },
+  { timestamps: clockTimestamps, collection: 'refresh_tokens' },
 );
 RefreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 RefreshTokenSchema.index({ tokenHash: 1 });

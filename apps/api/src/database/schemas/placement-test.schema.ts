@@ -1,7 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_PLACEMENT_STATUSES, PlacementStatus } from '@lc/shared';
 import { Models } from '../models';
-import { scoreField } from './helpers';
+import { clockTimestamps, scoreField } from './helpers';
 
 export interface PlacementCandidate {
   enrollmentId: Types.ObjectId;
@@ -55,7 +55,7 @@ export const PlacementTestSchema = new Schema<PlacementTest>(
     status: { type: String, enum: ALL_PLACEMENT_STATUSES, default: PlacementStatus.SCHEDULED },
     candidates: { type: [CandidateSchema], default: [] },
   },
-  { timestamps: true, collection: 'placement_tests' },
+  { timestamps: clockTimestamps, collection: 'placement_tests' },
 );
 PlacementTestSchema.index({ teacherId: 1, startAt: 1 });
 PlacementTestSchema.index({ roomId: 1, startAt: 1 });

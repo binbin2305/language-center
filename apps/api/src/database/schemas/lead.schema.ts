@@ -1,7 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_GENDERS, ALL_LEAD_STATUSES, Gender, LeadStatus } from '@lc/shared';
 import { Models } from '../models';
-import { VN_PHONE_REGEX } from './helpers';
+import { VN_PHONE_REGEX, clockTimestamps } from './helpers';
 
 export interface Lead {
   fullName: string;
@@ -33,7 +33,7 @@ export const LeadSchema = new Schema<Lead>(
     createdBy: { type: Schema.Types.ObjectId, ref: Models.User },
     deletedAt: { type: Date, default: null },
   },
-  { timestamps: true, collection: 'leads' },
+  { timestamps: clockTimestamps, collection: 'leads' },
 );
 LeadSchema.index({ phone: 1 });
 LeadSchema.index({ email: 1 });

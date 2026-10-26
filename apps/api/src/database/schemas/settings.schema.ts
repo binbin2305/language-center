@@ -1,4 +1,5 @@
 import { HydratedDocument, Schema } from 'mongoose';
+import { clockTimestamps } from './helpers';
 
 export const SETTINGS_ID = 'center';
 
@@ -22,7 +23,7 @@ export const SettingsSchema = new Schema<Settings>(
     teacherAttendanceEditDays: { type: Number, default: 7, min: 0 },
     invoiceDueDaysAfterStart: { type: Number, default: 7, min: 0 },
   },
-  { timestamps: true, collection: 'settings' },
+  { timestamps: clockTimestamps, collection: 'settings' },
 );
 
 export type SettingsDoc = HydratedDocument<Settings>;

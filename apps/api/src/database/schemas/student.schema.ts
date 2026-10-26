@@ -1,7 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_GENDERS, ALL_STUDENT_STATUSES, Gender, StudentStatus, removeVietnameseTones } from '@lc/shared';
 import { Models } from '../models';
-import { VN_PHONE_REGEX } from './helpers';
+import { VN_PHONE_REGEX, clockTimestamps } from './helpers';
 
 export interface StudentDocument {
   _id: Types.ObjectId;
@@ -59,7 +59,7 @@ export const StudentSchema = new Schema<Student>(
     createdBy: { type: Schema.Types.ObjectId, ref: Models.User },
     deletedAt: { type: Date, default: null },
   },
-  { timestamps: true, collection: 'students' },
+  { timestamps: clockTimestamps, collection: 'students' },
 );
 StudentSchema.pre('validate', function () {
   if (this.fullName) this.fullNameSearch = removeVietnameseTones(this.fullName).toLowerCase().trim();

@@ -1,6 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_SESSION_STATUSES, SessionStatus } from '@lc/shared';
 import { Models } from '../models';
+import { clockTimestamps } from './helpers';
 
 export interface Session {
   classId: Types.ObjectId;
@@ -48,7 +49,7 @@ export const SessionSchema = new Schema<Session>(
     attendanceNote: { type: String },
     createdBy: { type: Schema.Types.ObjectId, ref: Models.User },
   },
-  { timestamps: true, collection: 'sessions' },
+  { timestamps: clockTimestamps, collection: 'sessions' },
 );
 SessionSchema.index({ roomId: 1, startAt: 1, endAt: 1 });
 SessionSchema.index({ teacherId: 1, startAt: 1, endAt: 1 });

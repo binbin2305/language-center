@@ -11,8 +11,8 @@ import { SettingsService } from '../../src/common/settings/settings.service';
 import { Models } from '../../src/database/models';
 import { Settings } from '../../src/database/schemas/settings.schema';
 import { AuditLog } from '../../src/database/schemas/audit-log.schema';
-import { makeClass, makeEnrollment, makeSession, makeStudent, makeTeacher, makeUser, models } from '../factories';
-import { createTestApp, TestApp } from '../helpers/test-app';
+import { makeClass, makeEnrollment, makeLead, makeSession, makeStudent, makeTeacher, makeUser, models } from '../factories';
+import { createTestApp, DEFAULT_NOW, TestApp } from '../helpers/test-app';
 
 const ids = (a: Types.ObjectId[]) => a.map(String).sort();
 
@@ -218,6 +218,34 @@ describe('common services', () => {
       expect(r.data).toHaveLength(2);
       const asc = await paginate(Room, { code: /^PAGINATE-/ }, { page: 1, limit: 10, sort: 'code' }, { code: 1 });
       expect(asc.data.map((d) => d.code)).toEqual([0, 1, 2, 3, 4].map((i) => `PAGINATE-${i}`));
+    });
+  });
+
+  describe('timestamps theo ClockService', () => {
+    it('createdAt/updatedAt lấy từ FakeClock; tiến đồng hồ ảnh hưởng updatedAt', async () => {
+      t.clock.set(DEFAULT_NOW);
+      const lead = await makeLead(t.conn);
+      expect(lead.get('createdAt')).toEqual(DEFAULT_NOW);
+      expect(lead.get('updatedAt')).toEqual(DEFAULT_NOW);
+
+      t.clock.advance(60 * 60_000);
+      const later = t.clock.now();
+      const viaUpdate = await models(t.conn).Lead.findOneAndUpdate({ _id: lead._id }, { note: 'x' }, { new: true });
+      expect(viaUpdate?.get('updatedAt')).toEqual(later);
+      expect(viaUpdate?.get('createdAt')).toEqual(DEFAULT_NOW);
+
+      t.clock.advance(60_000);
+      lead.note = 'y';
+      await lead.save();
+      expect(lead.get('updatedAt')).toEqual(t.clock.now());
+      t.clock.set(DEFAULT_NOW);
+    });
+    it('mọi schema dùng clockTimestamps (currentTime = ClockService)', () => {
+      for (const model of Object.values(t.conn.models)) {
+        const ts = model.schema.get('timestamps') as { currentTime?: () => Date } | undefined;
+        expect([model.modelName, typeof ts?.currentTime]).toEqual([model.modelName, 'function']);
+        expect([model.modelName, ts?.currentTime?.()]).toEqual([model.modelName, t.clock.now()]);
+      }
     });
   });
 });

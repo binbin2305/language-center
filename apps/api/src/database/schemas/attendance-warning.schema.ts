@@ -1,5 +1,6 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { Models } from '../models';
+import { clockTimestamps } from './helpers';
 
 export interface AttendanceWarning {
   studentId: Types.ObjectId;
@@ -15,7 +16,7 @@ export const AttendanceWarningSchema = new Schema<AttendanceWarning>(
     triggeredAt: { type: Date, required: true },
     absenceRate: { type: Number, required: true, min: 0, max: 1 },
   },
-  { timestamps: true, collection: 'attendance_warnings' },
+  { timestamps: clockTimestamps, collection: 'attendance_warnings' },
 );
 AttendanceWarningSchema.index({ studentId: 1, classId: 1 }, { unique: true });
 

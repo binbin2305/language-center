@@ -1,6 +1,6 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { Models } from '../models';
-import { scoreField } from './helpers';
+import { clockTimestamps, scoreField } from './helpers';
 
 export interface GradeHistoryEntry {
   fromScore: number | null;
@@ -47,7 +47,7 @@ export const GradeSchema = new Schema<Grade>(
     isDraft: { type: Boolean, default: true },
     history: { type: [HistorySchema], default: [] },
   },
-  { timestamps: true, collection: 'grades' },
+  { timestamps: clockTimestamps, collection: 'grades' },
 );
 GradeSchema.index({ assessmentId: 1, studentId: 1 }, { unique: true });
 GradeSchema.index({ studentId: 1 });

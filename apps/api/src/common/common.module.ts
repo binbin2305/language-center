@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { AuditService } from './audit/audit.service';
+import { ClockHolderBinder } from './clock/clock-holder';
 import { ClockService, SystemClock } from './clock/clock.service';
 import { CounterService } from './db/counter.service';
 import { NotificationsService } from './notifications/notifications.service';
@@ -10,7 +11,7 @@ const services = [CounterService, AuditService, NotificationsService, SettingsSe
 
 @Global()
 @Module({
-  providers: [{ provide: ClockService, useClass: SystemClock }, ...services],
+  providers: [{ provide: ClockService, useClass: SystemClock }, ClockHolderBinder, ...services],
   exports: [ClockService, ...services],
 })
 export class CommonModule {}

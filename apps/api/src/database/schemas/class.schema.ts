@@ -1,7 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_CLASS_STATUSES, ClassStatus } from '@lc/shared';
 import { Models } from '../models';
-import { nullableRef } from './helpers';
+import { clockTimestamps, nullableRef } from './helpers';
 
 export interface Class {
   code: string;
@@ -63,7 +63,7 @@ export const ClassSchema = new Schema<Class>(
     },
     status: { type: String, enum: ALL_CLASS_STATUSES, default: ClassStatus.PLANNED },
   },
-  { timestamps: true, collection: 'classes' },
+  { timestamps: clockTimestamps, collection: 'classes' },
 );
 ClassSchema.index({ code: 1 }, { unique: true });
 ClassSchema.index({ courseId: 1, level: 1, status: 1 });

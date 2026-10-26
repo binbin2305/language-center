@@ -1,4 +1,8 @@
 import { Schema, SchemaTypeOptions, Types } from 'mongoose';
+import { clockHolder } from '../../common/clock/clock-holder';
+
+/** Use as `timestamps: clockTimestamps` in every schema: createdAt/updatedAt follow ClockService. */
+export const clockTimestamps = { currentTime: (): Date => clockHolder.now() };
 
 export const VN_PHONE_REGEX = /^(0|\+84)\d{9,10}$/;
 

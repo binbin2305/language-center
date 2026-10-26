@@ -1,6 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_ASSESSMENT_TYPES, AssessmentType } from '@lc/shared';
 import { Models } from '../models';
+import { clockTimestamps } from './helpers';
 
 export interface Assessment {
   classId: Types.ObjectId;
@@ -24,7 +25,7 @@ export const AssessmentSchema = new Schema<Assessment>(
     unlockedUntil: { type: Date, default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: Models.User },
   },
-  { timestamps: true, collection: 'assessments' },
+  { timestamps: clockTimestamps, collection: 'assessments' },
 );
 AssessmentSchema.index({ classId: 1, heldOn: 1 });
 

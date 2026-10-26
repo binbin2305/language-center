@@ -1,7 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_PAYMENT_METHODS, ALL_PAYMENT_STATUSES, PaymentMethod, PaymentStatus } from '@lc/shared';
 import { Models } from '../models';
-import { money } from './helpers';
+import { clockTimestamps, money } from './helpers';
 
 export interface Payment {
   code: string;
@@ -33,7 +33,7 @@ export const PaymentSchema = new Schema<Payment>(
     voidedAt: { type: Date },
     recordedBy: { type: Schema.Types.ObjectId, ref: Models.User },
   },
-  { timestamps: true, collection: 'payments' },
+  { timestamps: clockTimestamps, collection: 'payments' },
 );
 PaymentSchema.index({ code: 1 }, { unique: true });
 PaymentSchema.index({ invoiceId: 1 });

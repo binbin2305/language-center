@@ -1,7 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_DISCOUNT_STATUSES, ALL_INVOICE_KINDS, ALL_INVOICE_STATUSES, DiscountStatus, InvoiceKind, InvoiceStatus } from '@lc/shared';
 import { Models } from '../models';
-import { money, nullableRef } from './helpers';
+import { clockTimestamps, money, nullableRef } from './helpers';
 
 export interface InvoiceDiscount {
   kind: 'PERCENT' | 'AMOUNT';
@@ -81,7 +81,7 @@ export const InvoiceSchema = new Schema<Invoice>(
     dueDate: { type: Date, required: true },
     status: { type: String, enum: ALL_INVOICE_STATUSES, default: InvoiceStatus.UNPAID },
   },
-  { timestamps: true, collection: 'invoices' },
+  { timestamps: clockTimestamps, collection: 'invoices' },
 );
 InvoiceSchema.index({ code: 1 }, { unique: true });
 InvoiceSchema.index({ studentId: 1, status: 1 });

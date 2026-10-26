@@ -1,6 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_AUDIT_ACTIONS, ALL_ROLES, AuditAction, Role } from '@lc/shared';
 import { Models } from '../models';
+import { clockTimestamps } from './helpers';
 
 export interface AuditLog {
   actorId: Types.ObjectId;
@@ -26,7 +27,7 @@ export const AuditLogSchema = new Schema<AuditLog>(
     after: { type: Schema.Types.Mixed },
     at: { type: Date, required: true },
   },
-  { timestamps: true, collection: 'audit_logs' },
+  { timestamps: clockTimestamps, collection: 'audit_logs' },
 );
 AuditLogSchema.index({ entity: 1, entityId: 1, at: -1 });
 

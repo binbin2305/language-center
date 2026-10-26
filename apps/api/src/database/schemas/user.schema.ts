@@ -1,6 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_ROLES, ALL_USER_STATUSES, Role, UserStatus } from '@lc/shared';
 import { Models } from '../models';
+import { clockTimestamps } from './helpers';
 
 export interface User {
   email?: string;
@@ -46,7 +47,7 @@ export const UserSchema = new Schema<User>(
     studentId: { type: Schema.Types.ObjectId, ref: Models.Student },
     deletedAt: { type: Date, default: null },
   },
-  { timestamps: true, collection: 'users' },
+  { timestamps: clockTimestamps, collection: 'users' },
 );
 UserSchema.index({ username: 1 }, { unique: true });
 UserSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } } });

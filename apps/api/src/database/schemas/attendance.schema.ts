@@ -1,6 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_ATTENDANCE_STATUSES, AttendanceStatus } from '@lc/shared';
 import { Models } from '../models';
+import { clockTimestamps } from './helpers';
 
 export interface AttendanceHistoryEntry {
   from: AttendanceStatus;
@@ -43,7 +44,7 @@ export const AttendanceSchema = new Schema<Attendance>(
     recordedBy: { type: Schema.Types.ObjectId, ref: Models.User },
     history: { type: [HistorySchema], default: [] },
   },
-  { timestamps: true, collection: 'attendances' },
+  { timestamps: clockTimestamps, collection: 'attendances' },
 );
 AttendanceSchema.index({ sessionId: 1, studentId: 1 }, { unique: true });
 AttendanceSchema.index({ studentId: 1, createdAt: -1 });

@@ -1,5 +1,6 @@
 import { HydratedDocument, Schema } from 'mongoose';
 import { ALL_ROOM_STATUSES, RoomStatus } from '@lc/shared';
+import { clockTimestamps } from './helpers';
 
 export interface Room {
   code: string;
@@ -20,7 +21,7 @@ export const RoomSchema = new Schema<Room>(
     },
     status: { type: String, enum: ALL_ROOM_STATUSES, default: RoomStatus.ACTIVE },
   },
-  { timestamps: true, collection: 'rooms' },
+  { timestamps: clockTimestamps, collection: 'rooms' },
 );
 RoomSchema.index({ code: 1 }, { unique: true });
 

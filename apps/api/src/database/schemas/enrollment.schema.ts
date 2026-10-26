@@ -2,7 +2,7 @@ import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_ENROLLMENT_STATUSES, EnrollmentStatus } from '@lc/shared';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../active-enrollment';
 import { Models } from '../models';
-import { nullableRef } from './helpers';
+import { clockTimestamps, nullableRef } from './helpers';
 
 export interface ReasonStamp {
   reason: string;
@@ -70,7 +70,7 @@ export const EnrollmentSchema = new Schema<Enrollment>(
     invoiceId: nullableRef(Models.Invoice),
     history: { type: [HistorySchema], default: [] },
   },
-  { timestamps: true, collection: 'enrollments' },
+  { timestamps: clockTimestamps, collection: 'enrollments' },
 );
 EnrollmentSchema.index({ studentId: 1, courseId: 1, status: 1 });
 // At most one active enrollment per (student, course); closes the check-then-insert race.

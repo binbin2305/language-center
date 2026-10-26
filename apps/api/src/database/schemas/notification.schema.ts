@@ -1,6 +1,7 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_NOTIFICATION_TYPES, NotificationType } from '@lc/shared';
 import { Models } from '../models';
+import { clockTimestamps } from './helpers';
 
 export interface Notification {
   userId: Types.ObjectId;
@@ -22,7 +23,7 @@ export const NotificationSchema = new Schema<Notification>(
     refId: { type: Schema.Types.ObjectId },
     readAt: { type: Date, default: null },
   },
-  { timestamps: true, collection: 'notifications' },
+  { timestamps: clockTimestamps, collection: 'notifications' },
 );
 NotificationSchema.index({ userId: 1, readAt: 1, createdAt: -1 });
 
