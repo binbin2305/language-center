@@ -9,6 +9,8 @@ import { ALLOW_PASSWORD_CHANGE_KEY } from './allow-password-change.decorator';
 import { AuthedRequest } from './current-user.decorator';
 import { IS_PUBLIC_KEY } from './public.decorator';
 
+const OBJECT_ID_HEX = /^[0-9a-f]{24}$/i;
+
 interface AccessClaims {
   sub?: unknown;
   role?: unknown;
@@ -36,6 +38,7 @@ export class JwtAuthGuard implements CanActivate {
     let claims: AccessClaims;
     try {
       claims = this.jwt.verify<AccessClaims>(match[1], {
+        algorithms: ['HS256'],
         clockTimestamp: Math.floor(this.clock.now().getTime() / 1000),
       });
     } catch {
@@ -45,10 +48,10 @@ export class JwtAuthGuard implements CanActivate {
     const { sub, role, studentId } = claims;
     if (
       typeof sub !== 'string' ||
-      !Types.ObjectId.isValid(sub) ||
+      !OBJECT_ID_HEX.test(sub) ||
       typeof role !== 'string' ||
       !(ALL_ROLES as readonly string[]).includes(role) ||
-      (studentId !== undefined && (typeof studentId !== 'string' || !Types.ObjectId.isValid(studentId)))
+      (studentId !== undefined && (typeof studentId !== 'string' || !OBJECT_ID_HEX.test(studentId)))
     ) {
       throw new AppError(ErrorCode.UNAUTHENTICATED);
     }
@@ -59,7 +62,9 @@ export class JwtAuthGuard implements CanActivate {
       ...(studentId !== undefined ? { studentId: new Types.ObjectId(studentId as string) } : {}),
     };
 
-    if (claims.mcp === true && !this.reflector.getAllAndOverride<boolean>(ALLOW_PASSWORD_CHANGE_KEY, targets)) {
+    // Fail-closed: anything other than an absent/false claim means the password must be changed first.
+    const mustChangePassword = claims.mcp !== undefined && claims.mcp !== false;
+    if (mustChangePassword && !this.reflector.getAllAndOverride<boolean>(ALLOW_PASSWORD_CHANGE_KEY, targets)) {
       throw new AppError(ErrorCode.PASSWORD_CHANGE_REQUIRED);
     }
     return true;

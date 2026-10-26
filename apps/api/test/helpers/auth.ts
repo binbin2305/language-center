@@ -5,9 +5,10 @@ import { TestApp } from './test-app';
 
 export interface TestTokenPayload {
   sub?: string;
-  role: Role;
+  /** Deliberately loose so negative tests can sign invalid claims. */
+  role: Role | string;
   studentId?: string;
-  mcp?: boolean;
+  mcp?: unknown;
 }
 
 /** Signs an access token with iat taken from the app's FakeClock. */

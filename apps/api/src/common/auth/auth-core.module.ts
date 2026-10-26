@@ -11,7 +11,7 @@ import { RolesGuard } from './roles.guard';
       global: true,
       useFactory: () => {
         const env = loadEnv();
-        return { secret: env.JWT_ACCESS_SECRET, signOptions: { expiresIn: env.JWT_ACCESS_TTL as JwtSignOptions['expiresIn'] } };
+        return { secret: env.JWT_ACCESS_SECRET, signOptions: { algorithm: 'HS256', expiresIn: env.JWT_ACCESS_TTL as JwtSignOptions['expiresIn'] } };
       },
     }),
   ],

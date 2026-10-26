@@ -2,8 +2,8 @@ import { loadEnv } from './env';
 
 const base = {
   MONGODB_URI: 'mongodb://localhost/x',
-  JWT_ACCESS_SECRET: 'a'.repeat(16),
-  JWT_REFRESH_SECRET: 'b'.repeat(16),
+  JWT_ACCESS_SECRET: 'a'.repeat(32),
+  JWT_REFRESH_SECRET: 'b'.repeat(32),
 };
 
 describe('loadEnv', () => {
@@ -19,6 +19,10 @@ describe('loadEnv', () => {
   it('throw khi thiếu JWT_ACCESS_SECRET', () => {
     const rest: Record<string, string | undefined> = { ...base, JWT_ACCESS_SECRET: undefined };
     expect(() => loadEnv(rest)).toThrow(/JWT_ACCESS_SECRET/);
+  });
+  it('throw khi JWT secret ngắn hơn 32 ký tự', () => {
+    expect(() => loadEnv({ ...base, JWT_ACCESS_SECRET: 'a'.repeat(31) })).toThrow(/JWT_ACCESS_SECRET/);
+    expect(() => loadEnv({ ...base, JWT_REFRESH_SECRET: 'b'.repeat(31) })).toThrow(/JWT_REFRESH_SECRET/);
   });
   it('ép kiểu PORT và BCRYPT_COST', () => {
     const env = loadEnv({ ...base, PORT: '4000', BCRYPT_COST: '10' });
