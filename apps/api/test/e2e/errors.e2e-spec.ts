@@ -1,4 +1,4 @@
-import { Body, Controller, Get, INestApplication, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, HttpException, Get, INestApplication, Param, Post, Query } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { MongooseModule, InjectConnection } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
@@ -32,6 +32,14 @@ class TestController {
   @Get('app-error')
   appError() {
     throw new AppError('CLASS_FULL');
+  }
+  @Get('http413')
+  http413() {
+    throw new HttpException('x', 413);
+  }
+  @Post('root')
+  root(@Body(new ZodValidationPipe(z.string())) b: string) {
+    return { data: b };
   }
   @Get('boom')
   boom() {
@@ -107,6 +115,27 @@ describe('error envelope', () => {
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe('INTERNAL');
     expect(JSON.stringify(res.body)).not.toContain('x-secret-internal');
+  });
+
+  it('JSON hỏng → 400 VALIDATION_FAILED', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/t/lead')
+      .set('content-type', 'application/json')
+      .send('{bad');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('HttpException 4xx chưa map giữ status, code VALIDATION_FAILED', async () => {
+    const res = await request(app.getHttpServer()).get('/api/v1/t/http413');
+    expect(res.status).toBe(413);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('lỗi zod ở gốc dùng khóa _root', async () => {
+    const res = await request(app.getHttpServer()).post('/api/v1/t/root').send({ a: 1 });
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.fields._root).toEqual(expect.any(String));
   });
 
   it('route không tồn tại → 404 NOT_FOUND', async () => {

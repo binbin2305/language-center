@@ -30,8 +30,17 @@ function mapHttp(status: number): ErrorCode {
     case 429:
       return ErrorCode.RATE_LIMITED;
     default:
-      return ErrorCode.INTERNAL;
+      return status >= 400 && status < 500 ? ErrorCode.VALIDATION_FAILED : ErrorCode.INTERNAL;
   }
+}
+
+function httpStatusOf(e: unknown): number | undefined {
+  if (typeof e !== 'object' || e === null) return undefined;
+  const { status, statusCode } = e as { status?: unknown; statusCode?: unknown };
+  for (const v of [status, statusCode]) {
+    if (typeof v === 'number' && v >= 400 && v < 500) return v;
+  }
+  return undefined;
 }
 
 @Catch()
@@ -58,7 +67,7 @@ export class HttpErrorFilter implements ExceptionFilter {
     if (e instanceof ZodError) {
       const fields: Record<string, string> = {};
       for (const issue of e.issues) {
-        const key = issue.path.join('.');
+        const key = issue.path.join('.') || '_root';
         if (!(key in fields)) fields[key] = issue.message;
       }
       return {
@@ -80,6 +89,11 @@ export class HttpErrorFilter implements ExceptionFilter {
       const status = e.getStatus();
       const code = mapHttp(status);
       if (status >= 500) return { status: 500, code: ErrorCode.INTERNAL, message: ErrorCode.INTERNAL };
+      return { status, code, message: code };
+    }
+    const status = httpStatusOf(e);
+    if (status) {
+      const code = mapHttp(status);
       return { status, code, message: code };
     }
     return { status: 500, code: ErrorCode.INTERNAL, message: ErrorCode.INTERNAL };
