@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NotificationType } from '../enums';
+import { NotificationRefType, NotificationType } from '../enums';
 import { zBoolQuery, zDateTime, zObjectId, zPagination } from './common';
 
 export const ListNotificationsQuery = zPagination.extend({
@@ -13,7 +13,7 @@ export const NotificationDto = z.object({
   type: z.nativeEnum(NotificationType),
   title: z.string(),
   body: z.string(),
-  refType: z.string().nullish(),
+  refType: z.nativeEnum(NotificationRefType).nullish(),
   refId: zObjectId.nullish(),
   readAt: zDateTime.nullable(),
   createdAt: zDateTime,

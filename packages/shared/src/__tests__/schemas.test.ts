@@ -227,7 +227,14 @@ describe('smoke: mỗi file schema', () => {
   });
   it('notifications', () => {
     expect(S.ListNotificationsQuery.parse({ unread: 'true' })).toMatchObject({ unread: true });
-    expect(S.NotificationDto.safeParse({ id: id(1), type: 'CLASS_ASSIGNED', title: 't', body: 'b', refType: 'class', refId: id(2), readAt: null, createdAt: ts }).success).toBe(true);
+    const n = { id: id(1), type: 'CLASS_ASSIGNED', title: 't', body: 'b', refId: id(2), readAt: null, createdAt: ts };
+    expect(S.NotificationDto.safeParse({ ...n, refType: 'CLASS' }).success).toBe(true);
+    expect(S.NotificationDto.safeParse({ ...n, refType: 'class' }).success).toBe(false);
+    expect(S.NotificationDto.safeParse({ ...n, refType: null, refId: null }).success).toBe(true);
+    for (const refType of ['CLASS', 'SESSION', 'STUDENT', 'INVOICE', 'ASSESSMENT', 'ENROLLMENT', 'PLACEMENT_TEST', 'PAYMENT']) {
+      expect([refType, S.NotificationDto.safeParse({ ...n, refType }).success]).toEqual([refType, true]);
+    }
+    expect(S.ALL_NOTIFICATION_REF_TYPES).toHaveLength(8);
     expect(S.UnreadCountDto.safeParse({ count: 3 }).success).toBe(true);
   });
 });

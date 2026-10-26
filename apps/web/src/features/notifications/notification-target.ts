@@ -1,4 +1,4 @@
-import { Role } from '@lc/shared';
+import { NotificationRefType, Role } from '@lc/shared';
 
 /**
  * Where a notification leads, by `refType`. Unknown refTypes return null: the notification
@@ -6,23 +6,24 @@ import { Role } from '@lc/shared';
  * emitting a new refType.
  */
 export function notificationTarget(
-  refType: string | null | undefined,
+  refType: NotificationRefType | null | undefined,
   refId: string | null | undefined,
   role: Role,
 ): string | null {
   if (!refType || !refId) return null;
   const isStudent = role === Role.STUDENT;
   switch (refType) {
-    case 'CLASS':
+    case NotificationRefType.CLASS:
       return isStudent ? '/me/classes' : `/classes/${refId}`;
-    case 'SESSION':
+    case NotificationRefType.SESSION:
       return isStudent ? '/schedule' : `/sessions/${refId}/attendance`;
-    case 'STUDENT':
+    case NotificationRefType.STUDENT:
       return isStudent ? '/me/profile' : `/students/${refId}`;
-    case 'INVOICE':
+    case NotificationRefType.INVOICE:
       return isStudent ? '/me/fees' : `/fees/invoices/${refId}`;
-    case 'ASSESSMENT':
+    case NotificationRefType.ASSESSMENT:
       return isStudent ? '/me/results' : `/assessments/${refId}/grades`;
+    // ENROLLMENT, PLACEMENT_TEST, PAYMENT: no screen yet; owning lanes add their route here.
     default:
       return null;
   }

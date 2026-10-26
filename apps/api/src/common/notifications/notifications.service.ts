@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { NotificationType } from '@lc/shared';
+import { NotificationRefType, NotificationType } from '@lc/shared';
 import { Models } from '../../database/models';
 import { Notification } from '../../database/schemas/notification.schema';
 
@@ -9,7 +9,7 @@ export interface NotificationInput {
   type: NotificationType;
   title: string;
   body: string;
-  refType?: string;
+  refType?: NotificationRefType;
   refId?: Types.ObjectId;
 }
 

@@ -157,6 +157,20 @@ export const NotificationType = {
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 export const ALL_NOTIFICATION_TYPES: NotificationType[] = Object.values(NotificationType);
 
+/** What a notification's refId points at; the web maps (refType, refId) to a route. */
+export const NotificationRefType = {
+  CLASS: 'CLASS',
+  SESSION: 'SESSION',
+  STUDENT: 'STUDENT',
+  INVOICE: 'INVOICE',
+  ASSESSMENT: 'ASSESSMENT',
+  ENROLLMENT: 'ENROLLMENT',
+  PLACEMENT_TEST: 'PLACEMENT_TEST',
+  PAYMENT: 'PAYMENT',
+} as const;
+export type NotificationRefType = (typeof NotificationRefType)[keyof typeof NotificationRefType];
+export const ALL_NOTIFICATION_REF_TYPES: NotificationRefType[] = Object.values(NotificationRefType);
+
 export const GradeClass = {
   EXCELLENT: 'EXCELLENT',
   GOOD: 'GOOD',
