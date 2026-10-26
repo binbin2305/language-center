@@ -6,5 +6,8 @@ const config: Config = {
   testMatch: ['<rootDir>/test/e2e/**/*.e2e-spec.ts'],
   transform: { '^.+\\.ts$': 'ts-jest' },
   testTimeout: 120000,
+  globalSetup: '<rootDir>/test/helpers/global-setup.ts',
+  globalTeardown: '<rootDir>/test/helpers/global-teardown.ts',
+  setupFiles: ['<rootDir>/test/helpers/setup-env.ts'],
 };
 export default config;

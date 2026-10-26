@@ -1,17 +1,13 @@
 import { Body, Controller, HttpException, Get, INestApplication, Param, Post, Query } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import { MongooseModule, InjectConnection } from '@nestjs/mongoose';
+import { InjectConnection } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import request from 'supertest';
 import { z } from 'zod';
 import { CreateLeadInput } from '@lc/shared';
-import { setupApp } from '../../src/setup-app';
 import { AppError } from '../../src/common/errors/app-error';
 import { ZodValidationPipe } from '../../src/common/pipes/zod-validation.pipe';
-import { CommonModule } from '../../src/common/common.module';
 import { ClockService } from '../../src/common/clock/clock.service';
-import { FakeClock } from '../helpers/fake-clock';
+import { createTestApp, TestApp } from '../helpers/test-app';
 
 @Controller('t')
 class TestController {
@@ -56,27 +52,16 @@ class TestController {
 }
 
 describe('error envelope', () => {
+  let t: TestApp;
   let app: INestApplication;
-  let mongod: MongoMemoryReplSet;
-  const fake = new FakeClock(new Date('2026-01-01T00:00:00Z'));
 
   beforeAll(async () => {
-    mongod = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
-    const moduleRef = await Test.createTestingModule({
-      imports: [MongooseModule.forRoot(mongod.getUri()), CommonModule],
-      controllers: [TestController],
-    })
-      .overrideProvider(ClockService)
-      .useValue(fake)
-      .compile();
-    app = moduleRef.createNestApplication();
-    setupApp(app);
-    await app.init();
+    t = await createTestApp({ controllers: [TestController] });
+    app = t.app;
   });
 
   afterAll(async () => {
-    await app?.close();
-    await mongod?.stop();
+    await t.close();
   });
 
   it('body rỗng → 400 VALIDATION_FAILED với details.fields.phone', async () => {
@@ -145,8 +130,8 @@ describe('error envelope', () => {
   });
 
   it('ClockService có thể override bằng FakeClock', () => {
-    expect(app.get(ClockService).now()).toEqual(new Date('2026-01-01T00:00:00Z'));
-    fake.advance(1000);
-    expect(app.get(ClockService).now()).toEqual(new Date('2026-01-01T00:00:01Z'));
+    expect(app.get(ClockService).now()).toEqual(new Date('2026-01-05T02:00:00Z'));
+    t.clock.advance(1000);
+    expect(app.get(ClockService).now()).toEqual(new Date('2026-01-05T02:00:01Z'));
   });
 });
