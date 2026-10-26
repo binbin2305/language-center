@@ -97,6 +97,26 @@ describe('auth', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.user).toMatchObject({ role: 'STUDENT', studentId: s._id.toHexString(), username: s.code });
     });
+    it('STUDENT đăng nhập không phân biệt hoa thường: "hv2026…" và "Hv2026…"', async () => {
+      const s = await makeStudent(t.conn, { withUser: true, code: 'HV202612345' });
+      for (const typed of ['hv202612345', 'Hv202612345', ' HV202612345 ']) {
+        const res = await login(typed);
+        expect([typed, res.status]).toEqual([typed, 200]);
+        expect(res.body.data.user.username).toBe(s.code);
+      }
+    });
+    it('username lưu chuẩn hoá: STUDENT viết hoa, email viết thường; đăng nhập email không phân biệt hoa thường', async () => {
+      const st = await models(t.conn).User.create({
+        username: 'hv209900001',
+        passwordHash: 'x',
+        fullName: 'S',
+        role: Role.STUDENT,
+      });
+      expect(st.username).toBe('HV209900001');
+      const staff = await makeUser(t.conn, { email: 'Mixed.Case@Example.com' });
+      expect(staff.username).toBe('mixed.case@example.com');
+      expect((await login('MIXED.case@example.COM')).status).toBe(200);
+    });
     it('mọi response không chứa passwordHash', async () => {
       const u = await makeUser(t.conn);
       const l = await login(u.username);

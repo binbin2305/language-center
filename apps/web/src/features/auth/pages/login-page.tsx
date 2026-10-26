@@ -68,7 +68,14 @@ export default function LoginPage() {
             <FormItem>
               <FormLabel>Email hoặc mã học viên</FormLabel>
               <FormControl>
-                <Input autoComplete="username" autoFocus {...field} />
+                <Input
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoFocus
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

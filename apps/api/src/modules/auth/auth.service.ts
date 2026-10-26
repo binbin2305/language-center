@@ -18,6 +18,12 @@ export interface AuthSession {
   refreshToken: string;
 }
 
+/** Matches the stored canonical form: emails lowercase, student codes uppercase. */
+export function normalizeLoginUsername(raw: string): string {
+  const u = raw.trim();
+  return u.includes('@') ? u.toLowerCase() : u.toUpperCase();
+}
+
 export function toMeDto(u: UserDoc): MeDto {
   return {
     id: u._id.toHexString(),
@@ -48,9 +54,8 @@ export class AuthService {
   ) {}
 
   async login(input: LoginInput): Promise<AuthSession> {
-    const username = input.username.trim();
     const user = await this.users
-      .findOne({ username: { $in: [username, username.toLowerCase()] }, deletedAt: null })
+      .findOne({ username: normalizeLoginUsername(input.username), deletedAt: null })
       .select('+passwordHash');
     if (!user) {
       await burnPasswordCheck(input.password);

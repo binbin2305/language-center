@@ -49,6 +49,13 @@ export const UserSchema = new Schema<User>(
   },
   { timestamps: clockTimestamps, collection: 'users' },
 );
+// Canonical username: STUDENT logins (student code) are uppercase, email logins lowercase.
+UserSchema.pre('validate', function () {
+  if (this.username) {
+    const u = this.username.trim();
+    this.username = this.role === Role.STUDENT ? u.toUpperCase() : u.toLowerCase();
+  }
+});
 UserSchema.index({ username: 1 }, { unique: true });
 UserSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $type: 'string' } } });
 UserSchema.index({ studentId: 1 }, { unique: true, partialFilterExpression: { studentId: { $type: 'objectId' } } });

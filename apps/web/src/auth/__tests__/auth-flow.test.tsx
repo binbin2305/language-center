@@ -44,6 +44,15 @@ describe('đăng nhập', () => {
     expect(await screen.findByText('Sai thông tin đăng nhập')).toBeInTheDocument();
   });
 
+  it('ô tên đăng nhập tắt tự viết hoa / tự sửa / kiểm tra chính tả', async () => {
+    server.use(unauthenticated());
+    renderApp({ route: '/login' });
+    const input = await screen.findByLabelText('Email hoặc mã học viên');
+    expect(input).toHaveAttribute('autocapitalize', 'none');
+    expect(input).toHaveAttribute('autocorrect', 'off');
+    expect(input).toHaveAttribute('spellcheck', 'false');
+  });
+
   it('nút hiện/ẩn mật khẩu đổi kiểu ô nhập', async () => {
     server.use(unauthenticated());
     const user = userEvent.setup();
