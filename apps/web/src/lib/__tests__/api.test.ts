@@ -119,6 +119,45 @@ describe('api client', () => {
     expect(tokenStore.get()).toBeNull();
   });
 
+  it('401 đến muộn sau khi refresh đã thất bại -> không refresh lần hai, onAuthFailure 1 lần', async () => {
+    tokenStore.set('old');
+    const onFail = vi.fn();
+    setOnAuthFailure(onFail);
+    let refreshes = 0;
+    const unauth = () =>
+      HttpResponse.json({ error: { code: 'UNAUTHENTICATED', message: 'x' } }, { status: 401 });
+    server.use(
+      http.post('*/api/v1/auth/refresh', () => {
+        refreshes++;
+        return unauth();
+      }),
+      http.get('*/api/v1/a', () => unauth()),
+      http.get('*/api/v1/b', async () => {
+        await new Promise((r) => setTimeout(r, 150));
+        return unauth();
+      }),
+    );
+    const results = await Promise.allSettled([apiGet('a'), apiGet('b')]);
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    expect(refreshes).toBe(1);
+    expect(onFail).toHaveBeenCalledTimes(1);
+  });
+
+  it('refresh lỗi 5xx -> không xóa token, không onAuthFailure', async () => {
+    tokenStore.set('old');
+    const onFail = vi.fn();
+    setOnAuthFailure(onFail);
+    server.use(
+      http.post('*/api/v1/auth/refresh', () => new HttpResponse('x', { status: 500 })),
+      http.get('*/api/v1/a', () =>
+        HttpResponse.json({ error: { code: 'UNAUTHENTICATED', message: 'x' } }, { status: 401 }),
+      ),
+    );
+    await expect(apiGet('a')).rejects.toMatchObject({ status: 401 });
+    expect(tokenStore.get()).toBe('old');
+    expect(onFail).not.toHaveBeenCalled();
+  });
+
   it('retry vẫn 401 -> không refresh lần nữa', async () => {
     let refreshes = 0;
     server.use(

@@ -105,6 +105,7 @@ async function send(path: string, options: Options, token: string | null): Promi
     });
   } catch (e) {
     if (e instanceof HTTPError) return e.response;
+    if (e instanceof Error && e.name === 'AbortError') throw e;
     throw new ApiError({ code: 'INTERNAL', status: 0, message: NETWORK_MESSAGE });
   }
 }
@@ -126,7 +127,7 @@ export function refreshSession(): Promise<AuthResultDto> {
       tokenStore.set(body.data.accessToken);
       return body.data;
     } catch (e) {
-      if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
         tokenStore.clear();
         onAuthFailure();
       }
@@ -148,10 +149,12 @@ async function request(path: string, options: Options): Promise<Response> {
   const original = await toApiError(res);
   if (res.status !== 401 || NO_REFRESH.test(clean(path))) throw original;
 
-  // Another request may already have refreshed while this one was in flight.
+  // The token changed since this request was sent: another request already handled the
+  // 401 (refreshed, or failed and cleared). Do not refresh again.
   const current = tokenStore.get();
   let token: string | null;
-  if (current && current !== usedToken) {
+  if (current !== usedToken) {
+    if (!current) throw original;
     token = current;
   } else {
     try {
@@ -162,6 +165,8 @@ async function request(path: string, options: Options): Promise<Response> {
   }
   const retry = await send(path, options, token);
   if (retry.ok) return retry;
+  // Still 401 after a fresh token: propagate without clearing the session. It may be a
+  // non-session 401 (e.g. a resource-level rejection), so logging out would be wrong.
   throw await toApiError(retry);
 }
 

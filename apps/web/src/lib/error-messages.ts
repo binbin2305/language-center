@@ -68,7 +68,7 @@ export const GENERIC_ERROR_MESSAGE = 'Có lỗi xảy ra. Vui lòng thử lại.
 export function errorMessage(e: unknown): string {
   if (typeof e === 'object' && e !== null && 'code' in e) {
     const code = (e as { code: unknown }).code;
-    if (typeof code === 'string' && code in ERROR_MESSAGES)
+    if (typeof code === 'string' && Object.hasOwn(ERROR_MESSAGES, code))
       return ERROR_MESSAGES[code as ErrorCode];
   }
   return GENERIC_ERROR_MESSAGE;
