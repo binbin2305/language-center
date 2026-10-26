@@ -1,31 +1,25 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { CookieOptions, Request, Response } from 'express';
-import { z } from 'zod';
 import { ALL_ROLES, ChangePasswordInput, LoginInput } from '@lc/shared';
 import { AllowPasswordChangeRequired } from '../../common/auth/allow-password-change.decorator';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Public } from '../../common/auth/public.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
+import { loadEnv } from '../../config/env';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AuthService, AuthSession } from './auth.service';
 import { TokenService } from './token.service';
 
 export const REFRESH_COOKIE = 'lc_rt';
-
-/** FR-AUTH-02: at least 8 characters with a letter and a digit. */
-const ChangePasswordBody = ChangePasswordInput.extend({
-  newPassword: ChangePasswordInput.shape.newPassword
-    .refine((v) => /[A-Za-z]/.test(v), 'must contain a letter')
-    .refine((v) => /\d/.test(v), 'must contain a digit'),
-});
+const secureCookies = loadEnv().NODE_ENV === 'production';
 
 const baseCookie = (): CookieOptions => ({
   httpOnly: true,
   sameSite: 'lax',
   path: '/api/v1/auth',
-  secure: process.env.NODE_ENV === 'production',
+  secure: secureCookies,
 });
 
 @Controller('auth')
@@ -75,7 +69,7 @@ export class AuthController {
   @HttpCode(200)
   async changePassword(
     @CurrentUser() user: AuthUser,
-    @Body(new ZodValidationPipe(ChangePasswordBody)) body: z.infer<typeof ChangePasswordBody>,
+    @Body(new ZodValidationPipe(ChangePasswordInput)) body: ChangePasswordInput,
     @Res({ passthrough: true }) res: Response,
   ) {
     return this.respond(res, await this.auth.changePassword(user.id, body));

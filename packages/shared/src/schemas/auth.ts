@@ -8,7 +8,13 @@ export const LoginInput = z.object({
 });
 export type LoginInput = z.infer<typeof LoginInput>;
 
-export const zPassword = z.string().min(8).max(100);
+/** FR-AUTH-02: at least 8 characters, with a letter and a digit. */
+export const zPassword = z
+  .string()
+  .min(8)
+  .max(100)
+  .regex(/[A-Za-z]/, 'must contain a letter')
+  .regex(/\d/, 'must contain a digit');
 
 export const ChangePasswordInput = z.object({
   currentPassword: z.string().min(1).max(200),

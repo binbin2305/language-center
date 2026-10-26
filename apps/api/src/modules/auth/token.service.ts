@@ -31,9 +31,7 @@ export class TokenService {
     @InjectModel(Models.RefreshToken) private readonly tokens: Model<RefreshToken>,
   ) {}
 
-  get refreshTtlMs(): number {
-    return parseDurationMs(loadEnv().JWT_REFRESH_TTL);
-  }
+  readonly refreshTtlMs = parseDurationMs(loadEnv().JWT_REFRESH_TTL);
 
   signAccess(user: { _id: Types.ObjectId; role: User['role']; studentId?: Types.ObjectId; mustChangePassword: boolean }): string {
     return this.jwt.sign({
@@ -59,6 +57,8 @@ export class TokenService {
   /**
    * Single-use rotation. Presenting an already-revoked token is treated as theft:
    * every active token of that user is revoked.
+   * Not transactional: the claim is atomic, but a crash between claim and issuing the successor
+   * leaves the user without a valid refresh token (they simply log in again).
    */
   async rotate(raw: string): Promise<RotateResult> {
     const now = this.clock.now();

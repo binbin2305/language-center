@@ -8,6 +8,7 @@ const EnvSchema = z.object({
   JWT_REFRESH_TTL: z.string().default('7d'),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   UPLOAD_DIR: z.string().default('./uploads'),
+  NODE_ENV: z.string().default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   BCRYPT_COST: z.coerce.number().int().min(4).max(15).default(12),
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),

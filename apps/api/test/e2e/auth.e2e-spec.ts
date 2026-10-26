@@ -324,3 +324,43 @@ describe('lockout concurrency', () => {
     }
   });
 });
+
+describe('lockout bypass via parallel requests', () => {
+  const run = async (wrong: number) => {
+    const t = await createTestApp();
+    try {
+      const u = await makeUser(t.conn);
+      const post = (password: string) => t.http().post(LOGIN).send({ username: u.username, password });
+      const rs = await Promise.all([
+        ...Array.from({ length: wrong }, () => post('Wrong1234')),
+        post(DEFAULT_PASSWORD),
+      ]);
+      const fresh = await models(t.conn).User.findById(u._id);
+      const locked = !!fresh?.lockedUntil && fresh.lockedUntil.getTime() > t.clock.now().getTime();
+      // If any attempt observed a lock, the correct password must not have wiped it.
+      if (rs.some((r) => r.status === 423)) {
+        expect(locked).toBe(true);
+        expect((await post(DEFAULT_PASSWORD)).status).toBe(423);
+      }
+      return rs;
+    } finally {
+      await t.close();
+    }
+  };
+  it('5 sai + 1 đúng song song: tài khoản vẫn khoá, không mất khoá do reset', async () => {
+    for (let i = 0; i < 8; i++) await run(5);
+  });
+  it('4 sai + 1 đúng song song: nếu khoá được đặt thì lần đúng không được xoá khoá', async () => {
+    for (let i = 0; i < 8; i++) await run(4);
+  });
+  it('khoá đã đặt trước: đăng nhập đúng song song với khoá không bao giờ trả 200', async () => {
+    const t = await createTestApp();
+    try {
+      const u = await makeUser(t.conn, { failedLoginCount: 5, failedLoginWindowStart: t.clock.now(), lockedUntil: new Date(t.clock.now().getTime() + 15 * MIN) });
+      const rs = await Promise.all(Array.from({ length: 5 }, () => t.http().post(LOGIN).send({ username: u.username, password: DEFAULT_PASSWORD })));
+      expect(rs.every((r) => r.status === 423)).toBe(true);
+    } finally {
+      await t.close();
+    }
+  });
+});

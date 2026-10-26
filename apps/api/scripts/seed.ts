@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { connect, Connection, connection, disconnect } from 'mongoose';
-import { Role } from '@lc/shared';
+import { Role, zPassword } from '@lc/shared';
 import { loadEnv } from '../src/config/env';
 import { Models } from '../src/database/models';
 import { UserSchema } from '../src/database/schemas/user.schema';
@@ -19,8 +19,9 @@ export async function seedAdmin(
     console.log('SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set; skipping admin seed.');
     return 'skipped';
   }
-  if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-    throw new Error('SEED_ADMIN_PASSWORD must be at least 8 characters with a letter and a digit.');
+  const policy = zPassword.safeParse(password);
+  if (!policy.success) {
+    throw new Error(`SEED_ADMIN_PASSWORD is too weak: ${policy.error.issues.map((i) => i.message).join(', ')}`);
   }
   const User = conn.models[Models.User] ?? conn.model(Models.User, UserSchema);
   if (await User.exists({ $or: [{ username: email }, { email }] })) {

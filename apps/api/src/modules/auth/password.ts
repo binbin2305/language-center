@@ -2,8 +2,11 @@ import { compare, hash } from 'bcrypt';
 import { randomInt } from 'crypto';
 import { loadEnv } from '../../config/env';
 
+let cost: number | undefined;
+
 export function hashPassword(plain: string): Promise<string> {
-  return hash(plain, loadEnv().BCRYPT_COST);
+  cost ??= loadEnv().BCRYPT_COST;
+  return hash(plain, cost);
 }
 
 export function verifyPassword(plain: string, passwordHash: string): Promise<boolean> {

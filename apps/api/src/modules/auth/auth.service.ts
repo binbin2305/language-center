@@ -67,9 +67,14 @@ export class AuthService {
       if (locked) throw new AppError(ErrorCode.ACCOUNT_LOCKED, undefined, { lockedUntil: locked.toISOString() });
       throw new AppError(ErrorCode.INVALID_CREDENTIALS);
     }
-    if (user.failedLoginCount !== 0 || user.failedLoginWindowStart || user.lockedUntil) {
-      await this.users.updateOne({ _id: user._id }, { failedLoginCount: 0, failedLoginWindowStart: null, lockedUntil: null });
-    }
+    // Atomic and conditional: a lock set by parallel failures after our snapshot must not be cleared,
+    // and in that case no token is issued.
+    const reset = await this.users.findOneAndUpdate(
+      { _id: user._id, $or: [{ lockedUntil: null }, { lockedUntil: { $lte: now } }] },
+      { failedLoginCount: 0, failedLoginWindowStart: null, lockedUntil: null },
+      { timestamps: false },
+    );
+    if (!reset) throw new AppError(ErrorCode.ACCOUNT_LOCKED);
     return this.startSession(user);
   }
 
