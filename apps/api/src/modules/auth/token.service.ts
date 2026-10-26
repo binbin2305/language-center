@@ -17,11 +17,17 @@ export function parseDurationMs(v: string): number {
   return Number(m[1]) * UNIT_MS[m[2]];
 }
 
+/**
+ * Two tabs refreshing at once present the same token; the loser must not log every session out.
+ * A token rotated less than this long ago is rejected (401) without revoking the user's other tokens.
+ */
+export const REFRESH_REUSE_GRACE_MS = 10_000;
+
 export const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 
 export type RotateResult =
   | { ok: true; userId: Types.ObjectId; raw: string }
-  | { ok: false; reason: 'invalid' | 'reuse' | 'expired' };
+  | { ok: false; reason: 'invalid' | 'reuse' | 'race' | 'expired' };
 
 @Injectable()
 export class TokenService {
@@ -56,7 +62,8 @@ export class TokenService {
 
   /**
    * Single-use rotation. Presenting an already-revoked token is treated as theft:
-   * every active token of that user is revoked.
+   * every active token of that user is revoked — except within REFRESH_REUSE_GRACE_MS of a rotation
+   * (concurrent refresh from another tab), which is rejected without revoking anything.
    * Not transactional: the claim is atomic, but a crash between claim and issuing the successor
    * leaves the user without a valid refresh token (they simply log in again).
    */
@@ -65,19 +72,22 @@ export class TokenService {
     const existing = await this.tokens.findOne({ tokenHash: sha256(raw) });
     if (!existing) return { ok: false, reason: 'invalid' };
     if (existing.revokedAt) {
+      if (existing.replacedBy && this.withinGrace(existing.revokedAt, now)) return { ok: false, reason: 'race' };
       await this.revokeAllForUser(existing.userId);
       return { ok: false, reason: 'reuse' };
     }
     if (existing.expiresAt.getTime() <= now.getTime()) return { ok: false, reason: 'expired' };
     // Atomic claim so concurrent refreshes with the same token cannot both succeed.
     const claimed = await this.tokens.findOneAndUpdate({ _id: existing._id, revokedAt: null }, { revokedAt: now });
-    if (!claimed) {
-      await this.revokeAllForUser(existing.userId);
-      return { ok: false, reason: 'reuse' };
-    }
+    // Lost the claim to a concurrent rotation of the same token (another tab, same instant).
+    if (!claimed) return { ok: false, reason: 'race' };
     const next = await this.issueRefresh(existing.userId);
     await this.tokens.updateOne({ _id: existing._id }, { replacedBy: next.id });
     return { ok: true, userId: existing.userId, raw: next.raw };
+  }
+
+  private withinGrace(revokedAt: Date, now: Date): boolean {
+    return now.getTime() - revokedAt.getTime() < REFRESH_REUSE_GRACE_MS;
   }
 
   async revokeAllForUser(userId: Types.ObjectId): Promise<void> {

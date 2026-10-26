@@ -124,9 +124,32 @@ describe('auth', () => {
       expect(r.body.data.user.id).toBe(u._id.toHexString());
       const c2 = cookieValue(r);
       expect(c2).not.toBe(c1);
+      t.clock.advance(15_000);
       const reuse = await t.http().post(REFRESH).set('Cookie', c1);
       expect(reuse.status).toBe(401);
       expect((await t.http().post(REFRESH).set('Cookie', c2)).status).toBe(401);
+    });
+    it('hai tab refresh gần đồng thời: dùng lại token cũ trong 10s → 401 nhưng token kế nhiệm vẫn hợp lệ', async () => {
+      const u = await makeUser(t.conn);
+      const c1 = cookieValue(await login(u.username));
+      const r = await t.http().post(REFRESH).set('Cookie', c1);
+      expect(r.status).toBe(200);
+      const c2 = cookieValue(r);
+      t.clock.advance(5_000);
+      const reuse = await t.http().post(REFRESH).set('Cookie', c1);
+      expect(reuse.status).toBe(401);
+      expect(reuse.body.error.code).toBe('UNAUTHENTICATED');
+      expect((await t.http().post(REFRESH).set('Cookie', c2)).status).toBe(200);
+    });
+    it('dùng lại token cũ sau 15s → thu hồi toàn bộ', async () => {
+      const u = await makeUser(t.conn);
+      const c1 = cookieValue(await login(u.username));
+      const other = cookieValue(await login(u.username));
+      const c2 = cookieValue(await t.http().post(REFRESH).set('Cookie', c1));
+      t.clock.advance(15_000);
+      expect((await t.http().post(REFRESH).set('Cookie', c1)).status).toBe(401);
+      expect((await t.http().post(REFRESH).set('Cookie', c2)).status).toBe(401);
+      expect((await t.http().post(REFRESH).set('Cookie', other)).status).toBe(401);
     });
     it('refresh không cookie / cookie rác → 401', async () => {
       expect((await t.http().post(REFRESH)).status).toBe(401);
