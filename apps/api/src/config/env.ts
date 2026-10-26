@@ -10,6 +10,7 @@ const EnvSchema = z.object({
   UPLOAD_DIR: z.string().default('./uploads'),
   PORT: z.coerce.number().int().positive().default(3000),
   BCRYPT_COST: z.coerce.number().int().min(4).max(15).default(12),
+  LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   SEED_ADMIN_EMAIL: z.string().optional(),
   SEED_ADMIN_PASSWORD: z.string().optional(),
 });
