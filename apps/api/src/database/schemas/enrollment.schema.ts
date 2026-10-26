@@ -1,5 +1,6 @@
 import { HydratedDocument, Schema, Types } from 'mongoose';
 import { ALL_ENROLLMENT_STATUSES, EnrollmentStatus } from '@lc/shared';
+import { ACTIVE_ENROLLMENT_STATUSES } from '../active-enrollment';
 import { Models } from '../models';
 import { nullableRef } from './helpers';
 
@@ -72,6 +73,11 @@ export const EnrollmentSchema = new Schema<Enrollment>(
   { timestamps: true, collection: 'enrollments' },
 );
 EnrollmentSchema.index({ studentId: 1, courseId: 1, status: 1 });
+// At most one active enrollment per (student, course); closes the check-then-insert race.
+EnrollmentSchema.index(
+  { studentId: 1, courseId: 1 },
+  { unique: true, name: 'uniq_active_student_course', partialFilterExpression: { status: { $in: [...ACTIVE_ENROLLMENT_STATUSES] } } },
+);
 EnrollmentSchema.index({ classId: 1, status: 1 });
 EnrollmentSchema.index({ status: 1, waitingSince: 1 });
 
