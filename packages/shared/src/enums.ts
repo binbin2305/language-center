@@ -16,7 +16,7 @@ export const UserStatus = {
   DISABLED: 'DISABLED',
 } as const;
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
-export const ALL_USERSTATUSES: UserStatus[] = Object.values(UserStatus);
+export const ALL_USER_STATUSES: UserStatus[] = Object.values(UserStatus);
 
 export const Gender = {
   MALE: 'MALE',
@@ -32,7 +32,7 @@ export const LeadStatus = {
   CANCELLED: 'CANCELLED',
 } as const;
 export type LeadStatus = (typeof LeadStatus)[keyof typeof LeadStatus];
-export const ALL_LEADSTATUSS: LeadStatus[] = Object.values(LeadStatus);
+export const ALL_LEAD_STATUSES: LeadStatus[] = Object.values(LeadStatus);
 
 export const StudentStatus = {
   ACTIVE: 'ACTIVE',
@@ -41,14 +41,14 @@ export const StudentStatus = {
   COMPLETED: 'COMPLETED',
 } as const;
 export type StudentStatus = (typeof StudentStatus)[keyof typeof StudentStatus];
-export const ALL_STUDENTSTATUSS: StudentStatus[] = Object.values(StudentStatus);
+export const ALL_STUDENT_STATUSES: StudentStatus[] = Object.values(StudentStatus);
 
 export const CourseStatus = {
   ACTIVE: 'ACTIVE',
   ARCHIVED: 'ARCHIVED',
 } as const;
 export type CourseStatus = (typeof CourseStatus)[keyof typeof CourseStatus];
-export const ALL_COURSESTATUSS: CourseStatus[] = Object.values(CourseStatus);
+export const ALL_COURSE_STATUSES: CourseStatus[] = Object.values(CourseStatus);
 
 export const ClassStatus = {
   PLANNED: 'PLANNED',
@@ -57,7 +57,7 @@ export const ClassStatus = {
   INACTIVE: 'INACTIVE',
 } as const;
 export type ClassStatus = (typeof ClassStatus)[keyof typeof ClassStatus];
-export const ALL_CLASSSTATUSS: ClassStatus[] = Object.values(ClassStatus);
+export const ALL_CLASS_STATUSES: ClassStatus[] = Object.values(ClassStatus);
 
 export const EnrollmentStatus = {
   PENDING_PLACEMENT: 'PENDING_PLACEMENT',
@@ -69,7 +69,7 @@ export const EnrollmentStatus = {
   CANCELLED: 'CANCELLED',
 } as const;
 export type EnrollmentStatus = (typeof EnrollmentStatus)[keyof typeof EnrollmentStatus];
-export const ALL_ENROLLMENTSTATUSS: EnrollmentStatus[] = Object.values(EnrollmentStatus);
+export const ALL_ENROLLMENT_STATUSES: EnrollmentStatus[] = Object.values(EnrollmentStatus);
 
 export const PlacementStatus = {
   SCHEDULED: 'SCHEDULED',
@@ -77,14 +77,14 @@ export const PlacementStatus = {
   CANCELLED: 'CANCELLED',
 } as const;
 export type PlacementStatus = (typeof PlacementStatus)[keyof typeof PlacementStatus];
-export const ALL_PLACEMENTSTATUSS: PlacementStatus[] = Object.values(PlacementStatus);
+export const ALL_PLACEMENT_STATUSES: PlacementStatus[] = Object.values(PlacementStatus);
 
 export const SessionStatus = {
   SCHEDULED: 'SCHEDULED',
   CANCELLED: 'CANCELLED',
 } as const;
 export type SessionStatus = (typeof SessionStatus)[keyof typeof SessionStatus];
-export const ALL_SESSIONSTATUSS: SessionStatus[] = Object.values(SessionStatus);
+export const ALL_SESSION_STATUSES: SessionStatus[] = Object.values(SessionStatus);
 
 export const AttendanceStatus = {
   PRESENT: 'PRESENT',
@@ -93,7 +93,7 @@ export const AttendanceStatus = {
   UNEXCUSED: 'UNEXCUSED',
 } as const;
 export type AttendanceStatus = (typeof AttendanceStatus)[keyof typeof AttendanceStatus];
-export const ALL_ATTENDANCESTATUSS: AttendanceStatus[] = Object.values(AttendanceStatus);
+export const ALL_ATTENDANCE_STATUSES: AttendanceStatus[] = Object.values(AttendanceStatus);
 
 export const AssessmentType = {
   QUIZ: 'QUIZ',
@@ -102,7 +102,7 @@ export const AssessmentType = {
   SKILL: 'SKILL',
 } as const;
 export type AssessmentType = (typeof AssessmentType)[keyof typeof AssessmentType];
-export const ALL_ASSESSMENTTYPES: AssessmentType[] = Object.values(AssessmentType);
+export const ALL_ASSESSMENT_TYPES: AssessmentType[] = Object.values(AssessmentType);
 
 export const InvoiceStatus = {
   UNPAID: 'UNPAID',
@@ -111,14 +111,14 @@ export const InvoiceStatus = {
   VOID: 'VOID',
 } as const;
 export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
-export const ALL_INVOICESTATUSS: InvoiceStatus[] = Object.values(InvoiceStatus);
+export const ALL_INVOICE_STATUSES: InvoiceStatus[] = Object.values(InvoiceStatus);
 
 export const InvoiceKind = {
   TUITION: 'TUITION',
   SURCHARGE: 'SURCHARGE',
 } as const;
 export type InvoiceKind = (typeof InvoiceKind)[keyof typeof InvoiceKind];
-export const ALL_INVOICEKINDS: InvoiceKind[] = Object.values(InvoiceKind);
+export const ALL_INVOICE_KINDS: InvoiceKind[] = Object.values(InvoiceKind);
 
 export const DiscountStatus = {
   PENDING_APPROVAL: 'PENDING_APPROVAL',
@@ -126,7 +126,7 @@ export const DiscountStatus = {
   REJECTED: 'REJECTED',
 } as const;
 export type DiscountStatus = (typeof DiscountStatus)[keyof typeof DiscountStatus];
-export const ALL_DISCOUNTSTATUSS: DiscountStatus[] = Object.values(DiscountStatus);
+export const ALL_DISCOUNT_STATUSES: DiscountStatus[] = Object.values(DiscountStatus);
 
 export const PaymentMethod = {
   CASH: 'CASH',
@@ -134,14 +134,14 @@ export const PaymentMethod = {
   CARD: 'CARD',
 } as const;
 export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
-export const ALL_PAYMENTMETHODS: PaymentMethod[] = Object.values(PaymentMethod);
+export const ALL_PAYMENT_METHODS: PaymentMethod[] = Object.values(PaymentMethod);
 
 export const PaymentStatus = {
   VALID: 'VALID',
   VOIDED: 'VOIDED',
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
-export const ALL_PAYMENTSTATUSS: PaymentStatus[] = Object.values(PaymentStatus);
+export const ALL_PAYMENT_STATUSES: PaymentStatus[] = Object.values(PaymentStatus);
 
 export const NotificationType = {
   SESSION_CREATED: 'SESSION_CREATED',
@@ -155,7 +155,7 @@ export const NotificationType = {
   DISCOUNT_DECIDED: 'DISCOUNT_DECIDED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
-export const ALL_NOTIFICATIONTYPES: NotificationType[] = Object.values(NotificationType);
+export const ALL_NOTIFICATION_TYPES: NotificationType[] = Object.values(NotificationType);
 
 export const GradeClass = {
   EXCELLENT: 'EXCELLENT',
@@ -165,4 +165,4 @@ export const GradeClass = {
   FAIL: 'FAIL',
 } as const;
 export type GradeClass = (typeof GradeClass)[keyof typeof GradeClass];
-export const ALL_GRADECLASSES: GradeClass[] = Object.values(GradeClass);
+export const ALL_GRADE_CLASSES: GradeClass[] = Object.values(GradeClass);
