@@ -4,11 +4,11 @@ import { zDateTime } from './common';
 export const UpdateSettingsInput = z
   .object({
     centerName: z.string().trim().min(1).max(150),
-    attendanceWarningThreshold: z.number(),
-    gradeLockDays: z.number().int(),
+    attendanceWarningThreshold: z.number().min(0).max(1),
+    gradeLockDays: z.number().int().min(0).max(365),
     resultViewRequiresPaidFees: z.boolean(),
-    teacherAttendanceEditDays: z.number().int(),
-    invoiceDueDaysAfterStart: z.number().int(),
+    teacherAttendanceEditDays: z.number().int().min(0).max(365),
+    invoiceDueDaysAfterStart: z.number().int().min(0).max(365),
   })
   .partial()
   .strict();

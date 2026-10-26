@@ -8,6 +8,7 @@ import { Public } from '../../src/common/auth/public.decorator';
 import { AppError } from '../../src/common/errors/app-error';
 import { ZodValidationPipe } from '../../src/common/pipes/zod-validation.pipe';
 import { ClockService } from '../../src/common/clock/clock.service';
+import { Models } from '../../src/database/models';
 import { createTestApp, TestApp } from '../helpers/test-app';
 
 @Public()
@@ -50,6 +51,15 @@ class TestController {
     await col.insertOne({ k: 1 });
     await col.insertOne({ k: 1 });
     return {};
+  }
+  @Post('mongoose-validation')
+  async mongooseValidation() {
+    await this.conn.model(Models.Room).create({ code: 'X', capacity: -1 });
+    return {};
+  }
+  @Get('cast/:id')
+  async cast(@Param('id') id: string) {
+    return { data: await this.conn.model(Models.Room).findById(id) };
   }
 }
 
@@ -135,5 +145,18 @@ describe('error envelope', () => {
     expect(app.get(ClockService).now()).toEqual(new Date('2026-01-05T02:00:00Z'));
     t.clock.advance(1000);
     expect(app.get(ClockService).now()).toEqual(new Date('2026-01-05T02:00:01Z'));
+  });
+
+  it('Mongoose ValidationError → 400 VALIDATION_FAILED, details.fields theo path', async () => {
+    const res = await request(app.getHttpServer()).post('/api/v1/t/mongoose-validation');
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    expect(res.body.error.details.fields).toEqual({ name: expect.any(String), capacity: expect.any(String) });
+  });
+
+  it('CastError (ObjectId sai) → 404 NOT_FOUND', async () => {
+    const res = await request(app.getHttpServer()).get('/api/v1/t/cast/not-an-id');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toEqual({ code: 'NOT_FOUND', message: 'NOT_FOUND' });
   });
 });

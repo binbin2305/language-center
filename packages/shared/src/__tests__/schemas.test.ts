@@ -80,6 +80,21 @@ describe('smoke: mỗi file schema', () => {
     expect(S.UpdateSettingsInput.safeParse({ gradeLockDays: 10 }).success).toBe(true);
     expect(S.UpdateSettingsInput.safeParse({ foo: 1 }).success).toBe(false);
   });
+  it('settings: giới hạn giá trị', () => {
+    const ok = (v: object) => S.UpdateSettingsInput.safeParse(v).success;
+    expect(ok({ attendanceWarningThreshold: 0 })).toBe(true);
+    expect(ok({ attendanceWarningThreshold: 1 })).toBe(true);
+    expect(ok({ attendanceWarningThreshold: 0.2 })).toBe(true);
+    expect(ok({ attendanceWarningThreshold: -0.1 })).toBe(false);
+    expect(ok({ attendanceWarningThreshold: 1.5 })).toBe(false);
+    for (const k of ['gradeLockDays', 'teacherAttendanceEditDays', 'invoiceDueDaysAfterStart']) {
+      expect([k, ok({ [k]: 0 })]).toEqual([k, true]);
+      expect([k, ok({ [k]: 365 })]).toEqual([k, true]);
+      expect([k, ok({ [k]: -1 })]).toEqual([k, false]);
+      expect([k, ok({ [k]: 366 })]).toEqual([k, false]);
+      expect([k, ok({ [k]: 1.5 })]).toEqual([k, false]);
+    }
+  });
   it('leads', () => {
     const e = S.CreateLeadInput.safeParse({}).error!.flatten().fieldErrors;
     expect(e).toHaveProperty('phone');

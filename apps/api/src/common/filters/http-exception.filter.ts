@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import type { Response } from 'express';
+import { Error as MongooseError } from 'mongoose';
 import { ZodError } from 'zod';
 import { ERROR_HTTP_STATUS, ErrorCode } from '@lc/shared';
 import { AppError } from '../errors/app-error';
@@ -76,6 +77,20 @@ export class HttpErrorFilter implements ExceptionFilter {
         message: ErrorCode.VALIDATION_FAILED,
         details: { fields },
       };
+    }
+    if (e instanceof MongooseError.ValidationError) {
+      const fields: Record<string, string> = {};
+      for (const [path, err] of Object.entries(e.errors)) fields[path] = err.message;
+      return {
+        status: ERROR_HTTP_STATUS.VALIDATION_FAILED,
+        code: ErrorCode.VALIDATION_FAILED,
+        message: ErrorCode.VALIDATION_FAILED,
+        details: { fields },
+      };
+    }
+    // A malformed id (e.g. findById('abc')) can never match a document.
+    if (e instanceof MongooseError.CastError) {
+      return { status: ERROR_HTTP_STATUS.NOT_FOUND, code: ErrorCode.NOT_FOUND, message: ErrorCode.NOT_FOUND };
     }
     if (isDuplicateKey(e)) {
       return {
