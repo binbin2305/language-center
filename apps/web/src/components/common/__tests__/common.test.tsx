@@ -197,7 +197,7 @@ describe('EntitySelect', () => {
     let q: string | null = null;
     server.use(http.get('*/api/v1/classes', ({ request }) => {
       q = new URL(request.url).searchParams.get('q');
-      return HttpResponse.json({ data: [{ id: 'c1', code: 'IELTS-01', name: 'IELTS A' }], meta: { page: 1, pageSize: 20, total: 1 } });
+      return HttpResponse.json({ data: [{ id: 'c1', code: 'IELTS-01', name: 'IELTS A' }], meta: { page: 1, limit: 20, total: 1 } });
     }));
     const onChange = vi.fn();
     renderWithProviders(<EntitySelect entity="class" value={null} onChange={onChange} aria-label="Lớp" />);

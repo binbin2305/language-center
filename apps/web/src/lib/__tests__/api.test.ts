@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw';
+import type { PageMeta } from '@lc/shared';
 import { server } from '../../../test/msw/server';
 import { ApiError, apiGet, apiGetPage, apiPost, refreshSession, setOnAuthFailure, tokenStore } from '../api';
 
@@ -28,12 +29,13 @@ describe('api client', () => {
     server.use(
       http.get('*/api/v1/items', ({ request }) => {
         q = new URL(request.url).search;
-        return HttpResponse.json({ data: ['x'], meta: { page: 2, pageSize: 10, total: 11 } });
+        return HttpResponse.json({ data: ['x'], meta: { page: 2, limit: 10, total: 11 } });
       }),
     );
     const r = await apiGetPage<string>('items', { page: 2, q: undefined });
     expect(r.data).toEqual(['x']);
-    expect(r.meta).toEqual({ page: 2, pageSize: 10, total: 11 });
+    expect(r.meta).toEqual({ page: 2, limit: 10, total: 11 });
+    expectTypeOf(r.meta).toEqualTypeOf<PageMeta>();
     expect(q).toBe('?page=2');
   });
 

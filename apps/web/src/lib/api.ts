@@ -1,5 +1,5 @@
 import ky, { HTTPError, type Options } from 'ky';
-import type { AuthResultDto, ErrorCode } from '@lc/shared';
+import type { AuthResultDto, ErrorCode, PageMeta, Paginated } from '@lc/shared';
 
 export interface ApiErrorDetails {
   fields?: Record<string, string>;
@@ -25,12 +25,7 @@ export class ApiError extends Error {
   }
 }
 
-export interface PageMeta {
-  page: number;
-  pageSize: number;
-  total: number;
-  [k: string]: unknown;
-}
+export type { PageMeta, Paginated };
 
 // ---- token store -----------------------------------------------------------
 
@@ -239,9 +234,9 @@ export async function apiGet<T>(path: string, searchParams?: Params): Promise<T>
 export async function apiGetPage<T>(
   path: string,
   searchParams?: Params,
-): Promise<{ data: T[]; meta: PageMeta }> {
+): Promise<Paginated<T>> {
   const res = await request(path, { method: 'GET', searchParams: searchParamsOf(searchParams) });
-  return (await res.json()) as { data: T[]; meta: PageMeta };
+  return (await res.json()) as Paginated<T>;
 }
 
 const withBody = (method: string, body?: unknown): Options => ({
