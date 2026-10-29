@@ -91,3 +91,18 @@ Notification `refType` -> target mapping lives in `features/notifications/notifi
 - Class dependencies (D9): `CLASS_HAS_DEPENDENCIES` `details.reasons` is the closed enum `ClassDependencyReason` = ACTIVE_STUDENTS | ENROLLMENT_HISTORY | SESSIONS | GRADES | INVOICES. A class with only enrollment history (e.g. TRANSFERRED) still cannot be deleted (FR-CLS-04).
 - Locked accounts (D4): a user with `status=LOCKED` who logs in with the correct password gets 423 ACCOUNT_LOCKED (no `lockedUntil`); a wrong password stays 401 INVALID_CREDENTIALS so status is not leaked; DISABLED is always 401. Locking does not revoke access tokens already issued (up to 15 minutes).
 - Web client: `apiPostForm(path, form)` sends multipart without setting Content-Type (the runtime adds the boundary); `apiGetBlob(path)` downloads binary through the same `request()` path, so 401 -> refresh -> retry applies. In vitest/jsdom, jsdom's FormData/File are not serialised as multipart by Node's fetch; tests that exercise uploads end-to-end must build the form with Node classes (see `nodeForm` in `lib/__tests__/api.test.ts`).
+
+## Lock-key protocol (schedule/class invariants)
+
+Snapshot-isolated transactions cannot see each other's inserts, so invariants that span documents (no room/teacher overlap, sessions inside the class window, no sessions on a deleted class) are serialised through counter documents:
+
+- Keys: `lock:class:<classId>`, `lock:room:<roomId>`, `lock:teacher:<teacherId>`, bumped with `CounterService.next(key, s)` **inside the writing transaction and BEFORE reading the invariant**. Two writers on the same key write-conflict; the loser is retried by `withTransaction` and then sees the winner's data.
+- Who bumps what:
+  - Session create / update / bulk create (`ScheduleService.lockSchedule`): class, then room, then teacher — always in that order.
+  - Class delete and class date change (`startDate`/`endDate` differs from the stored value; then 422 `SESSION_OUTSIDE_CLASS_RANGE` with `details.sessionIds` when a SCHEDULED session would fall outside the new VN-day window): class.
+- Wave 2 must follow it: placement tests bump room + teacher (same order as sessions) before their conflict check; enrollment assign/transfer bump `lock:class:<id>` of every class whose seats or roster they read (ascending id order when more than one).
+- Inside a transaction never run operations concurrently on the same `ClientSession` (`Promise.all` with `s`): issue them one by one; keep `Promise.all` only for session-less reads.
+
+- Classes: sessions can only be created/moved for PLANNED|ONGOING classes (422 `CLASS_NOT_OPEN` otherwise, also for the bulk dry-run). `GET /classes?open=true` lists exactly those (full or not; `hasSeat` additionally needs a free seat); the session form class picker uses it, room pickers use `status=ACTIVE`, and a class `defaultRoomId` must be an ACTIVE room when set or changed.
+- Student writes (`PATCH /students/:id`, `/students/me/contact`, document upload/remove) commit together with their audit row; a `fullName` change also renames the STUDENT user in the same transaction. Uploaded files are deleted when the transaction fails; removed files are unlinked only after commit.
+- Shared API helpers: `escapeRegex` (`common/util/escape-regex.ts`) and `isDuplicateKey` / `DUPLICATE_KEY` (`common/util/is-duplicate-key.ts`); do not re-declare them in modules.
