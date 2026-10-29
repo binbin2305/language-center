@@ -1,16 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
-import { Connection, isValidObjectId, Model, Types } from 'mongoose';
+import { ClientSession, Connection, isValidObjectId, Model, Types } from 'mongoose';
 import {
   AuditAction,
   CLASS_TRANSITIONS,
   canTransition,
+  ClassDependencyReason,
   ClassDto,
   ClassStatus,
   CourseStatus,
   CreateClassInput,
   DomainEvent,
+  EnrollmentStatus,
   ErrorCode,
   fromDateOnly,
   Role,
@@ -24,8 +26,13 @@ import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { Models } from '../../database/models';
 import { Class } from '../../database/schemas/class.schema';
+import { Assessment } from '../../database/schemas/assessment.schema';
 import { Course } from '../../database/schemas/course.schema';
+import { Enrollment } from '../../database/schemas/enrollment.schema';
+import { Grade } from '../../database/schemas/grade.schema';
+import { Invoice } from '../../database/schemas/invoice.schema';
 import { Room } from '../../database/schemas/room.schema';
+import { Session } from '../../database/schemas/session.schema';
 import { User } from '../../database/schemas/user.schema';
 import { ClassLean, toDto } from './classes.mapper';
 
@@ -48,6 +55,11 @@ export class ClassesService {
     @InjectModel(Models.Course) private readonly courses: Model<Course>,
     @InjectModel(Models.User) private readonly users: Model<User>,
     @InjectModel(Models.Room) private readonly rooms: Model<Room>,
+    @InjectModel(Models.Enrollment) private readonly enrollments: Model<Enrollment>,
+    @InjectModel(Models.Session) private readonly sessions: Model<Session>,
+    @InjectModel(Models.Assessment) private readonly assessments: Model<Assessment>,
+    @InjectModel(Models.Grade) private readonly grades: Model<Grade>,
+    @InjectModel(Models.Invoice) private readonly invoices: Model<Invoice>,
     @InjectConnection() private readonly conn: Connection,
     private readonly audit: AuditService,
     private readonly clock: ClockService,
@@ -225,6 +237,59 @@ export class ClassesService {
       }
     }
     return this.present(after);
+  }
+
+  /** Deactivate goes through the same guarded transition path as PATCH status. */
+  deactivate(id: string, actor: AuthUser): Promise<ClassDto> {
+    return this.update(id, { status: ClassStatus.INACTIVE }, actor);
+  }
+
+  async remove(id: string, actor: AuthUser): Promise<void> {
+    const before = await this.load(id);
+    await withTransaction(this.conn, async (s) => {
+      // Delete first: the write on the class document serialises against concurrent
+      // writers, then dependencies are re-checked inside the same transaction.
+      const del = await this.classes.deleteOne({ _id: before._id }, { session: s });
+      if (del.deletedCount === 0) throw new AppError(ErrorCode.NOT_FOUND);
+      const reasons = await this.dependencyReasons(before._id, s);
+      if (reasons.length) {
+        throw new AppError(ErrorCode.CLASS_HAS_DEPENDENCIES, undefined, { reasons });
+      }
+      await this.audit.log(
+        { actor, action: AuditAction.DELETE, entity: 'class', entityId: before._id, before },
+        s,
+      );
+    });
+  }
+
+  private async dependencyReasons(
+    classId: Types.ObjectId,
+    session: ClientSession,
+  ): Promise<ClassDependencyReason[]> {
+    const opt = { session };
+    const [active, history, sessions, assessment, grade, invoice] = await Promise.all([
+      this.enrollments.exists({ classId, status: EnrollmentStatus.ENROLLED }).session(session),
+      this.enrollments
+        .exists({ classId, status: { $ne: EnrollmentStatus.ENROLLED } })
+        .session(session),
+      this.sessions.exists({ classId }).session(session),
+      this.assessments.find({ classId }, { _id: 1 }, opt).lean(),
+      this.grades.exists({ classId }).session(session),
+      this.invoices.exists({ classId }).session(session),
+    ]);
+    // Grades belong to a class through its assessments (grade.classId is denormalised).
+    const viaAssessment = assessment.length
+      ? await this.grades
+          .exists({ assessmentId: { $in: assessment.map((a) => a._id) } })
+          .session(session)
+      : null;
+    const reasons: ClassDependencyReason[] = [];
+    if (active) reasons.push('ACTIVE_STUDENTS');
+    if (history) reasons.push('ENROLLMENT_HISTORY');
+    if (sessions) reasons.push('SESSIONS');
+    if (grade || viaAssessment) reasons.push('GRADES');
+    if (invoice) reasons.push('INVOICES');
+    return reasons;
   }
 
   /** The guarded update matched nothing: find out which guard lost the race. */

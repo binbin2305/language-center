@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { CreateClassInput, Role, UpdateClassInput } from '@lc/shared';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
@@ -34,5 +34,19 @@ export class ClassesController {
     @Body(new ZodValidationPipe(UpdateClassInput)) input: UpdateClassInput,
   ) {
     return { data: await this.svc.update(id, input, user) };
+  }
+
+  @Post(':id/deactivate')
+  @HttpCode(200)
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async deactivate(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return { data: await this.svc.deactivate(id, user) };
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async remove(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<void> {
+    await this.svc.remove(id, user);
   }
 }
