@@ -4,6 +4,7 @@ import { FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
 import {
   attendanceRate,
   AttendanceStatus,
+  EnrollmentStatus,
   ErrorCode,
   ListStudentsQuery,
   removeVietnameseTones,
@@ -48,9 +49,19 @@ export class StudentsService {
   ) {}
 
   /** Student ids having an enrollment that matches classId/courseId, or null when neither is given. */
-  private async idsByEnrollment(q: ListStudentsQuery): Promise<Types.ObjectId[] | null> {
+  private async idsByEnrollment(user: AuthUser, q: ListStudentsQuery): Promise<Types.ObjectId[] | null> {
     if (!q.classId && !q.courseId) return null;
     const filter: FilterQuery<Enrollment> = {};
+    if (user.role === Role.TEACHER) {
+      // Never look outside the teacher's own classes (would reveal enrollments elsewhere).
+      const own = await this.scope.teacherClassIds(user.id);
+      filter.classId = { $in: own };
+      filter.status = { $in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED] };
+      if (q.classId && !own.some((c) => c.equals(q.classId))) return [];
+    } else {
+      // R17: CANCELLED enrollments do not count for the class/course filters.
+      filter.status = { $ne: EnrollmentStatus.CANCELLED };
+    }
     if (q.classId) filter.classId = new Types.ObjectId(q.classId);
     if (q.courseId) filter.courseId = new Types.ObjectId(q.courseId);
     return this.enrollments.distinct('studentId', filter);
@@ -59,7 +70,7 @@ export class StudentsService {
   async list(user: AuthUser, q: ListStudentsQuery) {
     const and: FilterQuery<Student>[] = [{ deletedAt: null }];
     if (user.role === Role.TEACHER) and.push({ _id: { $in: await this.scope.teacherStudentIds(user.id) } });
-    const byEnrollment = await this.idsByEnrollment(q);
+    const byEnrollment = await this.idsByEnrollment(user, q);
     if (byEnrollment) and.push({ _id: { $in: byEnrollment } });
     if (q.status) and.push({ status: q.status });
     if (q.q) {
@@ -69,7 +80,8 @@ export class StudentsService {
         $or: [
           ...(name ? [{ fullNameSearch: { $regex: escapeRe(name) } }] : []),
           { code: { $regex: `^${escapeRe(q.q.toUpperCase())}` } },
-          { email: { $regex: `^${escapeRe(q.q.toLowerCase())}` } },
+          // Teachers must not be able to probe emails they cannot see.
+          ...(user.role === Role.TEACHER ? [] : [{ email: { $regex: `^${escapeRe(q.q.toLowerCase())}` } }]),
           ...(phone ? [{ phone: { $regex: `^${escapeRe(phone)}` } }] : []),
         ],
       });

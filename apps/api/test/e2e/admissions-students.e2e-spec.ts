@@ -100,7 +100,8 @@ describe('FR-STU-01/02 Học viên', () => {
       const byClass = await list(manager, `?classId=${classB}`).expect(200);
       expect(ids(byClass).sort()).toEqual([hvA._id.toString(), hvOther._id.toString()].sort());
       const byCourse = await list(manager, `?courseId=${courseA}`).expect(200);
-      expect(ids(byCourse).sort()).toEqual([hvA._id, hvB._id, hvC._id].map(String).sort());
+      // R17: CANCELLED enrollment (hvC) is excluded from class/course filters.
+      expect(ids(byCourse).sort()).toEqual([hvA._id, hvB._id].map(String).sort());
     });
   });
 
@@ -132,8 +133,15 @@ describe('FR-STU-01/02 Học viên', () => {
       await detail(teacher.token, hvC._id).expect(404);
       await detail(outsider, hvA._id).expect(404);
     });
-    it('classId ngoài phạm vi GV → rỗng', async () => {
-      expect((await list(teacher.token, `?classId=${classB}&q=Phạm`).expect(200)).body.data).toEqual([]);
+    it('classId/courseId ngoài phạm vi GV → rỗng (không lộ ghi danh nơi khác)', async () => {
+      expect((await list(teacher.token, `?classId=${classB}`).expect(200)).body.data).toEqual([]);
+      expect((await list(teacher.token, `?courseId=${courseB}`).expect(200)).body.data).toEqual([]);
+      expect(ids(await list(teacher.token, `?courseId=${courseA}`).expect(200)).sort()).toEqual(
+        [hvA._id, hvB._id].map(String).sort(),
+      );
+    });
+    it('GV không dò được email qua q', async () => {
+      expect((await list(teacher.token, '?q=a.nguyen@').expect(200)).body.data).toEqual([]);
     });
   });
 
