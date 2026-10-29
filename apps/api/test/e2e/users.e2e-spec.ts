@@ -198,6 +198,48 @@ describe('FR-USR-01 Tài khoản', () => {
     }
   });
 
+  describe('R12 thu hồi refresh token khi reset mật khẩu / khóa / vô hiệu', () => {
+    const REFRESH = '/api/v1/auth/refresh';
+    const refreshCookie = async (username: string) => {
+      const res = await login(username, DEFAULT_PASSWORD);
+      expect(res.status).toBe(200);
+      const raw = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c) => c.startsWith('lc_rt='));
+      if (!raw) throw new Error('no refresh cookie');
+      return raw.split(';')[0];
+    };
+    const liveTokens = (userId: unknown) => t.conn.collection('refresh_tokens').countDocuments({ userId, revokedAt: null });
+
+    it('reset-password → refresh cookie cũ 401, mọi refresh token bị thu hồi', async () => {
+      const u = await makeUser(t.conn, { role: Role.TEACHER });
+      const c = await refreshCookie(u.username);
+      await t.http().post(`/api/v1/users/${u._id}/reset-password`).set(auth(Role.MANAGER)).expect(201);
+      expect(await liveTokens(u._id)).toBe(0);
+      expect((await t.http().post(REFRESH).set('Cookie', c)).status).toBe(401);
+    });
+
+    it('lock → thu hồi refresh token: sau unlock cookie cũ vẫn 401', async () => {
+      const u = await makeUser(t.conn, { role: Role.TEACHER });
+      const c = await refreshCookie(u.username);
+      await t.http().post(`/api/v1/users/${u._id}/lock`).set(auth(Role.MANAGER)).expect(201);
+      expect(await liveTokens(u._id)).toBe(0);
+      await t.http().post(`/api/v1/users/${u._id}/unlock`).set(auth(Role.MANAGER)).expect(201);
+      expect((await t.http().post(REFRESH).set('Cookie', c)).status).toBe(401);
+    });
+
+    it('PATCH status LOCKED/DISABLED thu hồi refresh token; PATCH fullName thì không', async () => {
+      for (const status of ['LOCKED', 'DISABLED']) {
+        const u = await makeUser(t.conn, { role: Role.TEACHER });
+        const c = await refreshCookie(u.username);
+        await t.http().patch(`/api/v1/users/${u._id}`).set(auth(Role.MANAGER)).send({ fullName: 'Tên Mới' }).expect(200);
+        expect(await liveTokens(u._id)).toBe(1);
+        await t.http().patch(`/api/v1/users/${u._id}`).set(auth(Role.MANAGER)).send({ status }).expect(200);
+        expect(await liveTokens(u._id)).toBe(0);
+        await t.http().patch(`/api/v1/users/${u._id}`).set(auth(Role.MANAGER)).send({ status: 'ACTIVE' }).expect(200);
+        expect((await t.http().post(REFRESH).set('Cookie', c)).status).toBe(401);
+      }
+    });
+  });
+
   it('audit: create/lock/unlock/reset ghi audit_logs entity User', async () => {
     const c = await post(Role.MANAGER, staff()).expect(201);
     const id = c.body.data.user.id as string;

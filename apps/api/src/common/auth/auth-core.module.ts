@@ -1,10 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { loadEnv } from '../../config/env';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RefreshTokenRevoker } from './refresh-token-revoker';
 import { RolesGuard } from './roles.guard';
 
+@Global()
 @Module({
   imports: [
     JwtModule.registerAsync({
@@ -18,6 +20,8 @@ import { RolesGuard } from './roles.guard';
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    RefreshTokenRevoker,
   ],
+  exports: [RefreshTokenRevoker],
 })
 export class AuthCoreModule {}

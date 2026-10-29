@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes } from 'crypto';
 import { Model, Types } from 'mongoose';
+import { RefreshTokenRevoker } from '../../common/auth/refresh-token-revoker';
 import { ClockService } from '../../common/clock/clock.service';
 import { loadEnv } from '../../config/env';
 import { Models } from '../../database/models';
@@ -35,6 +36,7 @@ export class TokenService {
     private readonly jwt: JwtService,
     private readonly clock: ClockService,
     @InjectModel(Models.RefreshToken) private readonly tokens: Model<RefreshToken>,
+    private readonly revoker: RefreshTokenRevoker,
   ) {}
 
   readonly refreshTtlMs = parseDurationMs(loadEnv().JWT_REFRESH_TTL);
@@ -91,7 +93,7 @@ export class TokenService {
   }
 
   async revokeAllForUser(userId: Types.ObjectId): Promise<void> {
-    await this.tokens.updateMany({ userId, revokedAt: null }, { revokedAt: this.clock.now() });
+    await this.revoker.revokeAllForUser(userId);
   }
 
   async revoke(raw: string, userId: Types.ObjectId): Promise<void> {

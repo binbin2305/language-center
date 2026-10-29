@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { ClientSession, FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { ClientSession, Connection, FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
 import {
   AuditAction,
   CreateUserInput,
@@ -17,6 +17,8 @@ import {
 } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
+import { RefreshTokenRevoker } from '../../common/auth/refresh-token-revoker';
+import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { paginate } from '../../common/pagination';
 import { Models } from '../../database/models';
@@ -45,6 +47,8 @@ export class UsersService {
     @InjectModel(Models.User) private readonly users: Model<User>,
     @InjectModel(Models.Student) private readonly students: Model<Student>,
     private readonly audit: AuditService,
+    private readonly revoker: RefreshTokenRevoker,
+    @InjectConnection() private readonly conn: Connection,
   ) {}
 
   /** Creates the STUDENT login (username = student code, no email). The caller links `student.userId`. */
@@ -149,7 +153,8 @@ export class UsersService {
     }
     const set: Record<string, unknown> = { ...input };
     if (input.status) Object.assign(set, STATUS_RESET[input.status]);
-    const after = await this.mutate(id, actor, { $set: set });
+    const revoke = input.status === UserStatus.LOCKED || input.status === UserStatus.DISABLED;
+    const after = await this.mutate(id, actor, { $set: set }, revoke);
     await this.audit.log({
       actor,
       action: input.status ? AuditAction.STATUS : AuditAction.UPDATE,
@@ -164,7 +169,7 @@ export class UsersService {
   async lock(id: string, actor: AuthUser): Promise<UserDto> {
     if (actor.id.equals(id)) throw new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields: { id: 'SELF' } });
     const before = await this.loadManageable(id, actor);
-    const after = await this.mutate(id, actor, { $set: { status: UserStatus.LOCKED, ...STATUS_RESET.LOCKED } });
+    const after = await this.mutate(id, actor, { $set: { status: UserStatus.LOCKED, ...STATUS_RESET.LOCKED } }, true);
     await this.audit.log({
       actor,
       action: AuditAction.STATUS,
@@ -196,7 +201,7 @@ export class UsersService {
     const tempPassword = generateTempPassword();
     await this.mutate(id, actor, {
       $set: { passwordHash: await hashPassword(tempPassword), mustChangePassword: true, lockedUntil: null, failedLoginCount: 0, failedLoginWindowStart: null },
-    });
+    }, true);
     await this.audit.log({
       actor,
       action: AuditAction.UPDATE,
@@ -220,13 +225,26 @@ export class UsersService {
     return u;
   }
 
-  /** Conditional update (role guard re-checked atomically for MANAGER actors). */
-  private async mutate(id: string, actor: AuthUser, update: Record<string, unknown>): Promise<UserLean> {
+  /**
+   * Conditional update (role guard re-checked atomically for MANAGER actors).
+   * `revokeSessions`: also revoke the user's refresh tokens in the same transaction (R12), so a
+   * reset password or a lock cannot be outlived by a refresh cookie issued before it.
+   */
+  private async mutate(
+    id: string,
+    actor: AuthUser,
+    update: Record<string, unknown>,
+    revokeSessions = false,
+  ): Promise<UserLean> {
     const filter: FilterQuery<User> = { _id: id, deletedAt: null };
     if (actor.role === Role.MANAGER) filter.role = { $ne: Role.ADMIN };
-    const u = (await this.users
-      .findOneAndUpdate(filter, update, { new: true, runValidators: true })
-      .lean()) as unknown as UserLean | null;
+    const u = await withTransaction(this.conn, async (s) => {
+      const doc = (await this.users
+        .findOneAndUpdate(filter, update, { new: true, runValidators: true, session: s })
+        .lean()) as unknown as UserLean | null;
+      if (doc && revokeSessions) await this.revoker.revokeAllForUser(doc._id, s);
+      return doc;
+    });
     if (u) return u;
     // Nothing matched: gone (404) vs. MANAGER targeting an ADMIN (403).
     const exists = await this.users.exists({ _id: id, deletedAt: null });
