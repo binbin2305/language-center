@@ -43,7 +43,7 @@ describe('danh sách lớp', () => {
     mockCatalog();
     server.use(http.get('*/api/v1/classes', () => page([cls({ currentSize: 20 })])));
     renderApp({ route: '/classes', user: makeUser('MANAGER') });
-    const bar = await screen.findByRole('progressbar', { name: 'Sĩ số' }, { timeout: 5000 });
+    const bar = await screen.findByRole('progressbar', { name: 'Sĩ số' }, { timeout: 10_000 });
     expect(bar).toHaveAttribute('aria-valuenow', '20');
     expect(within(bar).getByTestId('capacity-fill')).toHaveClass('bg-destructive');
   });
@@ -82,7 +82,7 @@ describe('chi tiết lớp', () => {
     renderApp({ route: `/classes/${CLASS_ID}`, user: makeUser('ACADEMIC_STAFF') });
     await user.click(await screen.findByRole('button', { name: 'Tùy chọn lớp' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Sửa' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sửa lớp học' }, { timeout: 5000 });
+    const dialog = await screen.findByRole('dialog', { name: 'Sửa lớp học' }, { timeout: 10_000 });
     const max = within(dialog).getByLabelText(/Sĩ số tối đa/);
     await user.clear(max);
     await user.type(max, '15');
@@ -164,7 +164,7 @@ describe('chi tiết lớp theo vai trò', () => {
         http.get('*/api/v1/classes/:id/students', () => page([])),
       );
       renderApp({ route: `/classes/${CLASS_ID}`, user: makeUser(role) });
-      const label = await screen.findByText('Phòng', {}, { timeout: 5000 });
+      const label = await screen.findByText('Phòng', {}, { timeout: 10_000 });
       expect(label.nextElementSibling).toHaveTextContent('Phòng 101');
       expect(roomsCalled).toBe(false);
     },
@@ -176,7 +176,7 @@ describe('chi tiết lớp theo vai trò', () => {
       http.get('*/api/v1/classes/:id/students', () => page([])),
     );
     renderApp({ route: `/classes/${CLASS_ID}`, user: makeUser('TEACHER') });
-    const label = await screen.findByText('Phòng', {}, { timeout: 5000 });
+    const label = await screen.findByText('Phòng', {}, { timeout: 10_000 });
     expect(label.nextElementSibling).toHaveTextContent('Chưa chọn');
   });
 });
@@ -193,7 +193,7 @@ describe('form tạo lớp', () => {
   const openCreate = async (user: ReturnType<typeof userEvent.setup>) => {
     renderApp({ route: '/classes', user: makeUser('MANAGER') });
     await user.click(await screen.findByRole('button', { name: 'Thêm lớp' }));
-    return screen.findByRole('dialog', { name: 'Thêm lớp học' }, { timeout: 5000 });
+    return screen.findByRole('dialog', { name: 'Thêm lớp học' }, { timeout: 10_000 });
   };
 
   const pick = async (

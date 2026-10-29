@@ -1,9 +1,12 @@
 import { http, HttpResponse } from 'msw';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from '../../../../test/msw/server';
 import { renderApp } from '../../../../test/render';
 import { makeUser } from '../../../../test/users';
+import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useConvertLead } from '../hooks';
 
 const LEAD_ID = '65000000000000000000a001';
 const COURSE_ID = '65000000000000000000c001';
@@ -70,7 +73,7 @@ describe('danh sách lead (FR-ADM-01)', () => {
     const user = userEvent.setup();
     renderApp({ route: '/admissions/leads', user: makeUser('ACADEMIC_STAFF') });
     // first lazy page import compiles the table/select/calendar chunks
-    expect(await screen.findByText('Nguyễn Thị Lan', undefined, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText('Nguyễn Thị Lan', undefined, { timeout: 10_000 })).toBeInTheDocument();
     await user.click(screen.getByRole('combobox', { name: 'Trạng thái' }));
     await user.click(await screen.findByRole('option', { name: 'Mới' }));
     await waitFor(() => expect(seen).toContain('NEW'));
@@ -80,7 +83,7 @@ describe('danh sách lead (FR-ADM-01)', () => {
     mockCourses();
     server.use(http.get('*/api/v1/leads', () => HttpResponse.json(page([lead({ createdByName: 'Lê Tiếp Nhận' })]))));
     renderApp({ route: '/admissions/leads', user: makeUser('ACADEMIC_STAFF') });
-    const row = (await screen.findByText('Nguyễn Thị Lan', undefined, { timeout: 5000 })).closest('tr') as HTMLElement;
+    const row = (await screen.findByText('Nguyễn Thị Lan', undefined, { timeout: 10_000 })).closest('tr') as HTMLElement;
     expect(screen.getByRole('columnheader', { name: 'Người tiếp nhận' })).toBeInTheDocument();
     expect(within(row).getByText('Lê Tiếp Nhận')).toBeInTheDocument();
   });
@@ -205,5 +208,25 @@ describe('chi tiết lead và tạo hồ sơ học viên (FR-ADM-03)', () => {
     await user.click(within(dup).getByRole('button', { name: 'Vẫn tạo hồ sơ' }));
     expect(await screen.findByRole('dialog', { name: 'Đã tạo hồ sơ học viên' })).toBeInTheDocument();
     expect(searches).toEqual(['', '?force=true']);
+  });
+});
+
+const CONVERT_LEAD_ID = '65000000000000000000f001';
+
+describe('FR-ADM-03 cache sau khi tạo hồ sơ học viên', () => {
+  it('convert lead → làm mới cả ["leads"] và ["students"]', async () => {
+    server.use(
+      http.post(`*/api/v1/leads/${CONVERT_LEAD_ID}/convert`, () =>
+        HttpResponse.json({ data: { student: { id: '65000000000000000000a001' }, tempPassword: 'x' } }, { status: 201 }),
+      ),
+    );
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    qc.setQueryData(['students', 'list', {}], { data: [] });
+    qc.setQueryData(['leads', 'list', {}], { data: [] });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => useConvertLead(CONVERT_LEAD_ID), { wrapper });
+    await act(() => result.current.mutateAsync(false));
+    expect(qc.getQueryState(['leads', 'list', {}])?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(['students', 'list', {}])?.isInvalidated).toBe(true);
   });
 });

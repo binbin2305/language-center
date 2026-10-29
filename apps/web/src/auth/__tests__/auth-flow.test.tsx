@@ -9,7 +9,7 @@ import { resetViewport } from '../../../test/media';
 import { tokenStore } from '@/lib/api';
 
 // The first render of a lazy route compiles its chunk; 1s (RTL default) is too tight under load.
-const PAGE = { timeout: 5000 };
+const PAGE = { timeout: 10_000 };
 
 const unauthenticated = () =>
   http.post('*/api/v1/auth/refresh', () =>

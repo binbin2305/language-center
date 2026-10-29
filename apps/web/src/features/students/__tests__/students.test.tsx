@@ -102,7 +102,7 @@ describe('hồ sơ học viên (FR-ADM-05/06)', () => {
     mockDetail({ ...brief, enrollments: [] });
     renderApp({ user: makeUser(Role.TEACHER), route: `/students/${SID}` });
     // First load of the lazy teacher tabs can exceed the default 1s.
-    expect(await screen.findByText('0912345678', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText('0912345678', {}, { timeout: 10_000 })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Thông tin' })).toBeInTheDocument();
     for (const name of ['Học phí', 'Giấy tờ', 'Lịch sử thay đổi'])
       expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument();

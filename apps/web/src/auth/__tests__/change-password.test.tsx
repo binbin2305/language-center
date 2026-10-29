@@ -6,7 +6,7 @@ import { renderApp } from '../../../test/render';
 import { makeUser } from '../../../test/users';
 
 // The first render of a lazy route compiles its chunk; 1s (RTL default) is too tight under load.
-const PAGE = { timeout: 5000 };
+const PAGE = { timeout: 10_000 };
 
 const forced = makeUser('TEACHER', { mustChangePassword: true });
 

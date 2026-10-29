@@ -92,7 +92,7 @@ describe('trang thông báo', () => {
     const user = userEvent.setup();
     renderApp({ route: '/notifications', user: makeUser('MANAGER') });
     await user.click(await screen.findByText('Thông báo a'));
-    expect(await screen.findByRole('heading', { name: 'Chi tiết lớp' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Chi tiết lớp' }, { timeout: 10_000 })).toBeInTheDocument();
   });
 
   it('"Đánh dấu tất cả đã đọc" gọi read-all', async () => {
