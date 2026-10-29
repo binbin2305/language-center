@@ -1,6 +1,6 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Types } from 'mongoose';
-import { ClassStatus, CourseStatus, DomainEvent, ErrorCode, Role, SessionStatus } from '@lc/shared';
+import { ClassStatus, CourseStatus, DomainEvent, ErrorCode, Role, RoomStatus, SessionStatus } from '@lc/shared';
 import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
 import { makeClass, makeCourse, makeRoom, makeSession, makeTeacher, makeUser } from '../factories';
@@ -134,6 +134,15 @@ describe('FR-CLS-01..03 Lớp học', () => {
     it('defaultRoomId không tồn tại trả 400', async () => {
       const res = await post(body({ defaultRoomId: String(new Types.ObjectId()) })).expect(400);
       expect(res.body.error.details.fields.defaultRoomId).toBeDefined();
+    });
+
+    it('defaultRoomId là phòng INACTIVE trả 400 fields.defaultRoomId (tạo và sửa)', async () => {
+      const inactive = await makeRoom(t.conn, { status: RoomStatus.INACTIVE });
+      const res = await post(body({ defaultRoomId: String(inactive._id) })).expect(400);
+      expect(res.body.error.details.fields.defaultRoomId).toBeDefined();
+      const c = await makeClass(t.conn, { courseId: course._id });
+      const upd = await patch(String(c._id), { defaultRoomId: String(inactive._id) }).expect(400);
+      expect(upd.body.error.details.fields.defaultRoomId).toBeDefined();
     });
 
     it('courseId không tồn tại trả 400 fields.courseId', async () => {

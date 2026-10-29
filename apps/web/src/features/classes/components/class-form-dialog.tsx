@@ -23,6 +23,7 @@ import { useCreateClass, useUpdateClass } from '../hooks';
 
 const NO_VALUE = '__none__';
 const CATALOG_PARAMS = { limit: 100 };
+const ACTIVE_ROOM_PARAMS = { ...CATALOG_PARAMS, status: 'ACTIVE' as const };
 const REQUIRED = 'Vui lòng nhập thông tin này';
 const PICK = 'Vui lòng chọn một giá trị';
 const PICK_DATE = 'Vui lòng chọn ngày';
@@ -149,7 +150,8 @@ export function ClassFormDialog({ open, onOpenChange, cls }: ClassFormDialogProp
   // Only rendered for classes.manage (M, S), who may read teachers and rooms.
   const teachers = useTeachers();
   const courses = useCourses(CATALOG_PARAMS);
-  const rooms = useRooms(CATALOG_PARAMS);
+  // New picks are limited to ACTIVE rooms (the API rejects INACTIVE ones).
+  const rooms = useRooms(ACTIVE_ROOM_PARAMS);
   const form = useForm<FormValues, unknown, FormOutput>({
     resolver: async (values, ctx, opts) => {
       const res = await zodResolver(buildSchema(cls?.currentSize ?? 0), { errorMap, path: [], async: false })(values, ctx, opts);
@@ -171,6 +173,10 @@ export function ClassFormDialog({ open, onOpenChange, cls }: ClassFormDialogProp
   const teacherOptions = (teachers.data ?? []).map((t) => ({ id: t.id, label: t.fullName }));
   const courseOptions = (courses.data?.data ?? []).map((c) => ({ id: c.id, label: `${c.code} - ${c.name}` }));
   const roomOptions = (rooms.data?.data ?? []).map((r) => ({ id: r.id, label: `${r.code} - ${r.name}` }));
+  // Keep showing the class's current room when it has since been deactivated.
+  if (cls?.defaultRoomId && !roomOptions.some((o) => o.id === cls.defaultRoomId)) {
+    roomOptions.push({ id: cls.defaultRoomId, label: cls.defaultRoomName ?? 'Phòng hiện tại' });
+  }
 
   const onSubmit = form.handleSubmit(async (v) => {
     try {

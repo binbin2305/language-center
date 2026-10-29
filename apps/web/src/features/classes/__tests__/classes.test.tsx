@@ -221,6 +221,21 @@ describe('form tạo lớp', () => {
     await pickDay(user, dialog, /Ngày kết thúc/, '20');
   };
 
+  it('bộ chọn phòng mặc định chỉ tải phòng ACTIVE', async () => {
+    mockCatalog();
+    let roomStatus: string | null = null;
+    server.use(
+      http.get('*/api/v1/classes', () => page([])),
+      http.get('*/api/v1/rooms', ({ request }) => {
+        roomStatus = new URL(request.url).searchParams.get('status');
+        return page([]);
+      }),
+    );
+    const user = userEvent.setup();
+    await openCreate(user);
+    await waitFor(() => expect(roomStatus).toBe('ACTIVE'));
+  });
+
   it('thiếu mã lớp: báo "Vui lòng nhập mã lớp" ngay trên trường, không gọi POST', async () => {
     mockCatalog();
     let posted = false;

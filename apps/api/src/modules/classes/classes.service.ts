@@ -22,6 +22,7 @@ import {
   fromDateOnly,
   addVnDays,
   Role,
+  RoomStatus,
   SessionStatus,
   startOfVnDay,
   toDateOnly,
@@ -300,7 +301,8 @@ export class ClassesService {
         course: touched('courseId') || touched('level'),
         teacher: touched('teacherId'),
         assistant: touched('assistantTeacherId'),
-        room: touched('defaultRoomId'),
+        // Re-saving an unchanged room that was deactivated later must not block other edits.
+        room: touched('defaultRoomId') && input.defaultRoomId !== before.defaultRoomId?.toString(),
       },
       touched('startDate') || touched('endDate'),
     );
@@ -529,8 +531,9 @@ export class ClassesService {
     if (only.assistant && v.assistantTeacherId)
       await this.checkTeacher(v.assistantTeacherId, 'assistantTeacherId', fields);
     if (only.room && v.defaultRoomId) {
-      if (!(await this.rooms.exists({ _id: v.defaultRoomId })))
-        fields.defaultRoomId = 'Phòng học không tồn tại';
+      const room = await this.rooms.findById(v.defaultRoomId, { status: 1 }).lean();
+      if (!room) fields.defaultRoomId = 'Phòng học không tồn tại';
+      else if (room.status !== RoomStatus.ACTIVE) fields.defaultRoomId = 'Phòng học đã ngừng sử dụng';
     }
   }
 
