@@ -26,6 +26,8 @@ export const ListClassesQuery = zPagination.extend({
   level: z.string().trim().optional(),
   status: z.nativeEnum(ClassStatus).optional(),
   hasSeat: zBoolQuery.optional(),
+  /** Only PLANNED|ONGOING classes (the ones sessions can be scheduled for), full or not. */
+  open: zBoolQuery.optional(),
   /** CL-03: only meaningful for STUDENT — include classes the student left or completed. */
   includePast: zBoolQuery.optional(),
   teacherId: zObjectId.optional(),

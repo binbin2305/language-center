@@ -62,6 +62,17 @@ describe('FR-CLS-05 Tìm lớp', () => {
       expect(res.body.data).toEqual([]);
     });
 
+    it('open=true chỉ trả lớp PLANNED|ONGOING (kể cả lớp đã đủ chỗ) — dùng cho bộ chọn lớp khi xếp lịch', async () => {
+      const course = await makeCourse(t.conn);
+      const base = { courseId: course._id, maxCapacity: 20 };
+      const planned = await makeClass(t.conn, { ...base });
+      const full = await makeClass(t.conn, { ...base, currentSize: 20, status: ClassStatus.ONGOING });
+      await makeClass(t.conn, { ...base, status: ClassStatus.FINISHED });
+      await makeClass(t.conn, { ...base, status: ClassStatus.INACTIVE });
+      const res = await list(manager.token, `?courseId=${course._id}&open=true`).expect(200);
+      expect(ids(res).sort()).toEqual([String(planned._id), String(full._id)].sort());
+    });
+
     it('ADMIN bị 403', async () => {
       await list(admin.token).expect(403);
     });

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { can, type SessionDto } from '@lc/shared';
+import { can, ClassStatus, type SessionDto } from '@lc/shared';
 import { useAuth } from '@/auth/use-auth';
 import { ReasonDialog } from '@/components/common/reason-dialog';
 import { Button } from '@/components/ui/button';
+import { useClass } from '@/features/classes/hooks';
 import { errorMessage } from '@/lib/error-messages';
 import { useCancelFutureSessions } from '../hooks';
 import { ScheduleCalendar } from './schedule-calendar';
@@ -20,13 +21,17 @@ export default function ClassScheduleTab() {
   const [creating, setCreating] = useState(false);
   const [cancellingFuture, setCancellingFuture] = useState(false);
   const cancelFuture = useCancelFutureSessions();
+  const cls = useClass(id);
+  // Sessions can only be added to PLANNED/ONGOING classes; hide the action until the status is known.
+  const status = cls.data?.status;
+  const canSchedule = status === ClassStatus.PLANNED || status === ClassStatus.ONGOING;
 
   return (
     <div className="space-y-3">
       {manage ? (
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={() => setCancellingFuture(true)}>Hủy các buổi sắp tới</Button>
-          <Button onClick={() => setCreating(true)}>Tạo lịch</Button>
+          {canSchedule ? <Button onClick={() => setCreating(true)}>Tạo lịch</Button> : null}
         </div>
       ) : null}
       <ScheduleCalendar filters={{ classId: id }} onSelectSession={setSelected} />

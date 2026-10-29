@@ -207,6 +207,31 @@ describe('FR-SCH-03 kiểm tra xung đột trước khi tạo', () => {
   });
 });
 
+describe('bộ chọn trong form tạo lịch', () => {
+  it('bộ chọn lớp chỉ hỏi lớp PLANNED|ONGOING (open=true), bộ chọn phòng chỉ phòng ACTIVE', async () => {
+    let classParams: URLSearchParams | null = null;
+    let roomParams: URLSearchParams | null = null;
+    server.use(
+      http.get('*/api/v1/classes', ({ request }) => {
+        classParams = new URL(request.url).searchParams;
+        return HttpResponse.json({ data: [], meta: { page: 1, limit: 20, total: 0 } });
+      }),
+      http.get('*/api/v1/rooms', ({ request }) => {
+        roomParams = new URL(request.url).searchParams;
+        return HttpResponse.json({ data: [], meta: { page: 1, limit: 20, total: 0 } });
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SessionFormDialog open onOpenChange={() => undefined} />, { user: makeUser('MANAGER') });
+    const [classPicker, roomPicker] = screen.getAllByRole('combobox');
+    await user.click(classPicker);
+    await waitFor(() => expect(classParams?.get('open')).toBe('true'));
+    await user.keyboard('{Escape}');
+    await user.click(roomPicker);
+    await waitFor(() => expect(roomParams?.get('status')).toBe('ACTIVE'));
+  });
+});
+
 describe('màn hình Lịch', () => {
   it('GET /sessions trả [] → "Chưa có lịch học"', async () => {
     mockSessions([]);
@@ -276,6 +301,20 @@ describe('màn hình Lịch', () => {
 });
 
 describe('tab Lịch học trong lớp', () => {
+  const mockClass = (status: string) =>
+    server.use(
+      http.get(`*/api/v1/classes/${CLASS_ID}`, () =>
+        HttpResponse.json({
+          data: {
+            id: CLASS_ID, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+            code: 'IELTS-01', name: 'IELTS Foundation 01', courseId: '65000000000000000000e001',
+            level: 'Foundation', teacherId: TEACHER_ID, defaultRoomId: null, maxCapacity: 20,
+            currentSize: 0, startDate: '2026-01-05', endDate: '2026-04-05', status,
+          },
+        }),
+      ),
+    );
+
   it('gọi GET /sessions?classId=…', async () => {
     let classId: string | null = null;
     server.use(
@@ -283,19 +322,20 @@ describe('tab Lịch học trong lớp', () => {
         classId = new URL(request.url).searchParams.get('classId');
         return HttpResponse.json({ data: [] });
       }),
-      http.get(`*/api/v1/classes/${CLASS_ID}`, () =>
-        HttpResponse.json({
-          data: {
-            id: CLASS_ID, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
-            code: 'IELTS-01', name: 'IELTS Foundation 01', courseId: '65000000000000000000e001',
-            level: 'Foundation', teacherId: TEACHER_ID, defaultRoomId: null, maxCapacity: 20,
-            currentSize: 0, startDate: '2026-01-05', endDate: '2026-04-05', status: 'ONGOING',
-          },
-        }),
-      ),
     );
+    mockClass('ONGOING');
     renderApp({ route: `/classes/${CLASS_ID}?tab=schedule`, user: makeUser('MANAGER') });
     await waitFor(() => expect(classId).toBe(CLASS_ID));
     expect(await screen.findByText('Chưa có lịch học')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Tạo lịch' })).toBeInTheDocument();
+  });
+
+  it.each(['FINISHED', 'INACTIVE'])('lớp %s → ẩn nút "Tạo lịch"', async (status) => {
+    mockSessions([]);
+    mockClass(status);
+    renderApp({ route: `/classes/${CLASS_ID}?tab=schedule`, user: makeUser('MANAGER') });
+    expect(await screen.findByText('Chưa có lịch học')).toBeInTheDocument();
+    expect(await screen.findByText('IELTS-01', { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tạo lịch' })).not.toBeInTheDocument();
   });
 });

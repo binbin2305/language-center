@@ -49,6 +49,9 @@ import { ClassLean, toDto } from './classes.mapper';
 
 type Fields = Record<string, string>;
 
+/** Classes that are still running or about to start (sessions can be scheduled, seats are offered). */
+const OPEN_CLASS_STATUSES = [ClassStatus.PLANNED, ClassStatus.ONGOING];
+
 function isDuplicateKey(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 11000;
 }
@@ -161,11 +164,12 @@ export class ClassesService {
     if (q.courseId) and.push({ courseId: new Types.ObjectId(q.courseId) });
     if (q.level) and.push({ level: q.level });
     if (q.status) and.push({ status: q.status });
+    if (q.open) and.push({ status: { $in: OPEN_CLASS_STATUSES } });
     // AND with the scope filter above: a teacher can only narrow, never widen.
     if (q.teacherId) and.push({ teacherId: new Types.ObjectId(q.teacherId) });
     if (q.hasSeat) {
       and.push({
-        status: { $in: [ClassStatus.PLANNED, ClassStatus.ONGOING] },
+        status: { $in: OPEN_CLASS_STATUSES },
         $expr: { $lt: ['$currentSize', '$maxCapacity'] },
       });
     }

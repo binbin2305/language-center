@@ -111,6 +111,12 @@ interface PickerItem {
   locked?: boolean;
 }
 
+/** Sessions can only be scheduled for open classes in active rooms (the API rejects the rest). */
+const PICKER_FILTERS: Partial<Record<PickerItem['entity'], Record<string, string | boolean>>> = {
+  class: { open: true },
+  room: { status: 'ACTIVE' },
+};
+
 function EntityPickers({ items }: { items: PickerItem[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-3">
@@ -120,6 +126,7 @@ function EntityPickers({ items }: { items: PickerItem[] }) {
             <EntitySelect
               {...p}
               entity={it.entity}
+              filter={PICKER_FILTERS[it.entity]}
               value={it.value || null}
               onChange={(id) => it.onChange(id ?? '')}
               disabled={it.locked}
