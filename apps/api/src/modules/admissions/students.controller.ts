@@ -1,5 +1,5 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ListStudentsQuery, Role } from '@lc/shared';
+import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { ListStudentsQuery, Role, StudentAuditQuery, UpdateStudentContactInput, UpdateStudentInput } from '@lc/shared';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -28,5 +28,31 @@ export class StudentsController {
   @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER, Role.STUDENT)
   async get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return { data: await this.svc.get(user, id) };
+  }
+
+  // Must be declared before ':id'.
+  @Patch('me/contact')
+  @Roles(Role.STUDENT)
+  async updateContact(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(UpdateStudentContactInput)) body: UpdateStudentContactInput,
+  ) {
+    return { data: await this.svc.updateContact(user, body) };
+  }
+
+  @Patch(':id')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(UpdateStudentInput)) body: UpdateStudentInput,
+  ) {
+    return { data: await this.svc.update(user, id, body) };
+  }
+
+  @Get(':id/audit')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  audit(@Param('id') id: string, @Query(new ZodValidationPipe(StudentAuditQuery)) q: StudentAuditQuery) {
+    return this.svc.auditTrail(id, q);
   }
 }

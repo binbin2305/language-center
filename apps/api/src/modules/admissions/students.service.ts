@@ -4,24 +4,35 @@ import { FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
 import {
   attendanceRate,
   AttendanceStatus,
+  AuditAction,
+  AuditLogDto,
   EnrollmentStatus,
   ErrorCode,
   ListStudentsQuery,
   removeVietnameseTones,
+  fromDateOnly,
   Role,
+  StudentAuditQuery,
   StudentBriefDto,
   StudentDetailDto,
   StudentDto,
   StudentTeacherViewDto,
+  toDateOnly,
+  UpdateStudentContactInput,
+  UpdateStudentInput,
+  UpdateStudentResultDto,
 } from '@lc/shared';
+import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
 import { AppError } from '../../common/errors/app-error';
 import { paginate } from '../../common/pagination';
 import { ScopeService } from '../../common/scope/scope.service';
 import { Models } from '../../database/models';
+import { AuditLog } from '../../database/schemas/audit-log.schema';
 import { Attendance } from '../../database/schemas/attendance.schema';
 import { Enrollment } from '../../database/schemas/enrollment.schema';
 import { Student } from '../../database/schemas/student.schema';
+import { DuplicatesService } from './duplicates.service';
 import {
   EnrollmentLean,
   StudentLean,
@@ -45,7 +56,10 @@ export class StudentsService {
     @InjectModel(Models.Student) private readonly students: Model<Student>,
     @InjectModel(Models.Enrollment) private readonly enrollments: Model<Enrollment>,
     @InjectModel(Models.Attendance) private readonly attendances: Model<Attendance>,
+    @InjectModel(Models.AuditLog) private readonly auditLogs: Model<AuditLog>,
     private readonly scope: ScopeService,
+    private readonly audit: AuditService,
+    private readonly duplicates: DuplicatesService,
   ) {}
 
   /** Student ids having an enrollment that matches classId/courseId, or null when neither is given. */
@@ -135,5 +149,72 @@ export class StudentsService {
       { $group: { _id: '$status', n: { $sum: 1 } } },
     ]);
     return attendanceRate(Object.fromEntries(rows.map((r) => [r._id, r.n])));
+  }
+
+  async update(user: AuthUser, id: string, input: UpdateStudentInput): Promise<UpdateStudentResultDto> {
+    if (!isValidObjectId(id)) throw new AppError(ErrorCode.NOT_FOUND);
+    return this.apply(user, new Types.ObjectId(id), input);
+  }
+
+  async updateContact(user: AuthUser, input: UpdateStudentContactInput): Promise<UpdateStudentResultDto> {
+    if (!user.studentId) throw new AppError(ErrorCode.NOT_FOUND);
+    return this.apply(user, user.studentId, input);
+  }
+
+  private async apply(user: AuthUser, studentId: Types.ObjectId, input: UpdateStudentInput): Promise<UpdateStudentResultDto> {
+    const current = (await this.students.findOne({ _id: studentId, deletedAt: null }).lean()) as StudentLean | null;
+    if (!current) throw new AppError(ErrorCode.NOT_FOUND);
+
+    // Audit values are plain/lean (date-only strings), only for fields that actually change.
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    const set: Record<string, unknown> = {};
+    const view = (k: keyof UpdateStudentInput, s: StudentLean): unknown => {
+      if (k === 'dob') return toDateOnly(s.dob);
+      if (k === 'email') return s.email ?? null;
+      return s[k] ?? null;
+    };
+    for (const k of Object.keys(input) as Array<keyof UpdateStudentInput>) {
+      const next = input[k] ?? null;
+      if (next === view(k, current)) continue;
+      before[k] = view(k, current);
+      after[k] = next;
+      set[k] = k === 'dob' ? fromDateOnly(input.dob as string) : next;
+    }
+    if (Object.keys(set).length === 0) return { student: toStudentDto(current) };
+    // The schema's validate hook does not run on findOneAndUpdate: keep fullNameSearch in sync here.
+    if (typeof set.fullName === 'string') set.fullNameSearch = removeVietnameseTones(set.fullName).toLowerCase().trim();
+
+    const updated = (await this.students
+      .findOneAndUpdate({ _id: studentId, deletedAt: null }, { $set: set }, { new: true, runValidators: true })
+      .lean()) as StudentLean | null;
+    if (!updated) throw new AppError(ErrorCode.NOT_FOUND);
+    await this.audit.log({ actor: user, action: AuditAction.UPDATE, entity: 'student', entityId: studentId, before, after });
+
+    const result: UpdateStudentResultDto = { student: toStudentDto(updated) };
+    if ('phone' in set || 'email' in set) {
+      const dups = await this.duplicates.find({ phone: updated.phone, email: updated.email }, { studentId });
+      if (dups.length > 0) result.warnings = { duplicates: dups };
+    }
+    return result;
+  }
+
+  async auditTrail(id: string, q: StudentAuditQuery) {
+    if (!isValidObjectId(id)) throw new AppError(ErrorCode.NOT_FOUND);
+    const studentId = new Types.ObjectId(id);
+    if (!(await this.students.exists({ _id: studentId, deletedAt: null }))) throw new AppError(ErrorCode.NOT_FOUND);
+    const page = await paginate(this.auditLogs, { entity: 'student', entityId: studentId }, { page: q.page, limit: q.limit, sort: '-at' });
+    const data: AuditLogDto[] = (page.data as unknown as Array<AuditLog & { _id: Types.ObjectId }>).map((l) => ({
+      id: l._id.toString(),
+      actorId: l.actorId.toString(),
+      actorRole: l.actorRole,
+      action: l.action,
+      entity: l.entity,
+      entityId: l.entityId.toString(),
+      before: l.before ?? null,
+      after: l.after ?? null,
+      at: l.at.toISOString(),
+    }));
+    return { data, meta: page.meta };
   }
 }
