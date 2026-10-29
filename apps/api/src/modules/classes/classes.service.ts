@@ -22,6 +22,7 @@ import {
 import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
 import { ClockService } from '../../common/clock/clock.service';
+import { CounterService } from '../../common/db/counter.service';
 import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { Models } from '../../database/models';
@@ -62,6 +63,7 @@ export class ClassesService {
     @InjectModel(Models.Invoice) private readonly invoices: Model<Invoice>,
     @InjectConnection() private readonly conn: Connection,
     private readonly audit: AuditService,
+    private readonly counter: CounterService,
     private readonly clock: ClockService,
     private readonly events: EventEmitter2,
   ) {}
@@ -247,8 +249,10 @@ export class ClassesService {
   async remove(id: string, actor: AuthUser): Promise<void> {
     const before = await this.load(id);
     await withTransaction(this.conn, async (s) => {
-      // Delete first: the write on the class document serialises against concurrent
-      // writers, then dependencies are re-checked inside the same transaction.
+      // Same lock key as the schedule lane's session create/update (R11): the shared counter
+      // write makes delete and a concurrent session insert write-conflict instead of both
+      // committing under snapshot isolation. Dependencies are then re-checked in-session.
+      await this.counter.next(`lock:class:${before._id.toString()}`, s);
       const del = await this.classes.deleteOne({ _id: before._id }, { session: s });
       if (del.deletedCount === 0) throw new AppError(ErrorCode.NOT_FOUND);
       const reasons = await this.dependencyReasons(before._id, s);
@@ -266,28 +270,27 @@ export class ClassesService {
     classId: Types.ObjectId,
     session: ClientSession,
   ): Promise<ClassDependencyReason[]> {
-    const opt = { session };
-    const [active, history, sessions, assessment, grade, invoice] = await Promise.all([
-      this.enrollments.exists({ classId, status: EnrollmentStatus.ENROLLED }).session(session),
-      this.enrollments
-        .exists({ classId, status: { $ne: EnrollmentStatus.ENROLLED } })
-        .session(session),
-      this.sessions.exists({ classId }).session(session),
-      this.assessments.find({ classId }, { _id: 1 }, opt).lean(),
-      this.grades.exists({ classId }).session(session),
-      this.invoices.exists({ classId }).session(session),
-    ]);
+    // Sequential on purpose: a transaction's ClientSession does not support concurrent operations.
+    const active = await this.enrollments
+      .exists({ classId, status: EnrollmentStatus.ENROLLED })
+      .session(session);
+    const history = await this.enrollments
+      .exists({ classId, status: { $ne: EnrollmentStatus.ENROLLED } })
+      .session(session);
+    const sessions = await this.sessions.exists({ classId }).session(session);
+    const invoice = await this.invoices.exists({ classId }).session(session);
     // Grades belong to a class through its assessments (grade.classId is denormalised).
-    const viaAssessment = assessment.length
-      ? await this.grades
-          .exists({ assessmentId: { $in: assessment.map((a) => a._id) } })
-          .session(session)
-      : null;
+    const assessmentIds = await this.assessments.distinct('_id', { classId }).session(session);
+    const grade =
+      (await this.grades.exists({ classId }).session(session)) ||
+      (assessmentIds.length
+        ? await this.grades.exists({ assessmentId: { $in: assessmentIds } }).session(session)
+        : null);
     const reasons: ClassDependencyReason[] = [];
     if (active) reasons.push('ACTIVE_STUDENTS');
     if (history) reasons.push('ENROLLMENT_HISTORY');
     if (sessions) reasons.push('SESSIONS');
-    if (grade || viaAssessment) reasons.push('GRADES');
+    if (grade) reasons.push('GRADES');
     if (invoice) reasons.push('INVOICES');
     return reasons;
   }

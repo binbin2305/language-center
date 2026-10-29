@@ -44,6 +44,9 @@ describe('FR-CLS-04 Xóa / ngừng lớp', () => {
       .model<AuditLog>(Models.AuditLog)
       .findOne({ entity: 'class', entityId: c._id, action: 'delete' });
     expect(log).not.toBeNull();
+    const lock = await t.conn.collection('counters').findOne({ _id: `lock:class:${c._id}` } as never);
+    expect(lock).not.toBeNull();
+    expect((lock as unknown as { seq: number }).seq).toBeGreaterThanOrEqual(1);
   });
 
   it('FR-CLS-04: lớp không tồn tại → 404', async () => {
@@ -54,7 +57,12 @@ describe('FR-CLS-04 Xóa / ngừng lớp', () => {
   it('FR-CLS-04: có enrollment ENROLLED → ACTIVE_STUDENTS, lớp còn nguyên', async () => {
     const c = await makeClass(t.conn);
     await makeEnrollment(t.conn, { classId: c._id, status: 'ENROLLED' });
-    expect(await reasonsOf(c._id)).toContain('ACTIVE_STUDENTS');
+    expect(await reasonsOf(c._id)).toEqual(['ACTIVE_STUDENTS']);
+    // A rejected delete rolls back everything, including the audit row.
+    const logs = await t.conn
+      .model<AuditLog>(Models.AuditLog)
+      .countDocuments({ entity: 'class', entityId: c._id, action: 'delete' });
+    expect(logs).toBe(0);
     await t.http().get(`/api/v1/classes/${c._id}`).set(auth(manager.token)).expect(200);
   });
 
@@ -78,8 +86,8 @@ describe('FR-CLS-04 Xóa / ngừng lớp', () => {
   it('FR-CLS-04: có grade qua assessment của lớp → GRADES', async () => {
     const c = await makeClass(t.conn);
     const a = await makeAssessment(t.conn, { classId: c._id });
-    const g = await makeGrade(t.conn, { assessmentId: a._id });
-    await t.conn.model(Models.Enrollment).deleteOne({ _id: g.enrollmentId });
+    const e = await makeEnrollment(t.conn, { classId: null, status: 'CANCELLED' });
+    await makeGrade(t.conn, { assessmentId: a._id, enrollmentId: e._id });
     expect(await reasonsOf(c._id)).toEqual(['GRADES']);
   });
 
