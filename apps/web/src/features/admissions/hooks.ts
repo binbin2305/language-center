@@ -27,6 +27,7 @@ export function useConvertLead(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (force: boolean) => leadsApi.convert(id, force),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+    // Converting creates a student, so the students lists are stale too.
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: [KEY] }), qc.invalidateQueries({ queryKey: ['students'] })]),
   });
 }
