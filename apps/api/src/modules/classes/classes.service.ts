@@ -1,13 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
-import { ClientSession, Connection, isValidObjectId, Model, Types } from 'mongoose';
+import { ClientSession, Connection, FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
 import {
   AuditAction,
   CLASS_TRANSITIONS,
   canTransition,
   ClassDependencyReason,
+  absenceRate,
   ClassDto,
+  ClassRosterQuery,
+  ClassStudentDto,
+  ListClassesQuery,
+  Paginated,
   ClassStatus,
   CourseStatus,
   CreateClassInput,
@@ -21,12 +26,17 @@ import {
 } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
+import { paginate } from '../../common/pagination';
+import { ScopeService } from '../../common/scope/scope.service';
+import { SettingsService } from '../../common/settings/settings.service';
 import { ClockService } from '../../common/clock/clock.service';
 import { CounterService } from '../../common/db/counter.service';
 import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { Models } from '../../database/models';
 import { Class } from '../../database/schemas/class.schema';
+import { Attendance } from '../../database/schemas/attendance.schema';
+import { Student } from '../../database/schemas/student.schema';
 import { Assessment } from '../../database/schemas/assessment.schema';
 import { Course } from '../../database/schemas/course.schema';
 import { Enrollment } from '../../database/schemas/enrollment.schema';
@@ -61,11 +71,15 @@ export class ClassesService {
     @InjectModel(Models.Assessment) private readonly assessments: Model<Assessment>,
     @InjectModel(Models.Grade) private readonly grades: Model<Grade>,
     @InjectModel(Models.Invoice) private readonly invoices: Model<Invoice>,
+    @InjectModel(Models.Attendance) private readonly attendances: Model<Attendance>,
+    @InjectModel(Models.Student) private readonly students: Model<Student>,
     @InjectConnection() private readonly conn: Connection,
     private readonly audit: AuditService,
     private readonly counter: CounterService,
     private readonly clock: ClockService,
     private readonly events: EventEmitter2,
+    private readonly scope: ScopeService,
+    private readonly settings: SettingsService,
   ) {}
 
   async create(input: CreateClassInput, actor: AuthUser): Promise<ClassDto> {
@@ -128,8 +142,127 @@ export class ClassesService {
     }
   }
 
-  async get(id: string): Promise<ClassDto> {
-    return this.present(await this.load(id));
+  /** Out-of-scope T/H classes are reported as 404, never 403 (existence is not leaked). */
+  async get(id: string, user?: AuthUser): Promise<ClassDto> {
+    const c = await this.load(id);
+    if (user) await this.assertInScope(c, user);
+    return this.present(c);
+  }
+
+  async list(q: ListClassesQuery, user: AuthUser): Promise<Paginated<ClassDto>> {
+    const and: FilterQuery<Class>[] = [];
+    if (user.role === Role.TEACHER) {
+      and.push({ _id: { $in: await this.scope.teacherClassIds(user.id) } });
+    } else if (user.role === Role.STUDENT) {
+      const mode = q.includePast ? 'history' : 'current';
+      const classIds = user.studentId ? await this.scope.studentClassIds(user.studentId, mode) : [];
+      and.push({ _id: { $in: classIds } });
+    }
+    if (q.courseId) and.push({ courseId: new Types.ObjectId(q.courseId) });
+    if (q.level) and.push({ level: q.level });
+    if (q.status) and.push({ status: q.status });
+    // AND with the scope filter above: a teacher can only narrow, never widen.
+    if (q.teacherId) and.push({ teacherId: new Types.ObjectId(q.teacherId) });
+    if (q.hasSeat) {
+      and.push({
+        status: { $in: [ClassStatus.PLANNED, ClassStatus.ONGOING] },
+        $expr: { $lt: ['$currentSize', '$maxCapacity'] },
+      });
+    }
+    if (q.q) {
+      const rx = new RegExp(q.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      and.push({ $or: [{ code: rx }, { name: rx }] });
+    }
+    this.assertSort(q.sort);
+    const page = await paginate(this.classes, and.length ? { $and: and } : {}, q);
+    const rows = page.data as unknown as ClassLean[];
+    const [courses, teachers] = await Promise.all([
+      this.courses.find({ _id: { $in: rows.map((r) => r.courseId) } }, { name: 1 }).lean(),
+      this.users.find({ _id: { $in: rows.map((r) => r.teacherId) } }, { fullName: 1 }).lean(),
+    ]);
+    const courseName = new Map(courses.map((c) => [String(c._id), c.name]));
+    const teacherName = new Map(teachers.map((u) => [String(u._id), u.fullName]));
+    return {
+      data: rows.map((r) =>
+        toDto(r, {
+          courseName: courseName.get(String(r.courseId)),
+          teacherName: teacherName.get(String(r.teacherId)),
+        }),
+      ),
+      meta: page.meta,
+    };
+  }
+
+  /** ENROLLED students of the class with their absence rate in this class (one aggregate per page). */
+  async roster(id: string, q: ClassRosterQuery, user: AuthUser): Promise<Paginated<ClassStudentDto>> {
+    const c = await this.load(id);
+    await this.assertInScope(c, user);
+    const match = { classId: c._id, status: EnrollmentStatus.ENROLLED };
+    const [rows, total] = await Promise.all([
+      this.enrollments
+        .aggregate<{ _id: Types.ObjectId; studentId: Types.ObjectId; s: { code: string; fullName: string } }>([
+          { $match: match },
+          { $lookup: { from: this.students.collection.name, localField: 'studentId', foreignField: '_id', as: 's' } },
+          { $unwind: '$s' },
+          { $sort: { 's.fullName': 1, _id: 1 } },
+          { $skip: (q.page - 1) * q.limit },
+          { $limit: q.limit },
+          { $project: { studentId: 1, 's.code': 1, 's.fullName': 1 } },
+        ])
+        .exec(),
+      this.enrollments.countDocuments(match),
+    ]);
+    const counts = await this.attendances.aggregate<{
+      _id: { studentId: Types.ObjectId; status: string };
+      n: number;
+    }>([
+      { $match: { classId: c._id, studentId: { $in: rows.map((r) => r.studentId) } } },
+      { $group: { _id: { studentId: '$studentId', status: '$status' }, n: { $sum: 1 } } },
+    ]);
+    const byStudent = new Map<string, Record<string, number>>();
+    for (const g of counts) {
+      const key = String(g._id.studentId);
+      byStudent.set(key, { ...byStudent.get(key), [g._id.status]: g.n });
+    }
+    const { attendanceWarningThreshold } = await this.settings.get();
+    return {
+      data: rows.map((r) => {
+        const rate = absenceRate(byStudent.get(String(r.studentId)) ?? {});
+        return {
+          studentId: r.studentId.toString(),
+          enrollmentId: r._id.toString(),
+          studentCode: r.s.code,
+          fullName: r.s.fullName,
+          absenceRate: rate,
+          warning: rate > attendanceWarningThreshold,
+        };
+      }),
+      meta: { page: q.page, limit: q.limit, total },
+    };
+  }
+
+  private assertSort(sort?: string): void {
+    if (!sort) return;
+    const allowed = ['createdAt', 'code', 'name', 'startDate', 'endDate', 'status', 'level'];
+    const bad = sort
+      .split(',')
+      .map((k) => k.trim().replace(/^[-+]/, ''))
+      .filter((k) => k && !allowed.includes(k));
+    if (bad.length) throw invalid({ sort: `Không hỗ trợ sắp xếp theo: ${bad.join(', ')}` });
+  }
+
+  /** M/S see all; T needs main/assistant role; STUDENT needs any enrollment in the class; others 404. */
+  private async assertInScope(c: ClassLean, user: AuthUser): Promise<void> {
+    if (user.role === Role.TEACHER) {
+      const mine = await this.scope.teacherClassIds(user.id);
+      if (mine.some((x) => x.equals(c._id))) return;
+    } else if (user.role === Role.STUDENT) {
+      const mine = user.studentId ? await this.scope.studentClassIds(user.studentId, 'history') : [];
+      if (mine.some((x) => x.equals(c._id))) return;
+    } else {
+      return;
+    }
+    throw new AppError(ErrorCode.NOT_FOUND);
   }
 
   async update(id: string, input: UpdateClassInput, actor: AuthUser): Promise<ClassDto> {

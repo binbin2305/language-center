@@ -276,14 +276,13 @@ describe('FR-CLS-01..03 Lớp học', () => {
       await patch(String(c._id), { name: 'x' }, u.token).expect(403);
     });
 
-    it.each([Role.TEACHER, Role.STUDENT])(
-      '%s GET /classes/:id trả 403 (chờ CL-03 mở rộng)',
-      async (role) => {
-        const u = await loginAs(t, role);
-        const c = await makeClass(t.conn, { courseId: course._id });
-        await t.http().get(`/api/v1/classes/${c._id}`).set(auth(u.token)).expect(403);
-      },
-    );
+    it('ADMIN GET /classes/:id trả 403; TEACHER/STUDENT ngoài phạm vi trả 404', async () => {
+      const c = await makeClass(t.conn, { courseId: course._id });
+      const get = (token: string) => t.http().get(`/api/v1/classes/${c._id}`).set(auth(token));
+      await get((await loginAs(t, Role.ADMIN)).token).expect(403);
+      await get((await loginAs(t, Role.TEACHER)).token).expect(404);
+      await get((await loginAs(t, Role.STUDENT)).token).expect(404);
+    });
 
     it('chưa đăng nhập trả 401; ACADEMIC_STAFF tạo được', async () => {
       await t.http().post('/api/v1/classes').send(body()).expect(401);

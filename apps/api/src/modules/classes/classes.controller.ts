@@ -1,5 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
-import { CreateClassInput, Role, UpdateClassInput } from '@lc/shared';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  ClassRosterQuery,
+  CreateClassInput,
+  ListClassesQuery,
+  Role,
+  UpdateClassInput,
+} from '@lc/shared';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -20,10 +26,29 @@ export class ClassesController {
     return { data: await this.svc.create(input, user) };
   }
 
+  @Get()
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER, Role.STUDENT)
+  list(
+    @CurrentUser() user: AuthUser,
+    @Query(new ZodValidationPipe(ListClassesQuery)) q: ListClassesQuery,
+  ) {
+    return this.svc.list(q, user);
+  }
+
   @Get(':id')
-  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
-  async get(@Param('id') id: string) {
-    return { data: await this.svc.get(id) };
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER, Role.STUDENT)
+  async get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return { data: await this.svc.get(id, user) };
+  }
+
+  @Get(':id/students')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER)
+  roster(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query(new ZodValidationPipe(ClassRosterQuery)) q: ClassRosterQuery,
+  ) {
+    return this.svc.roster(id, q, user);
   }
 
   @Patch(':id')
