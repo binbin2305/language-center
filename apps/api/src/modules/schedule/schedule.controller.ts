@@ -1,9 +1,11 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import {
   BulkCreateSessionsInput,
+  CancelSessionInput,
   CheckConflictsInput,
   CreateSessionInput,
   Role,
+  UpdateSessionInput,
 } from '@lc/shared';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
@@ -36,5 +38,26 @@ export class ScheduleController {
   @HttpCode(200)
   async checkConflicts(@Body(new ZodValidationPipe(CheckConflictsInput)) body: CheckConflictsInput) {
     return { data: await this.svc.checkConflicts(body) };
+  }
+
+  @Patch(':id')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(UpdateSessionInput)) body: UpdateSessionInput,
+  ) {
+    return { data: await this.svc.update(id, body, user) };
+  }
+
+  @Post(':id/cancel')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  @HttpCode(200)
+  async cancel(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(CancelSessionInput)) body: CancelSessionInput,
+  ) {
+    return { data: await this.svc.cancel(id, body.reason, user) };
   }
 }

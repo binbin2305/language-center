@@ -8,16 +8,21 @@ import {
   type CheckConflictsInput,
   type CheckConflictsResultDto,
   type CreateSessionInput,
+  type CancelFutureSessionsResultDto,
   type CreateSessionResultDto,
+  type UpdateSessionInput,
+  SessionStatus,
   ErrorCode,
   Role,
   RoomStatus,
   type SessionConflictDto,
+  type SessionDto,
   type SessionWarning,
   toDateOnly,
   UserStatus,
   vnDay,
 } from '@lc/shared';
+import { ClockService } from '../../common/clock/clock.service';
 import { AuditService } from '../../common/audit/audit.service';
 import { CounterService } from '../../common/db/counter.service';
 import type { AuthUser } from '../../common/auth/auth-user';
@@ -27,7 +32,7 @@ import { AppError } from '../../common/errors/app-error';
 import { Models } from '../../database/models';
 import type { Class, ClassDoc } from '../../database/schemas/class.schema';
 import type { Room, RoomDoc } from '../../database/schemas/room.schema';
-import type { Session } from '../../database/schemas/session.schema';
+import type { Session, SessionDoc } from '../../database/schemas/session.schema';
 import type { User } from '../../database/schemas/user.schema';
 import { findSlotConflicts } from './conflict-checker';
 import { expandWeekly } from './recurrence';
@@ -58,6 +63,7 @@ export class ScheduleService {
     @Inject(SCHEDULE_CONFLICT_CHECKER) private readonly checker: ScheduleConflictChecker,
     private readonly audit: AuditService,
     private readonly counters: CounterService,
+    private readonly clock: ClockService,
   ) {}
 
   async checkConflicts(input: CheckConflictsInput): Promise<CheckConflictsResultDto> {
@@ -120,6 +126,102 @@ export class ScheduleService {
     });
   }
 
+  async update(id: string, input: UpdateSessionInput, actor: AuthUser): Promise<CreateSessionResultDto> {
+    return withTransaction(this.conn, async (s) => {
+      const current = await this.findOrThrow(id, s);
+      if (current.status === SessionStatus.CANCELLED) throw new AppError(ErrorCode.SESSION_LOCKED);
+      const changes = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
+      const merged = {
+        classId: current.classId.toString(),
+        roomId: input.roomId ?? current.roomId.toString(),
+        teacherId: input.teacherId ?? current.teacherId.toString(),
+        startAt: input.startAt ? new Date(input.startAt) : current.startAt,
+        endAt: input.endAt ? new Date(input.endAt) : current.endAt,
+      };
+      if (merged.endAt <= merged.startAt) throw fieldError('endAt', 'MUST_BE_AFTER_START');
+      const { cls, warnings } = await this.resolve(merged, s);
+      if (Object.keys(changes).length === 0) return { session: toSessionDto(current), warnings };
+
+      const now = this.clock.now();
+      if (current.attendanceTakenAt || current.startAt <= now) throw new AppError(ErrorCode.SESSION_LOCKED);
+      const range = { startAt: merged.startAt, endAt: merged.endAt };
+      this.assertInClassRange(cls, [range]);
+      await this.lockSchedule(merged, s);
+      await this.assertNoConflicts(merged.roomId, merged.teacherId, [range], cls, s, current._id);
+
+      const updated = await this.sessions.findOneAndUpdate(
+        { _id: current._id, status: SessionStatus.SCHEDULED, attendanceTakenAt: null, startAt: { $gt: now } },
+        { $set: { roomId: merged.roomId, teacherId: merged.teacherId, ...range } },
+        { new: true, session: s },
+      );
+      if (!updated) throw new AppError(ErrorCode.SESSION_LOCKED);
+      await this.audit.log(
+        { actor, action: AuditAction.UPDATE, entity: Models.Session, entityId: updated._id, before: current.toObject(), after: updated.toObject() },
+        s,
+      );
+      return { session: toSessionDto(updated), warnings };
+    });
+  }
+
+  async cancel(id: string, reason: string, actor: AuthUser): Promise<SessionDto> {
+    const trimmed = this.requireReason(reason);
+    return withTransaction(this.conn, async (s) => {
+      const current = await this.findOrThrow(id, s);
+      const updated = await this.cancelOne(current._id, trimmed, s);
+      if (!updated) throw new AppError(ErrorCode.SESSION_NOT_CANCELLABLE);
+      await this.auditCancel(current, updated, actor, s);
+      return toSessionDto(updated);
+    });
+  }
+
+  async cancelFuture(classId: string, reason: string, actor: AuthUser): Promise<CancelFutureSessionsResultDto> {
+    const trimmed = this.requireReason(reason);
+    if (!Types.ObjectId.isValid(classId)) throw new AppError(ErrorCode.NOT_FOUND);
+    return withTransaction(this.conn, async (s) => {
+      if (!(await this.classes.exists({ _id: classId }).session(s))) throw new AppError(ErrorCode.NOT_FOUND);
+      const future = await this.sessions
+        .find({ classId, status: SessionStatus.SCHEDULED, startAt: { $gt: this.clock.now() } })
+        .sort({ startAt: 1 })
+        .session(s);
+      let cancelled = 0;
+      for (const before of future) {
+        const updated = await this.cancelOne(before._id, trimmed, s);
+        if (!updated) continue;
+        await this.auditCancel(before, updated, actor, s);
+        cancelled += 1;
+      }
+      return { cancelled };
+    });
+  }
+
+  private requireReason(reason: string): string {
+    const trimmed = reason.trim();
+    if (!trimmed) throw new AppError(ErrorCode.REASON_REQUIRED);
+    return trimmed;
+  }
+
+  private async findOrThrow(id: string, s: ClientSession) {
+    if (!Types.ObjectId.isValid(id)) throw new AppError(ErrorCode.NOT_FOUND);
+    const doc = await this.sessions.findById(id).session(s);
+    if (!doc) throw new AppError(ErrorCode.NOT_FOUND);
+    return doc;
+  }
+
+  private cancelOne(id: Types.ObjectId, reason: string, s: ClientSession) {
+    return this.sessions.findOneAndUpdate(
+      { _id: id, status: SessionStatus.SCHEDULED, startAt: { $gt: this.clock.now() } },
+      { $set: { status: SessionStatus.CANCELLED, cancelReason: reason } },
+      { new: true, session: s },
+    );
+  }
+
+  private auditCancel(before: SessionDoc, after: SessionDoc, actor: AuthUser, s: ClientSession) {
+    return this.audit.log(
+      { actor, action: AuditAction.STATUS, entity: Models.Session, entityId: after._id, before: before.toObject(), after: after.toObject() },
+      s,
+    );
+  }
+
   private async resolve(
     input: { classId: string; roomId: string; teacherId: string },
     s: ClientSession,
@@ -173,12 +275,13 @@ export class ScheduleService {
     ranges: Range[],
     cls: ClassDoc,
     s: ClientSession,
+    excludeSessionId?: Types.ObjectId,
   ): Promise<void> {
     const conflicts: SessionConflictDto[] = [];
     const seen = new Set<string>();
     for (const r of ranges) {
       const found = await this.checker.findConflicts(
-        { roomId: new Types.ObjectId(roomId), teacherId: new Types.ObjectId(teacherId), ...r },
+        { roomId: new Types.ObjectId(roomId), teacherId: new Types.ObjectId(teacherId), ...r, ...(excludeSessionId ? { excludeSessionId } : {}) },
         s,
       );
       for (const c of found) {
