@@ -11,7 +11,6 @@ import { SearchInput } from '@/components/common/search-input';
 import { StatusBadge } from '@/components/common/status-badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -108,12 +107,12 @@ export default function ClassesPage() {
             ))}
           </SelectContent>
         </Select>
-        <Input
-          className="w-36"
-          aria-label="Lọc theo trình độ"
-          placeholder="Trình độ"
+        <SearchInput
           value={level}
-          onChange={(e) => reset(setLevel)(e.target.value)}
+          onChange={reset(setLevel)}
+          placeholder="Trình độ"
+          aria-label="Lọc theo trình độ"
+          className="w-40"
         />
         <Select value={status || ALL} onValueChange={(v) => reset(setStatus)(v === ALL ? '' : (v as ClassStatus))}>
           <SelectTrigger className="w-44" aria-label="Lọc theo trạng thái">

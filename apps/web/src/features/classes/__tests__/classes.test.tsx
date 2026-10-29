@@ -147,3 +147,120 @@ describe('chi tiết lớp', () => {
     expect(within(ok).queryByLabelText('Cảnh báo vắng nhiều')).not.toBeInTheDocument();
   });
 });
+
+describe('chi tiết lớp theo vai trò', () => {
+  it('TEACHER xem chi tiết lớp không gọi GET /rooms và không thấy dòng Phòng', async () => {
+    let roomsCalled = false;
+    server.use(
+      http.get('*/api/v1/rooms', () => {
+        roomsCalled = true;
+        return page([]);
+      }),
+      http.get('*/api/v1/classes/:id', () => HttpResponse.json({ data: cls({ defaultRoomId: 'x' }) })),
+      http.get('*/api/v1/classes/:id/students', () => page([])),
+    );
+    renderApp({ route: `/classes/${CLASS_ID}`, user: makeUser('TEACHER') });
+    expect(await screen.findByText('Giáo viên')).toBeInTheDocument();
+    expect(screen.queryByText('Phòng')).not.toBeInTheDocument();
+    expect(roomsCalled).toBe(false);
+  });
+});
+
+describe('form tạo lớp', () => {
+
+  beforeAll(() => {
+    // Radix Select / popovers need these in jsdom.
+    Element.prototype.hasPointerCapture ??= () => false;
+    Element.prototype.setPointerCapture ??= () => undefined;
+    Element.prototype.releasePointerCapture ??= () => undefined;
+  });
+
+  const openCreate = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderApp({ route: '/classes', user: makeUser('MANAGER') });
+    await user.click(await screen.findByRole('button', { name: 'Thêm lớp' }));
+    return screen.findByRole('dialog', { name: 'Thêm lớp học' }, { timeout: 5000 });
+  };
+
+  const pick = async (
+    user: ReturnType<typeof userEvent.setup>,
+    dialog: HTMLElement,
+    label: RegExp,
+    option: string,
+  ) => {
+    await user.click(within(dialog).getByRole('combobox', { name: label }));
+    await user.click(await screen.findByRole('option', { name: option }));
+  };
+
+  const pickDay = async (user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, label: RegExp, day: string) => {
+    await user.click(within(dialog).getByRole('button', { name: label }));
+    await user.click(await screen.findByRole('gridcell', { name: day }).then((c) => within(c).getByRole('button')));
+  };
+
+  const fill = async (user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement) => {
+    await user.type(within(dialog).getByLabelText(/Mã lớp/), 'ielts-02');
+    await user.type(within(dialog).getByLabelText(/Tên lớp/), 'IELTS 02');
+    await user.type(within(dialog).getByLabelText(/Trình độ/), 'Foundation');
+    await pick(user, dialog, /Khóa học/, 'IELTS - IELTS');
+    await pick(user, dialog, /^Giáo viên/, 'Cô Lan');
+    await pickDay(user, dialog, /Ngày khai giảng/, '10');
+    await pickDay(user, dialog, /Ngày kết thúc/, '20');
+  };
+
+  it('thiếu mã lớp: báo "Vui lòng nhập mã lớp" ngay trên trường, không gọi POST', async () => {
+    mockCatalog();
+    let posted = false;
+    server.use(
+      http.get('*/api/v1/classes', () => page([])),
+      http.post('*/api/v1/classes', () => {
+        posted = true;
+        return HttpResponse.json({ data: cls() }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    const dialog = await openCreate(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+    expect(await within(dialog).findByText('Vui lòng nhập mã lớp')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Mã lớp/)).toHaveAttribute('aria-invalid', 'true');
+    expect(posted).toBe(false);
+  });
+
+  it('server trả CLASS_CODE_EXISTS: lỗi hiện dưới ô Mã lớp và dialog vẫn mở', async () => {
+    mockCatalog();
+    server.use(
+      http.get('*/api/v1/classes', () => page([])),
+      http.post('*/api/v1/classes', () =>
+        HttpResponse.json({ error: { code: 'CLASS_CODE_EXISTS', message: 'x' } }, { status: 409 }),
+      ),
+    );
+    const user = userEvent.setup();
+    const dialog = await openCreate(user);
+    await fill(user, dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+    expect(await within(dialog).findByText('Mã lớp đã được dùng. Nhập mã lớp khác.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Thêm lớp học' })).toBeInTheDocument();
+  });
+
+  it('tạo thành công: gửi mã viết hoa, đóng dialog và dòng mới xuất hiện', async () => {
+    mockCatalog();
+    const rows: unknown[] = [];
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.get('*/api/v1/classes', () => page(rows)),
+      http.post('*/api/v1/classes', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        const created = cls({ id: '65000000000000000000c002', code: 'IELTS-02', name: 'IELTS 02', currentSize: 0 });
+        rows.push(created);
+        return HttpResponse.json({ data: created }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    const dialog = await openCreate(user);
+    await fill(user, dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+    expect(await screen.findByText('IELTS-02')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thêm lớp học' })).not.toBeInTheDocument());
+    expect(body.code).toBe('IELTS-02');
+    expect(body.courseId).toBe(COURSE_ID);
+  });
+});
+

@@ -3,7 +3,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import type { ClassDto } from '@lc/shared';
+import { CreateClassInput, type ClassDto } from '@lc/shared';
 import { DatePicker } from '@/components/common/date-picker';
 import { FormField } from '@/components/common/form-field';
 import { Button } from '@/components/ui/button';
@@ -23,40 +23,55 @@ import {
 const NO_VALUE = '__none__';
 const REQUIRED = 'Vui lòng nhập thông tin này';
 const PICK = 'Vui lòng chọn một giá trị';
+const PICK_DATE = 'Vui lòng chọn ngày';
 
+/** Vietnamese texts for the shared schema's default zod issues (explicit shared messages win). */
+const errorMap: z.ZodErrorMap = (issue, ctx) => {
+  const field = String(issue.path[0] ?? '');
+  if (field === 'maxCapacity') {
+    if (issue.code === 'invalid_type')
+      return { message: issue.expected === 'integer' ? 'Sĩ số phải là số nguyên' : REQUIRED };
+    if (issue.code === 'too_small') return { message: 'Sĩ số tối đa phải từ 1 trở lên' };
+    if (issue.code === 'too_big') return { message: 'Sĩ số tối đa không quá 100' };
+  }
+  if (issue.code === 'too_small' && issue.type === 'string') return { message: REQUIRED };
+  if (issue.code === 'too_big' && issue.type === 'string') return { message: 'Nội dung quá dài' };
+  if (issue.code === 'invalid_type') return { message: REQUIRED };
+  return { message: ctx.defaultError };
+};
+
+const EMPTY_MESSAGES: Record<string, string> = {
+  code: 'Vui lòng nhập mã lớp',
+  name: REQUIRED,
+  level: REQUIRED,
+  courseId: PICK,
+  teacherId: PICK,
+  startDate: PICK_DATE,
+  endDate: PICK_DATE,
+};
+
+/** Shared create schema + cross-field rules; the same schema serves edit (code is prefilled, never sent). */
 const buildSchema = (currentSize: number) =>
-  z
-    .object({
-      code: z.string().trim().max(30),
-      name: z.string().trim().min(1, REQUIRED).max(150),
-      courseId: z.string().min(1, PICK),
-      level: z.string().trim().min(1, REQUIRED).max(50),
-      teacherId: z.string().min(1, PICK),
-      assistantTeacherId: z.string(),
-      defaultRoomId: z.string(),
-      maxCapacity: z
-        .number({ invalid_type_error: REQUIRED })
-        .int('Sĩ số phải là số nguyên')
-        .min(1, 'Sĩ số tối đa phải từ 1 trở lên')
-        .max(100, 'Sĩ số tối đa không quá 100'),
-      startDate: z.string().min(1, PICK),
-      endDate: z.string().min(1, PICK),
-    })
-    .superRefine((v, ctx) => {
-      if (Number.isFinite(v.maxCapacity) && v.maxCapacity < currentSize)
-        ctx.addIssue({
-          code: 'custom',
-          path: ['maxCapacity'],
-          message: `Sĩ số tối đa không được nhỏ hơn sĩ số hiện tại (${currentSize})`,
-        });
-      if (v.startDate && v.endDate && v.endDate < v.startDate)
-        ctx.addIssue({
-          code: 'custom',
-          path: ['endDate'],
-          message: 'Ngày kết thúc phải sau hoặc cùng ngày khai giảng',
-        });
-    });
-type FormValues = z.infer<ReturnType<typeof buildSchema>>;
+  CreateClassInput.superRefine((v, ctx) => {
+    if (v.maxCapacity < currentSize)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['maxCapacity'],
+        message: `Sĩ số tối đa không được nhỏ hơn sĩ số hiện tại (${currentSize})`,
+      });
+    if (v.startDate && v.endDate && v.endDate < v.startDate)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['endDate'],
+        message: 'Ngày kết thúc phải sau hoặc cùng ngày khai giảng',
+      });
+  });
+/** PATCH body: everything but the immutable code. */
+const EditPayload = CreateClassInput.omit({ code: true });
+
+type FormSchema = ReturnType<typeof buildSchema>;
+type FormValues = z.input<FormSchema>;
+type FormOutput = z.output<FormSchema>;
 
 const emptyValues = (): FormValues => ({
   code: '',
@@ -64,8 +79,8 @@ const emptyValues = (): FormValues => ({
   courseId: '',
   level: '',
   teacherId: '',
-  assistantTeacherId: '',
-  defaultRoomId: '',
+  assistantTeacherId: null,
+  defaultRoomId: null,
   maxCapacity: 20,
   startDate: '',
   endDate: '',
@@ -77,8 +92,8 @@ const fromClass = (c: ClassDto): FormValues => ({
   courseId: c.courseId,
   level: c.level,
   teacherId: c.teacherId,
-  assistantTeacherId: c.assistantTeacherId ?? '',
-  defaultRoomId: c.defaultRoomId ?? '',
+  assistantTeacherId: c.assistantTeacherId ?? null,
+  defaultRoomId: c.defaultRoomId ?? null,
   maxCapacity: c.maxCapacity,
   startDate: c.startDate,
   endDate: c.endDate,
@@ -132,8 +147,16 @@ export function ClassFormDialog({ open, onOpenChange, cls }: ClassFormDialogProp
   const teachers = useTeacherOptions();
   const courses = useCourseOptions();
   const rooms = useRoomOptions();
-  const form = useForm<FormValues>({
-    resolver: zodResolver(buildSchema(cls?.currentSize ?? 0)),
+  const form = useForm<FormValues, unknown, FormOutput>({
+    resolver: async (values, ctx, opts) => {
+      const res = await zodResolver(buildSchema(cls?.currentSize ?? 0), { errorMap, path: [], async: false })(values, ctx, opts);
+      for (const [name, message] of Object.entries(EMPTY_MESSAGES)) {
+        const err = res.errors[name as keyof FormValues];
+        const v = values[name as keyof FormValues];
+        if (err && (v === '' || v == null)) err.message = message;
+      }
+      return res;
+    },
     defaultValues: cls ? fromClass(cls) : emptyValues(),
   });
   const { errors } = form.formState;
@@ -147,20 +170,9 @@ export function ClassFormDialog({ open, onOpenChange, cls }: ClassFormDialogProp
   const roomOptions = (rooms.data ?? []).map((r) => ({ id: r.id, label: `${r.code} - ${r.name}` }));
 
   const onSubmit = form.handleSubmit(async (v) => {
-    const common = {
-      name: v.name,
-      courseId: v.courseId,
-      level: v.level,
-      teacherId: v.teacherId,
-      assistantTeacherId: v.assistantTeacherId || null,
-      defaultRoomId: v.defaultRoomId || null,
-      maxCapacity: v.maxCapacity,
-      startDate: v.startDate,
-      endDate: v.endDate,
-    };
     try {
-      if (cls) await update.mutateAsync(common);
-      else await create.mutateAsync({ ...common, code: v.code });
+      if (cls) await update.mutateAsync(EditPayload.parse(v));
+      else await create.mutateAsync(v);
       toast.success(cls ? 'Đã cập nhật lớp học' : 'Đã tạo lớp học');
       onOpenChange(false);
     } catch (e) {
@@ -222,7 +234,7 @@ export function ClassFormDialog({ open, onOpenChange, cls }: ClassFormDialogProp
                 control={form.control}
                 name="assistantTeacherId"
                 render={({ field }) => (
-                  <OptionSelect {...p} optional options={teacherOptions} value={field.value} onChange={field.onChange} placeholder="Không chọn" />
+                  <OptionSelect {...p} optional options={teacherOptions} value={field.value ?? ''} onChange={(v) => field.onChange(v || null)} placeholder="Không chọn" />
                 )}
               />
             )}
@@ -233,7 +245,7 @@ export function ClassFormDialog({ open, onOpenChange, cls }: ClassFormDialogProp
                 control={form.control}
                 name="defaultRoomId"
                 render={({ field }) => (
-                  <OptionSelect {...p} optional options={roomOptions} value={field.value} onChange={field.onChange} placeholder="Không chọn" />
+                  <OptionSelect {...p} optional options={roomOptions} value={field.value ?? ''} onChange={(v) => field.onChange(v || null)} placeholder="Không chọn" />
                 )}
               />
             )}

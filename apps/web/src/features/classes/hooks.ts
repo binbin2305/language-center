@@ -57,5 +57,6 @@ export const useTeacherOptions = () =>
   useQuery({ queryKey: ['catalog', 'teachers'], queryFn: catalogApi.teachers, select: (r) => r.data });
 export const useCourseOptions = () =>
   useQuery({ queryKey: ['catalog', 'courses'], queryFn: catalogApi.courses, select: (r) => r.data });
-export const useRoomOptions = () =>
-  useQuery({ queryKey: ['catalog', 'rooms'], queryFn: catalogApi.rooms, select: (r) => r.data });
+/** `GET /rooms` is M,S only: pass `enabled=false` for other roles. */
+export const useRoomOptions = (enabled = true) =>
+  useQuery({ queryKey: ['catalog', 'rooms'], queryFn: catalogApi.rooms, select: (r) => r.data, enabled });

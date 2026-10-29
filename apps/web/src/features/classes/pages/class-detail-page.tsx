@@ -24,17 +24,17 @@ const ClassFormDialog = lazy(() =>
   import('../components/class-form-dialog').then((m) => ({ default: m.ClassFormDialog })),
 );
 
-type Dialog = 'edit' | 'deactivate' | 'delete' | null;
+type DialogKind = 'edit' | 'deactivate' | 'delete' | null;
 
 export default function ClassDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [dialog, setDialog] = useState<Dialog>(null);
+  const [dialog, setDialog] = useState<DialogKind>(null);
   const cls = useClass(id);
-  const rooms = useRoomOptions();
   const deactivate = useDeactivateClass();
   const manage = can(user, 'classes.manage');
+  const rooms = useRoomOptions(manage);
   const c = cls.data;
 
   const room = c?.defaultRoomId ? rooms.data?.find((r) => r.id === c.defaultRoomId) : undefined;
@@ -54,10 +54,12 @@ export default function ClassDetailPage() {
           <dt className="text-muted-foreground">Giáo viên</dt>
           <dd>{c.teacherName ?? ''}</dd>
         </div>
-        <div>
-          <dt className="text-muted-foreground">Phòng</dt>
-          <dd>{room ? `${room.code} - ${room.name}` : 'Chưa chọn'}</dd>
-        </div>
+        {manage ? (
+          <div>
+            <dt className="text-muted-foreground">Phòng</dt>
+            <dd>{room ? `${room.code} - ${room.name}` : 'Chưa chọn'}</dd>
+          </div>
+        ) : null}
         <div>
           <dt className="text-muted-foreground">Thời gian</dt>
           <dd>{`${formatDate(c.startDate)} - ${formatDate(c.endDate)}`}</dd>
