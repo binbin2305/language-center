@@ -247,6 +247,14 @@ const withBody = (method: string, body?: unknown): Options => ({
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return data<T>(await request(path, withBody('POST', body)));
 }
+/** Multipart upload. No Content-Type is set so the runtime adds the multipart boundary. */
+export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
+  return data<T>(await request(path, { method: 'POST', body: form }));
+}
+/** Authenticated binary download (refreshes on 401 like every other call). */
+export async function apiGetBlob(path: string): Promise<Blob> {
+  return (await request(path, { method: 'GET' })).blob();
+}
 export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   return data<T>(await request(path, withBody('PATCH', body)));
 }

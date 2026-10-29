@@ -1,7 +1,8 @@
+import { File as NodeFile } from 'node:buffer';
 import { http, HttpResponse } from 'msw';
 import type { PageMeta } from '@lc/shared';
 import { server } from '../../../test/msw/server';
-import { ApiError, apiGet, apiGetPage, apiPost, refreshSession, setOnAuthFailure, tokenStore } from '../api';
+import { ApiError, apiGet, apiGetBlob, apiGetPage, apiPost, apiPostForm, refreshSession, setOnAuthFailure, tokenStore } from '../api';
 
 const user = { id: 'u1', username: 'a', fullName: 'A', role: 'ADMIN', mustChangePassword: false };
 
@@ -279,5 +280,77 @@ describe('refresh giữa nhiều tab (navigator.locks + BroadcastChannel lc-auth
     expect((await refreshSession()).accessToken).toBe('mine');
     await tick();
     expect(received).toEqual([{ type: 'refreshed', result: { accessToken: 'mine', user } }]);
+  });
+});
+
+/**
+ * jsdom's FormData/File are not understood by Node's fetch (undici), so the request would not be
+ * multipart. Build the form with Node's own classes: FormData from a parsed (text-only) multipart
+ * body, File from node:buffer.
+ */
+async function nodeForm(field: string, fileName: string, type: string): Promise<FormData> {
+  const form = await new Response('--b--\r\n', {
+    headers: { 'content-type': 'multipart/form-data; boundary=b' },
+  }).formData();
+  form.append(field, new NodeFile(['hello'], fileName, { type }) as unknown as Blob, fileName);
+  return form;
+}
+
+const readText = (b: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsText(b);
+  });
+
+describe('apiPostForm / apiGetBlob', () => {
+  it('apiPostForm gửi multipart FormData, không set content-type JSON', async () => {
+    tokenStore.set('tok');
+    let ct: string | null = null;
+    let raw = '';
+    let auth: string | null = null;
+    server.use(
+      http.post('*/api/v1/upload', async ({ request }) => {
+        ct = request.headers.get('content-type');
+        auth = request.headers.get('authorization');
+        // request.formData() cannot build jsdom Files here, so inspect the raw multipart body.
+        raw = await request.text();
+        return HttpResponse.json({ data: { ok: true } }, { status: 201 });
+      }),
+    );
+    const form = await nodeForm('file', 'a.pdf', 'application/pdf');
+    expect(await apiPostForm<{ ok: boolean }>('upload', form)).toEqual({ ok: true });
+    expect(raw).toContain('name="file"; filename="a.pdf"');
+    expect(ct).toMatch(/^multipart\/form-data; boundary=/);
+    expect(auth).toBe('Bearer tok');
+  });
+
+  it('apiGetBlob trả Blob', async () => {
+    tokenStore.set('tok');
+    server.use(
+      http.get('*/api/v1/file', () => new HttpResponse('bytes', { headers: { 'content-type': 'application/pdf' } })),
+    );
+    const b = await apiGetBlob('file');
+    expect(b).toBeInstanceOf(Blob);
+    expect(await readText(b)).toBe('bytes');
+  });
+
+  it('apiGetBlob refresh một lần khi 401', async () => {
+    tokenStore.set('old');
+    let refreshes = 0;
+    server.use(
+      http.post('*/api/v1/auth/refresh', () => {
+        refreshes++;
+        return HttpResponse.json({ data: { accessToken: 'new', user } });
+      }),
+      http.get('*/api/v1/file', ({ request }) =>
+        request.headers.get('authorization') === 'Bearer new'
+          ? new HttpResponse('ok')
+          : HttpResponse.json({ error: { code: 'UNAUTHENTICATED', message: 'x' } }, { status: 401 }),
+      ),
+    );
+    expect(await readText(await apiGetBlob('file'))).toBe('ok');
+    expect(refreshes).toBe(1);
   });
 });
