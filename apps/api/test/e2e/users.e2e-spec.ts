@@ -146,18 +146,55 @@ describe('FR-USR-01 Tài khoản', () => {
 
   it('GET /teachers M, S → chỉ TEACHER ACTIVE sắp theo fullName; T, H, A → 403', async () => {
     const act = await makeUser(t.conn, { role: Role.TEACHER, fullName: 'AAA Active' });
+    const dd = await makeUser(t.conn, { role: Role.TEACHER, fullName: 'Đào AAA' });
+    const dz = await makeUser(t.conn, { role: Role.TEACHER, fullName: 'Dung AAA' });
+    const ez = await makeUser(t.conn, { role: Role.TEACHER, fullName: 'Em AAA' });
     const lk = await makeUser(t.conn, { role: Role.TEACHER, fullName: 'AAA Locked', status: 'LOCKED' as never });
     for (const role of [Role.MANAGER, Role.ACADEMIC_STAFF]) {
       const res = await t.http().get('/api/v1/teachers').set(auth(role)).expect(200);
       const list = res.body.data as { id: string; fullName: string }[];
       expect(list.map((x) => x.id)).toContain(act._id.toString());
       expect(list.map((x) => x.id)).not.toContain(lk._id.toString());
-      const names = list.map((x) => x.fullName);
-      expect(names).toEqual([...names].sort((x, y) => x.localeCompare(y)));
+      const order = list.map((x) => x.id).filter((i) => [dd, dz, ez].some((u) => u._id.toString() === i));
+      expect(order).toEqual([dz, dd, ez].map((u) => u._id.toString()));
       expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|email/);
     }
     for (const role of [Role.TEACHER, Role.STUDENT, Role.ADMIN]) {
       await t.http().get('/api/v1/teachers').set(auth(role)).expect(403);
+    }
+  });
+
+  it('PATCH status dùng chung đường lock/unlock: ACTIVE xóa throttle, audit STATUS, tự đổi → 400, DISABLED đăng nhập 401', async () => {
+    const u = await makeUser(t.conn, { role: Role.TEACHER, status: 'LOCKED' as never, failedLoginCount: 5, lockedUntil: new Date('2030-01-01') });
+    const res = await t.http().patch(`/api/v1/users/${u._id}`).set(auth(Role.MANAGER)).send({ status: 'ACTIVE' }).expect(200);
+    expect(res.body.data.status).toBe('ACTIVE');
+    expect(await t.conn.collection('users').findOne({ _id: u._id })).toMatchObject({ lockedUntil: null, failedLoginCount: 0 });
+    const log = await t.conn.collection('audit_logs').findOne({ entityId: u._id });
+    expect(log?.action).toBe('status');
+    await t.http().patch(`/api/v1/users/${u._id}`).set(auth(Role.MANAGER)).send({ status: 'DISABLED' }).expect(200);
+    expect((await login(u.username, DEFAULT_PASSWORD)).status).toBe(401);
+    const self = await t.http().patch(`/api/v1/users/${ids[Role.MANAGER]}`).set(auth(Role.MANAGER)).send({ status: 'LOCKED' }).expect(400);
+    expect(self.body.error.details.fields.id).toBe('SELF');
+  });
+
+  it('unlock chỉ từ LOCKED: ACTIVE/DISABLED → 422 INVALID_STATUS_TRANSITION', async () => {
+    const a = await makeUser(t.conn, { role: Role.TEACHER });
+    const d = await makeUser(t.conn, { role: Role.TEACHER, status: 'DISABLED' as never });
+    for (const u of [a, d]) {
+      const r = await t.http().post(`/api/v1/users/${u._id}/unlock`).set(auth(Role.MANAGER)).expect(422);
+      expect(r.body.error.code).toBe('INVALID_STATUS_TRANSITION');
+    }
+  });
+
+  it('reset-password xóa lockedUntil: user bị throttle-lock đăng nhập được bằng mật khẩu tạm', async () => {
+    const u = await makeUser(t.conn, { role: Role.TEACHER, failedLoginCount: 5, lockedUntil: new Date('2030-01-01') });
+    const res = await t.http().post(`/api/v1/users/${u._id}/reset-password`).set(auth(Role.MANAGER)).expect(201);
+    expect((await login(u.username, res.body.data.tempPassword)).status).toBe(200);
+  });
+
+  it('id không tồn tại: lock/unlock/reset → 404 (kể cả MANAGER)', async () => {
+    for (const a of ['lock', 'unlock', 'reset-password']) {
+      await t.http().post(`/api/v1/users/64b000000000000000000000/${a}`).set(auth(Role.MANAGER)).expect(404);
     }
   });
 

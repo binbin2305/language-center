@@ -26,6 +26,13 @@ import { generateTempPassword, hashPassword } from '../auth/password';
 import { escapeRegex } from '../courses/courses.service';
 import { toTeacherOptionDto, toUserDto, UserLean } from './users.mapper';
 
+/** Side effects of entering a status; ACTIVE clears login-throttle state. */
+const STATUS_RESET: Record<string, Record<string, unknown>> = {
+  ACTIVE: { lockedUntil: null, failedLoginCount: 0, failedLoginWindowStart: null },
+  LOCKED: {},
+  DISABLED: {},
+};
+
 const SORTS = new Set(['fullName', 'email', 'role', 'status', 'createdAt']);
 
 function isDuplicateKey(e: unknown): boolean {
@@ -112,7 +119,7 @@ export class UsersService {
       const re = new RegExp(escapeRegex(q.q), 'i');
       filter.$or = [{ fullName: re }, { email: re }, { username: re }];
     }
-    const page = await paginate(this.users, filter, { page: q.page, limit: q.limit, sort: q.sort });
+    const page = await paginate(this.users, filter, { page: q.page, limit: q.limit, sort: q.sort }, { passwordHash: 0 });
     return { data: (page.data as unknown as UserLean[]).map(toUserDto), meta: page.meta };
   }
 
@@ -127,6 +134,7 @@ export class UsersService {
     const rows = await this.users
       .find({ role: Role.TEACHER, status: UserStatus.ACTIVE, deletedAt: null })
       .sort({ fullName: 1, _id: 1 })
+      .collation({ locale: 'vi' })
       .lean();
     return (rows as unknown as UserLean[]).map(toTeacherOptionDto);
   }
@@ -139,10 +147,12 @@ export class UsersService {
     if (input.teacherProfile && before.role !== Role.TEACHER) {
       throw new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields: { teacherProfile: 'NOT_TEACHER' } });
     }
-    const after = await this.mutate(id, actor, { $set: input });
+    const set: Record<string, unknown> = { ...input };
+    if (input.status) Object.assign(set, STATUS_RESET[input.status]);
+    const after = await this.mutate(id, actor, { $set: set });
     await this.audit.log({
       actor,
-      action: AuditAction.UPDATE,
+      action: input.status ? AuditAction.STATUS : AuditAction.UPDATE,
       entity: Models.User,
       entityId: before._id,
       before: this.snapshot(before),
@@ -154,7 +164,7 @@ export class UsersService {
   async lock(id: string, actor: AuthUser): Promise<UserDto> {
     if (actor.id.equals(id)) throw new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields: { id: 'SELF' } });
     const before = await this.loadManageable(id, actor);
-    const after = await this.mutate(id, actor, { $set: { status: UserStatus.LOCKED } });
+    const after = await this.mutate(id, actor, { $set: { status: UserStatus.LOCKED, ...STATUS_RESET.LOCKED } });
     await this.audit.log({
       actor,
       action: AuditAction.STATUS,
@@ -168,9 +178,8 @@ export class UsersService {
 
   async unlock(id: string, actor: AuthUser): Promise<UserDto> {
     const before = await this.loadManageable(id, actor);
-    const after = await this.mutate(id, actor, {
-      $set: { status: UserStatus.ACTIVE, lockedUntil: null, failedLoginCount: 0, failedLoginWindowStart: null },
-    });
+    if (before.status !== UserStatus.LOCKED) throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION);
+    const after = await this.mutate(id, actor, { $set: { status: UserStatus.ACTIVE, ...STATUS_RESET.ACTIVE } });
     await this.audit.log({
       actor,
       action: AuditAction.STATUS,
@@ -186,7 +195,7 @@ export class UsersService {
     const before = await this.loadManageable(id, actor);
     const tempPassword = generateTempPassword();
     await this.mutate(id, actor, {
-      $set: { passwordHash: await hashPassword(tempPassword), mustChangePassword: true, failedLoginCount: 0, failedLoginWindowStart: null },
+      $set: { passwordHash: await hashPassword(tempPassword), mustChangePassword: true, lockedUntil: null, failedLoginCount: 0, failedLoginWindowStart: null },
     });
     await this.audit.log({
       actor,
@@ -218,7 +227,9 @@ export class UsersService {
     const u = (await this.users
       .findOneAndUpdate(filter, update, { new: true, runValidators: true })
       .lean()) as unknown as UserLean | null;
-    if (!u) throw new AppError(ErrorCode.FORBIDDEN);
-    return u;
+    if (u) return u;
+    // Nothing matched: gone (404) vs. MANAGER targeting an ADMIN (403).
+    const exists = await this.users.exists({ _id: id, deletedAt: null });
+    throw new AppError(exists ? ErrorCode.FORBIDDEN : ErrorCode.NOT_FOUND);
   }
 }
