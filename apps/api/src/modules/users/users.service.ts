@@ -25,8 +25,9 @@ import { Models } from '../../database/models';
 import { Student } from '../../database/schemas/student.schema';
 import { User, UserDoc } from '../../database/schemas/user.schema';
 import { generateTempPassword, hashPassword } from '../auth/password';
-import { escapeRegex } from '../courses/courses.service';
 import { toTeacherOptionDto, toUserDto, UserLean } from './users.mapper';
+import { isDuplicateKey } from '../../common/util/is-duplicate-key';
+import { escapeRegex } from '../../common/util/escape-regex';
 
 /** Side effects of entering a status; ACTIVE clears login-throttle state. */
 const STATUS_RESET: Record<string, Record<string, unknown>> = {
@@ -36,10 +37,6 @@ const STATUS_RESET: Record<string, Record<string, unknown>> = {
 };
 
 const SORTS = new Set(['fullName', 'email', 'role', 'status', 'createdAt']);
-
-function isDuplicateKey(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 11000;
-}
 
 @Injectable()
 export class UsersService {

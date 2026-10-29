@@ -7,16 +7,10 @@ import { paginate } from '../../common/pagination';
 import { Models } from '../../database/models';
 import { Course } from '../../database/schemas/course.schema';
 import { CourseLean, toCourseDto } from './courses.mapper';
+import { isDuplicateKey } from '../../common/util/is-duplicate-key';
+import { escapeRegex } from '../../common/util/escape-regex';
 
 const SORTS = new Set(['code', 'name', 'createdAt']);
-
-export function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function isDuplicateKey(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 11000;
-}
 
 @Injectable()
 export class CoursesService {

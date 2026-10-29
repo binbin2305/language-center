@@ -42,9 +42,9 @@ import {
   toStudentBriefDto,
   toStudentDto,
 } from './admissions.mapper';
+import { escapeRegex } from '../../common/util/escape-regex';
 
 const SORTS = new Set(['createdAt', '-createdAt', 'fullName', '-fullName', 'code', '-code']);
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** "+84 912.345-678" -> "0912345678"; leaves anything else untouched (still regex-escaped by callers). */
 function normalizePhoneQuery(q: string): string {
@@ -96,11 +96,11 @@ export class StudentsService {
       const phone = normalizePhoneQuery(q.q);
       and.push({
         $or: [
-          ...(name ? [{ fullNameSearch: { $regex: escapeRe(name) } }] : []),
-          { code: { $regex: `^${escapeRe(q.q.toUpperCase())}` } },
+          ...(name ? [{ fullNameSearch: { $regex: escapeRegex(name) } }] : []),
+          { code: { $regex: `^${escapeRegex(q.q.toUpperCase())}` } },
           // Teachers must not be able to probe emails they cannot see.
-          ...(user.role === Role.TEACHER ? [] : [{ email: { $regex: `^${escapeRe(q.q.toLowerCase())}` } }]),
-          ...(phone ? [{ phone: { $regex: `^${escapeRe(phone)}` } }] : []),
+          ...(user.role === Role.TEACHER ? [] : [{ email: { $regex: `^${escapeRegex(q.q.toLowerCase())}` } }]),
+          ...(phone ? [{ phone: { $regex: `^${escapeRegex(phone)}` } }] : []),
         ],
       });
     }

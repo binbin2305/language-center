@@ -9,8 +9,7 @@ import { AppError } from '../../common/errors/app-error';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../../database/active-enrollment';
 import { Models } from '../../database/models';
 import { Enrollment, EnrollmentDoc } from '../../database/schemas/enrollment.schema';
-
-const DUPLICATE_KEY = 11000;
+import { isDuplicateKey } from '../../common/util/is-duplicate-key';
 
 @Injectable()
 export class EnrollmentsService {
@@ -44,7 +43,7 @@ export class EnrollmentsService {
       );
     } catch (e) {
       // The partial unique index is the authority when two requests race past the check above.
-      if ((e as { code?: number }).code === DUPLICATE_KEY) throw new AppError(ErrorCode.ENROLLMENT_EXISTS);
+      if (isDuplicateKey(e)) throw new AppError(ErrorCode.ENROLLMENT_EXISTS);
       throw e;
     }
     await this.audit.log(

@@ -4,16 +4,13 @@ import { Error as MongooseError } from 'mongoose';
 import { ZodError } from 'zod';
 import { ERROR_HTTP_STATUS, ErrorCode } from '@lc/shared';
 import { AppError } from '../errors/app-error';
+import { isDuplicateKey } from '../util/is-duplicate-key';
 
 interface Mapped {
   status: number;
   code: ErrorCode;
   message: string;
   details?: Record<string, unknown>;
-}
-
-function isDuplicateKey(e: unknown): e is { code: number; keyValue?: Record<string, unknown> } {
-  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 11000;
 }
 
 function mapHttp(status: number): ErrorCode {

@@ -26,6 +26,7 @@ import { Lead } from '../../database/schemas/lead.schema';
 import { User } from '../../database/schemas/user.schema';
 import { LeadLean, toLeadDto } from './admissions.mapper';
 import { DuplicatesService } from './duplicates.service';
+import { escapeRegex } from '../../common/util/escape-regex';
 
 const SORTS = new Set(['createdAt', '-createdAt', 'fullName', '-fullName']);
 
@@ -44,7 +45,7 @@ function toneInsensitivePattern(q: string): string {
   return [...removeVietnameseTones(q).toLowerCase()]
     .map((ch) => {
       const extra = TONE_VARIANTS[ch];
-      if (!extra) return ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (!extra) return escapeRegex(ch);
       return `[${ch}${ch.toUpperCase()}${extra}${extra.toUpperCase()}]`;
     })
     .join('');

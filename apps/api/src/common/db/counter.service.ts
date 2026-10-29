@@ -3,8 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model } from 'mongoose';
 import { Models } from '../../database/models';
 import { Counter } from '../../database/schemas/counter.schema';
-
-const DUPLICATE_KEY = 11000;
+import { isDuplicateKey } from '../util/is-duplicate-key';
 
 @Injectable()
 export class CounterService {
@@ -20,13 +19,12 @@ export class CounterService {
         return doc.seq;
       } catch (e) {
         // Concurrent first upserts can race on the _id; the loser simply retries as an update.
-        const code = (e as { code?: number }).code;
-        if (code === DUPLICATE_KEY && s) {
+        if (isDuplicateKey(e) && s) {
           // Inside a transaction a lost upsert race is transient: label it so withTransaction retries.
           (e as { addErrorLabel?: (l: string) => void }).addErrorLabel?.('TransientTransactionError');
           throw e;
         }
-        if (code !== DUPLICATE_KEY || attempt >= 5) throw e;
+        if (!isDuplicateKey(e) || attempt >= 5) throw e;
       }
     }
   }

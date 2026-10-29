@@ -50,15 +50,13 @@ import { Room } from '../../database/schemas/room.schema';
 import { Session } from '../../database/schemas/session.schema';
 import { User } from '../../database/schemas/user.schema';
 import { ClassLean, toDto } from './classes.mapper';
+import { isDuplicateKey } from '../../common/util/is-duplicate-key';
+import { escapeRegex } from '../../common/util/escape-regex';
 
 type Fields = Record<string, string>;
 
 /** Classes that are still running or about to start (sessions can be scheduled, seats are offered). */
 const OPEN_CLASS_STATUSES = [ClassStatus.PLANNED, ClassStatus.ONGOING];
-
-function isDuplicateKey(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 11000;
-}
 
 function invalid(fields: Fields): AppError {
   return new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields });
@@ -178,7 +176,7 @@ export class ClassesService {
       });
     }
     if (q.q) {
-      const rx = new RegExp(q.q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const rx = new RegExp(escapeRegex(q.q), 'i');
       and.push({ $or: [{ code: rx }, { name: rx }] });
     }
     this.assertSort(q.sort);

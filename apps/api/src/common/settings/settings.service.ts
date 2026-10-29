@@ -5,6 +5,7 @@ import { Models } from '../../database/models';
 import { Settings, SETTINGS_ID } from '../../database/schemas/settings.schema';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth-user';
+import { isDuplicateKey } from '../util/is-duplicate-key';
 
 /** AuditLog.entityId is an ObjectId but the settings _id is the string 'center': use a fixed stand-in. */
 export const SETTINGS_AUDIT_ID = new Types.ObjectId(Buffer.from('settings_ctr'));
@@ -31,7 +32,7 @@ export class SettingsService {
       .lean()
       .catch(async (e: unknown) => {
         // Concurrent first upserts can lose the race with E11000; the document then exists.
-        if ((e as { code?: number }).code !== 11000) throw e;
+        if (!isDuplicateKey(e)) throw e;
         return this.settings.findById(SETTINGS_ID).lean();
       });
     if (!doc) throw new Error('settings document missing');
