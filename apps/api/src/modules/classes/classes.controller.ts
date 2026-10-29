@@ -13,7 +13,10 @@ export class ClassesController {
 
   @Post()
   @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
-  async create(@CurrentUser() user: AuthUser, @Body(new ZodValidationPipe(CreateClassInput)) input: CreateClassInput) {
+  async create(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(CreateClassInput)) input: CreateClassInput,
+  ) {
     return { data: await this.svc.create(input, user) };
   }
 

@@ -45,7 +45,9 @@ describe('FR-CLS-01..03 Lớp học', () => {
 
   describe('tạo lớp', () => {
     it('201 trả ClassDto kèm courseName/teacherName, currentSize 0, PLANNED, ghi audit', async () => {
-      const res = await post(body({ code: 'ielts-aud', defaultRoomId: String((await makeRoom(t.conn))._id) })).expect(201);
+      const res = await post(
+        body({ code: 'ielts-aud', defaultRoomId: String((await makeRoom(t.conn))._id) }),
+      ).expect(201);
       expect(res.body.data).toMatchObject({
         code: 'IELTS-AUD',
         currentSize: 0,
@@ -55,7 +57,11 @@ describe('FR-CLS-01..03 Lớp học', () => {
         endDate: '2026-05-02',
       });
       expect(res.body.data.teacherName).toEqual(expect.any(String));
-      const got = await t.http().get(`/api/v1/classes/${res.body.data.id}`).set(auth(staff.token)).expect(200);
+      const got = await t
+        .http()
+        .get(`/api/v1/classes/${res.body.data.id}`)
+        .set(auth(staff.token))
+        .expect(200);
       expect(got.body.data.id).toBe(res.body.data.id);
       const logs = await t.conn
         .model<AuditLog>(Models.AuditLog)
@@ -63,16 +69,22 @@ describe('FR-CLS-01..03 Lớp học', () => {
       expect(logs.map((l) => l.action)).toEqual(['create']);
     });
 
-    it.each(['code', 'name', 'courseId', 'level', 'teacherId', 'maxCapacity', 'startDate', 'endDate'])(
-      'thiếu %s trả 400 đúng field',
-      async (field) => {
-        const b = body();
-        delete (b as Record<string, unknown>)[field];
-        const res = await post(b).expect(400);
-        expect(res.body.error.code).toBe('VALIDATION_FAILED');
-        expect(res.body.error.details.fields[field]).toBeDefined();
-      },
-    );
+    it.each([
+      'code',
+      'name',
+      'courseId',
+      'level',
+      'teacherId',
+      'maxCapacity',
+      'startDate',
+      'endDate',
+    ])('thiếu %s trả 400 đúng field', async (field) => {
+      const b = body();
+      delete (b as Record<string, unknown>)[field];
+      const res = await post(b).expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.details.fields[field]).toBeDefined();
+    });
 
     it('code "ielts-01" khi đã có "IELTS-01" trả 409 CLASS_CODE_EXISTS', async () => {
       await post(body({ code: 'IELTS-01' })).expect(201);
@@ -82,10 +94,19 @@ describe('FR-CLS-01..03 Lớp học', () => {
 
     it('hai request song song cùng code: 1×201, 1×409 CLASS_CODE_EXISTS', async () => {
       const code = 'RACE-1';
-      const rs = await Promise.all([post(body({ code })), post(body({ code: code.toLowerCase() }))]);
+      const rs = await Promise.all([
+        post(body({ code })),
+        post(body({ code: code.toLowerCase() })),
+      ]);
       expect(rs.map((r) => r.status).sort()).toEqual([201, 409]);
       expect(rs.find((r) => r.status === 409)?.body.error.code).toBe('CLASS_CODE_EXISTS');
       expect(await t.conn.model(Models.Class).countDocuments({ code: 'RACE-1' })).toBe(1);
+    });
+
+    it('tạo với assistantTeacherId hợp lệ trả 201', async () => {
+      const a = await makeTeacher(t.conn);
+      const res = await post(body({ assistantTeacherId: String(a._id) })).expect(201);
+      expect(res.body.data.assistantTeacherId).toBe(String(a._id));
     });
 
     it('level "C2" không thuộc course.levels trả 400 fields.level', async () => {
@@ -156,13 +177,33 @@ describe('FR-CLS-01..03 Lớp học', () => {
     it('PATCH lớp không tồn tại hoặc id sai trả 404', async () => {
       await patch(String(new Types.ObjectId()), { name: 'x' }).expect(404);
       await patch('not-an-id', { name: 'x' }).expect(404);
-      await t.http().get(`/api/v1/classes/${new Types.ObjectId()}`).set(auth(manager.token)).expect(404);
+      await t
+        .http()
+        .get(`/api/v1/classes/${new Types.ObjectId()}`)
+        .set(auth(manager.token))
+        .expect(404);
+    });
+
+    it('ghi audit action status khi đổi trạng thái', async () => {
+      const c = await makeClass(t.conn, { courseId: course._id });
+      await patch(String(c._id), { status: ClassStatus.ONGOING }).expect(200);
+      const logs = await t.conn
+        .model<AuditLog>(Models.AuditLog)
+        .find({ entity: 'class', entityId: c._id });
+      expect(logs.map((l) => l.action)).toEqual(['status']);
+    });
+
+    it('PATCH name khi startDate/endDate không đổi không bị kiểm tra ngày, không dính guard status', async () => {
+      const c = await makeClass(t.conn, { courseId: course._id });
+      await patch(String(c._id), { name: 'Chỉ đổi tên' }).expect(200);
     });
 
     it('ghi audit update với before/after', async () => {
       const c = await makeClass(t.conn, { courseId: course._id });
       await patch(String(c._id), { name: 'Đổi tên' }).expect(200);
-      const logs = await t.conn.model<AuditLog>(Models.AuditLog).find({ entity: 'class', entityId: c._id });
+      const logs = await t.conn
+        .model<AuditLog>(Models.AuditLog)
+        .find({ entity: 'class', entityId: c._id });
       expect(logs).toHaveLength(1);
       expect(logs[0].action).toBe('update');
     });
@@ -183,16 +224,19 @@ describe('FR-CLS-01..03 Lớp học', () => {
       expect(res.body.error.code).toBe('INVALID_STATUS_TRANSITION');
     });
 
-    it.each([ClassStatus.PLANNED, ClassStatus.ONGOING, ClassStatus.INACTIVE])('FINISHED -> %s trả 422', async (to) => {
+    it.each(Object.values(ClassStatus))('FINISHED -> %s trả 422', async (to) => {
       const c = await makeClass(t.conn, { courseId: course._id, status: ClassStatus.FINISHED });
       const res = await patch(String(c._id), { status: to }).expect(422);
       expect(res.body.error.code).toBe('INVALID_STATUS_TRANSITION');
     });
 
-    it('gửi lại đúng status hiện tại không phải chuyển trạng thái (200, không phát sự kiện)', async () => {
+    it('gửi lại đúng status hiện tại (không phải FINISHED) là no-op 200, không phát sự kiện', async () => {
       const spy = jest.spyOn(t.app.get(EventEmitter2), 'emitAsync');
-      const c = await makeClass(t.conn, { courseId: course._id, status: ClassStatus.FINISHED });
-      await patch(String(c._id), { status: ClassStatus.FINISHED, name: 'Giữ nguyên trạng thái' }).expect(200);
+      const c = await makeClass(t.conn, { courseId: course._id, status: ClassStatus.ONGOING });
+      await patch(String(c._id), {
+        status: ClassStatus.ONGOING,
+        name: 'Giữ nguyên trạng thái',
+      }).expect(200);
       expect(spy.mock.calls.filter(([ev]) => ev === DomainEvent.ClassFinished)).toHaveLength(0);
       spy.mockRestore();
     });
@@ -231,6 +275,15 @@ describe('FR-CLS-01..03 Lớp học', () => {
       await post(body(), u.token).expect(403);
       await patch(String(c._id), { name: 'x' }, u.token).expect(403);
     });
+
+    it.each([Role.TEACHER, Role.STUDENT])(
+      '%s GET /classes/:id trả 403 (chờ CL-03 mở rộng)',
+      async (role) => {
+        const u = await loginAs(t, role);
+        const c = await makeClass(t.conn, { courseId: course._id });
+        await t.http().get(`/api/v1/classes/${c._id}`).set(auth(u.token)).expect(403);
+      },
+    );
 
     it('chưa đăng nhập trả 401; ACADEMIC_STAFF tạo được', async () => {
       await t.http().post('/api/v1/classes').send(body()).expect(401);

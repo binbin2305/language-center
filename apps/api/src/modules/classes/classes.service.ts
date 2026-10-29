@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, isValidObjectId, Model, Types } from 'mongoose';
@@ -41,6 +41,8 @@ function invalid(fields: Fields): AppError {
 
 @Injectable()
 export class ClassesService {
+  private readonly logger = new Logger(ClassesService.name);
+
   constructor(
     @InjectModel(Models.Class) private readonly classes: Model<Class>,
     @InjectModel(Models.Course) private readonly courses: Model<Course>,
@@ -54,7 +56,8 @@ export class ClassesService {
 
   async create(input: CreateClassInput, actor: AuthUser): Promise<ClassDto> {
     const fields: Fields = {};
-    if (input.status && input.status !== ClassStatus.PLANNED) fields.status = 'Lớp mới phải ở trạng thái PLANNED';
+    if (input.status && input.status !== ClassStatus.PLANNED)
+      fields.status = 'Lớp mới phải ở trạng thái PLANNED';
     const startDate = fromDateOnly(input.startDate);
     const endDate = fromDateOnly(input.endDate);
     await this.validateRefs(
@@ -81,7 +84,9 @@ export class ClassesService {
               courseId: new Types.ObjectId(input.courseId),
               level: input.level,
               teacherId: new Types.ObjectId(input.teacherId),
-              assistantTeacherId: input.assistantTeacherId ? new Types.ObjectId(input.assistantTeacherId) : null,
+              assistantTeacherId: input.assistantTeacherId
+                ? new Types.ObjectId(input.assistantTeacherId)
+                : null,
               defaultRoomId: input.defaultRoomId ? new Types.ObjectId(input.defaultRoomId) : null,
               maxCapacity: input.maxCapacity,
               startDate,
@@ -91,7 +96,13 @@ export class ClassesService {
           { session: s },
         );
         await this.audit.log(
-          { actor, action: AuditAction.CREATE, entity: 'class', entityId: created._id, after: created.toObject() },
+          {
+            actor,
+            action: AuditAction.CREATE,
+            entity: 'class',
+            entityId: created._id,
+            after: created.toObject(),
+          },
           s,
         );
         return created;
@@ -113,25 +124,49 @@ export class ClassesService {
       courseId: input.courseId ?? before.courseId.toString(),
       level: input.level ?? before.level,
       teacherId: input.teacherId ?? before.teacherId.toString(),
-      assistantTeacherId: input.assistantTeacherId === undefined ? before.assistantTeacherId?.toString() : input.assistantTeacherId,
-      defaultRoomId: input.defaultRoomId === undefined ? before.defaultRoomId?.toString() : input.defaultRoomId,
+      assistantTeacherId:
+        input.assistantTeacherId === undefined
+          ? before.assistantTeacherId?.toString()
+          : input.assistantTeacherId,
+      defaultRoomId:
+        input.defaultRoomId === undefined ? before.defaultRoomId?.toString() : input.defaultRoomId,
       startDate: input.startDate ? fromDateOnly(input.startDate) : before.startDate,
       endDate: input.endDate ? fromDateOnly(input.endDate) : before.endDate,
     };
     const fields: Fields = {};
     // Only re-validate references that this request actually touches.
     const touched = (k: keyof UpdateClassInput) => input[k] !== undefined;
-    await this.validateRefs(merged, fields, {
-      course: touched('courseId') || touched('level'),
-      teacher: touched('teacherId'),
-      assistant: touched('assistantTeacherId'),
-      room: touched('defaultRoomId'),
-    });
+    await this.validateRefs(
+      merged,
+      fields,
+      {
+        course: touched('courseId') || touched('level'),
+        teacher: touched('teacherId'),
+        assistant: touched('assistantTeacherId'),
+        room: touched('defaultRoomId'),
+      },
+      touched('startDate') || touched('endDate'),
+    );
     if (Object.keys(fields).length) throw invalid(fields);
 
     const statusChange = input.status !== undefined && input.status !== before.status;
-    if (statusChange && !canTransition(CLASS_TRANSITIONS, before.status, input.status as ClassStatus)) {
-      throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION, undefined, { from: before.status, to: input.status });
+    // FINISHED is terminal: even re-sending FINISHED is rejected.
+    const terminalResend =
+      input.status === ClassStatus.FINISHED && before.status === ClassStatus.FINISHED;
+    if (terminalResend) {
+      throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION, undefined, {
+        from: before.status,
+        to: input.status,
+      });
+    }
+    if (
+      statusChange &&
+      !canTransition(CLASS_TRANSITIONS, before.status, input.status as ClassStatus)
+    ) {
+      throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION, undefined, {
+        from: before.status,
+        to: input.status,
+      });
     }
 
     const set: Record<string, unknown> = {};
@@ -140,7 +175,9 @@ export class ClassesService {
     if (input.level !== undefined) set.level = input.level;
     if (input.teacherId !== undefined) set.teacherId = new Types.ObjectId(input.teacherId);
     if (input.assistantTeacherId !== undefined)
-      set.assistantTeacherId = input.assistantTeacherId ? new Types.ObjectId(input.assistantTeacherId) : null;
+      set.assistantTeacherId = input.assistantTeacherId
+        ? new Types.ObjectId(input.assistantTeacherId)
+        : null;
     if (input.defaultRoomId !== undefined)
       set.defaultRoomId = input.defaultRoomId ? new Types.ObjectId(input.defaultRoomId) : null;
     if (input.maxCapacity !== undefined) set.maxCapacity = input.maxCapacity;
@@ -149,7 +186,8 @@ export class ClassesService {
     if (statusChange) set.status = input.status;
 
     // Guards live in the filter so nothing is read-then-written.
-    const filter: Record<string, unknown> = { _id: before._id, status: before.status };
+    const filter: Record<string, unknown> = { _id: before._id };
+    if (statusChange) filter.status = before.status;
     if (input.maxCapacity !== undefined) filter.currentSize = { $lte: input.maxCapacity };
 
     const after = await withTransaction(this.conn, async (s) => {
@@ -173,11 +211,18 @@ export class ClassesService {
 
     if (!after) throw await this.explainFailedUpdate(before, input);
     if (statusChange && after.status === ClassStatus.FINISHED) {
-      await this.events.emitAsync(DomainEvent.ClassFinished, {
-        classId: after._id.toString(),
-        at: this.clock.now(),
-        actorId: actor.id.toString(),
-      });
+      try {
+        await this.events.emitAsync(DomainEvent.ClassFinished, {
+          classId: after._id.toString(),
+          at: this.clock.now(),
+          actorId: actor.id.toString(),
+        });
+      } catch (e) {
+        // The update is already committed; a failing listener must not turn it into a 500.
+        this.logger.error(
+          `class.finished listener failed: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`,
+        );
+      }
     }
     return this.present(after);
   }
@@ -187,9 +232,14 @@ export class ClassesService {
     const now = await this.classes.findById(before._id).lean<ClassLean>();
     if (!now) return new AppError(ErrorCode.NOT_FOUND);
     if (now.status !== before.status) {
-      return new AppError(ErrorCode.INVALID_STATUS_TRANSITION, undefined, { from: now.status, to: input.status });
+      return new AppError(ErrorCode.INVALID_STATUS_TRANSITION, undefined, {
+        from: now.status,
+        to: input.status,
+      });
     }
-    return new AppError(ErrorCode.CAPACITY_BELOW_CURRENT, undefined, { currentSize: now.currentSize });
+    return new AppError(ErrorCode.CAPACITY_BELOW_CURRENT, undefined, {
+      currentSize: now.currentSize,
+    });
   }
 
   private async load(id: string): Promise<ClassLean> {
@@ -216,20 +266,24 @@ export class ClassesService {
       assistant: true,
       room: true,
     },
+    checkDates = true,
   ): Promise<void> {
-    if (v.endDate < v.startDate) fields.endDate = 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu';
+    if (checkDates && v.endDate < v.startDate)
+      fields.endDate = 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu';
     if (only.course) {
       const course = await this.courses.findById(v.courseId).lean();
       if (!course) fields.courseId = 'Khóa học không tồn tại';
       else {
-        if (only.course && course.status === CourseStatus.ARCHIVED) fields.courseId = 'Khóa học đã lưu trữ';
+        if (course.status === CourseStatus.ARCHIVED) fields.courseId = 'Khóa học đã lưu trữ';
         if (!course.levels.includes(v.level)) fields.level = 'Trình độ không thuộc khóa học';
       }
     }
     if (only.teacher) await this.checkTeacher(v.teacherId, 'teacherId', fields);
-    if (only.assistant && v.assistantTeacherId) await this.checkTeacher(v.assistantTeacherId, 'assistantTeacherId', fields);
+    if (only.assistant && v.assistantTeacherId)
+      await this.checkTeacher(v.assistantTeacherId, 'assistantTeacherId', fields);
     if (only.room && v.defaultRoomId) {
-      if (!(await this.rooms.exists({ _id: v.defaultRoomId }))) fields.defaultRoomId = 'Phòng học không tồn tại';
+      if (!(await this.rooms.exists({ _id: v.defaultRoomId })))
+        fields.defaultRoomId = 'Phòng học không tồn tại';
     }
   }
 

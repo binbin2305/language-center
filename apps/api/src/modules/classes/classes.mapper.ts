@@ -4,7 +4,10 @@ import type { Class } from '../../database/schemas/class.schema';
 
 export type ClassLean = Class & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 
-export function toDto(c: ClassLean, names: { courseName?: string; teacherName?: string } = {}): ClassDto {
+export function toDto(
+  c: ClassLean,
+  names: { courseName?: string; teacherName?: string } = {},
+): ClassDto {
   return {
     id: c._id.toString(),
     createdAt: c.createdAt.toISOString(),
