@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { isValidObjectId, Model, Types } from 'mongoose';
+import { Connection, isValidObjectId, Model, Types } from 'mongoose';
 import { AuditAction, ErrorCode, StudentDocumentDto } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
 import { ClockService } from '../../common/clock/clock.service';
+import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { loadEnv } from '../../config/env';
 import { Models } from '../../database/models';
@@ -37,6 +38,7 @@ export class DocumentsService {
     @InjectModel(Models.Student) private readonly students: Model<Student>,
     private readonly audit: AuditService,
     private readonly clock: ClockService,
+    @InjectConnection() private readonly conn: Connection,
   ) {}
 
   /** Absolute path for a stored relative path; throws when it would escape UPLOAD_DIR. */
@@ -80,21 +82,27 @@ export class DocumentsService {
     const rel = path.relative(path.resolve(loadEnv().UPLOAD_DIR), abs);
     const uploadedAt = this.clock.now();
     try {
-      const updated = await this.students.findOneAndUpdate(
-        { _id: studentId, deletedAt: null },
-        { $push: { documents: { _id: docId, fileName, mimeType: file.mimetype, size: file.size, path: rel, uploadedAt, uploadedBy: user.id } } },
-        { new: true },
-      );
-      if (!updated) throw new AppError(ErrorCode.NOT_FOUND);
-      await this.audit.log({
-        actor: user,
-        action: AuditAction.UPDATE,
-        entity: 'student',
-        entityId: studentId,
-        before: null,
-        after: { documentAdded: { id: docId.toString(), fileName, mimeType: file.mimetype, size: file.size } },
+      await withTransaction(this.conn, async (s) => {
+        const updated = await this.students.findOneAndUpdate(
+          { _id: studentId, deletedAt: null },
+          { $push: { documents: { _id: docId, fileName, mimeType: file.mimetype, size: file.size, path: rel, uploadedAt, uploadedBy: user.id } } },
+          { new: true, session: s },
+        );
+        if (!updated) throw new AppError(ErrorCode.NOT_FOUND);
+        await this.audit.log(
+          {
+            actor: user,
+            action: AuditAction.UPDATE,
+            entity: 'student',
+            entityId: studentId,
+            before: null,
+            after: { documentAdded: { id: docId.toString(), fileName, mimeType: file.mimetype, size: file.size } },
+          },
+          s,
+        );
       });
     } catch (e) {
+      // The transaction rolled back: the file written above has no record pointing at it.
       await this.unlinkQuietly(abs);
       throw e;
     }
@@ -123,16 +131,26 @@ export class DocumentsService {
 
   async remove(user: AuthUser, id: string, docId: string): Promise<void> {
     const { studentId, doc } = await this.find(id, docId);
-    const res = await this.students.updateOne({ _id: studentId, deletedAt: null }, { $pull: { documents: { _id: doc._id } } });
-    if (res.modifiedCount === 0) throw new AppError(ErrorCode.NOT_FOUND);
-    await this.audit.log({
-      actor: user,
-      action: AuditAction.UPDATE,
-      entity: 'student',
-      entityId: studentId,
-      before: { documentRemoved: { id: doc._id.toString(), fileName: doc.fileName } },
-      after: null,
+    await withTransaction(this.conn, async (s) => {
+      const res = await this.students.updateOne(
+        { _id: studentId, deletedAt: null },
+        { $pull: { documents: { _id: doc._id } } },
+        { session: s },
+      );
+      if (res.modifiedCount === 0) throw new AppError(ErrorCode.NOT_FOUND);
+      await this.audit.log(
+        {
+          actor: user,
+          action: AuditAction.UPDATE,
+          entity: 'student',
+          entityId: studentId,
+          before: { documentRemoved: { id: doc._id.toString(), fileName: doc.fileName } },
+          after: null,
+        },
+        s,
+      );
     });
+    // Only after commit: a rolled-back removal must keep its file (ENOENT is ignored).
     await this.unlinkQuietly(this.resolve(doc.path));
   }
 }

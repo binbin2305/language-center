@@ -6,7 +6,7 @@ import { Role } from '@lc/shared';
 import { loginAs } from '../helpers/auth';
 import { Models } from '../../src/database/models';
 import { createTestApp, TestApp } from '../helpers/test-app';
-import { makeStudent } from '../factories';
+import { DEFAULT_PASSWORD, makeStudent } from '../factories';
 
 describe('FR-STU-03/04 FR-ADM-06 Cập nhật hồ sơ, giấy tờ, lịch sử', () => {
   let t: TestApp;
@@ -73,6 +73,15 @@ describe('FR-STU-03/04 FR-ADM-06 Cập nhật hồ sơ, giấy tờ, lịch sử
         before: { fullName: 'Nguyễn Văn A' },
         after: { fullName: 'Lương Thế Vinh' },
       });
+    });
+
+    it('đổi fullName -> tài khoản STUDENT cũng đổi tên (GET /auth/me)', async () => {
+      const st = await makeStudent(t.conn, { withUser: true, fullName: 'Tên Cũ' });
+      const login = await t.http().post('/api/v1/auth/login').send({ username: st.code, password: DEFAULT_PASSWORD }).expect(200);
+      const token = login.body.data.accessToken as string;
+      await t.http().patch(`${API}/${st._id}`).set(auth(manager.token)).send({ fullName: 'Tên Mới' }).expect(200);
+      const me = await t.http().get('/api/v1/auth/me').set(auth(token)).expect(200);
+      expect(me.body.data.fullName).toBe('Tên Mới');
     });
 
     it('M và S cập nhật được; dob/gender/status/note/address lưu đúng, audit chỉ có trường đổi', async () => {

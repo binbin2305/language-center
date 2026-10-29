@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
 import {
   attendanceRate,
   AttendanceStatus,
@@ -24,6 +24,7 @@ import {
 } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
+import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { paginate } from '../../common/pagination';
 import { ScopeService } from '../../common/scope/scope.service';
@@ -32,6 +33,7 @@ import { AuditLog } from '../../database/schemas/audit-log.schema';
 import { Attendance } from '../../database/schemas/attendance.schema';
 import { Enrollment } from '../../database/schemas/enrollment.schema';
 import { Student } from '../../database/schemas/student.schema';
+import { User } from '../../database/schemas/user.schema';
 import { DuplicatesService } from './duplicates.service';
 import {
   EnrollmentLean,
@@ -57,6 +59,8 @@ export class StudentsService {
     @InjectModel(Models.Enrollment) private readonly enrollments: Model<Enrollment>,
     @InjectModel(Models.Attendance) private readonly attendances: Model<Attendance>,
     @InjectModel(Models.AuditLog) private readonly auditLogs: Model<AuditLog>,
+    @InjectModel(Models.User) private readonly users: Model<User>,
+    @InjectConnection() private readonly conn: Connection,
     private readonly scope: ScopeService,
     private readonly audit: AuditService,
     private readonly duplicates: DuplicatesService,
@@ -185,11 +189,18 @@ export class StudentsService {
     // The schema's validate hook does not run on findOneAndUpdate: keep fullNameSearch in sync here.
     if (typeof set.fullName === 'string') set.fullNameSearch = removeVietnameseTones(set.fullName).toLowerCase().trim();
 
-    const updated = (await this.students
-      .findOneAndUpdate({ _id: studentId, deletedAt: null }, { $set: set }, { new: true, runValidators: true })
-      .lean()) as StudentLean | null;
-    if (!updated) throw new AppError(ErrorCode.NOT_FOUND);
-    await this.audit.log({ actor: user, action: AuditAction.UPDATE, entity: 'student', entityId: studentId, before, after });
+    const updated = await withTransaction(this.conn, async (s) => {
+      const doc = (await this.students
+        .findOneAndUpdate({ _id: studentId, deletedAt: null }, { $set: set }, { new: true, runValidators: true, session: s })
+        .lean()) as StudentLean | null;
+      if (!doc) throw new AppError(ErrorCode.NOT_FOUND);
+      // The STUDENT account shows the same name (header, /auth/me).
+      if (typeof set.fullName === 'string' && doc.userId) {
+        await this.users.updateOne({ _id: doc.userId }, { $set: { fullName: set.fullName } }, { session: s });
+      }
+      await this.audit.log({ actor: user, action: AuditAction.UPDATE, entity: 'student', entityId: studentId, before, after }, s);
+      return doc;
+    });
 
     const result: UpdateStudentResultDto = { student: toStudentDto(updated) };
     if ('phone' in set || 'email' in set) {
