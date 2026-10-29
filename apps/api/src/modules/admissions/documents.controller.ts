@@ -26,7 +26,12 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { AppError } from '../../common/errors/app-error';
 import { DocumentsService, MAX_DOCUMENT_BYTES, UploadedFile as UploadedFileData } from './documents.service';
 
-const Base = FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_DOCUMENT_BYTES + 1 } }) as Type<NestInterceptor>;
+// defParamCharset: browsers send UTF-8 filenames; multer would otherwise decode them as latin1.
+const Base = FileInterceptor('file', {
+  storage: memoryStorage(),
+  defParamCharset: 'utf8',
+  limits: { fileSize: MAX_DOCUMENT_BYTES + 1, files: 1, fields: 10 },
+}) as Type<NestInterceptor>;
 
 /** FileInterceptor that reports an oversize upload with our FILE_TOO_LARGE code. */
 @Injectable()

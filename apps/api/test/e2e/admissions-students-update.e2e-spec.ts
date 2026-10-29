@@ -196,6 +196,23 @@ describe('FR-STU-03/04 FR-ADM-06 Cập nhật hồ sơ, giấy tờ, lịch sử
       expect(res.body.error).toMatchObject({ code: 'VALIDATION_FAILED', details: { fields: { file: expect.any(String) } } });
     });
 
+    it('A-04 tên file dài 300 ký tự -> lưu tối đa 255 ký tự, giữ đuôi .pdf', async () => {
+      const long = `${'Đ'.repeat(296)}.pdf`;
+      const res = await upload(manager.token, hv._id, pdf(), long, 'application/pdf').expect(201);
+      expect(res.body.data.fileName).toHaveLength(255);
+      expect(res.body.data.fileName.endsWith('.pdf')).toBe(true);
+      expect(res.body.data.fileName.startsWith('ĐĐĐ')).toBe(true);
+    });
+
+    it('A-04 gửi 2 tệp trong một request -> 400, không lưu gì', async () => {
+      const before = ((await db().findById(other._id).lean()) as unknown as { documents: unknown[] }).documents.length;
+      const res = await t.http().post(`${API}/${other._id}/documents`).set(auth(manager.token))
+        .attach('file', pdf(), { filename: 'a.pdf', contentType: 'application/pdf' })
+        .attach('file', pdf(), { filename: 'b.pdf', contentType: 'application/pdf' });
+      expect(res.status).toBe(400);
+      expect(((await db().findById(other._id).lean()) as unknown as { documents: unknown[] }).documents).toHaveLength(before);
+    });
+
     it('tên file chứa ../ không thoát khỏi UPLOAD_DIR', async () => {
       const res = await upload(manager.token, hv._id, pdf(), '../../evil.pdf', 'application/pdf').expect(201);
       const file = path.join(uploadDir, 'students', hv._id.toString(), `${res.body.data.id}.pdf`);

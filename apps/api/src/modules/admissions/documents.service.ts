@@ -23,6 +23,15 @@ const EXTENSIONS: Record<string, string[]> = {
   'application/pdf': ['.pdf'],
 };
 
+const MAX_FILE_NAME = 255;
+
+/** Keeps names within MAX_FILE_NAME characters, cutting the stem so the extension survives. */
+function capFileName(name: string): string {
+  if (name.length <= MAX_FILE_NAME) return name;
+  const ext = path.extname(name).slice(0, 16);
+  return name.slice(0, MAX_FILE_NAME - ext.length) + ext;
+}
+
 export interface UploadedFile {
   originalname: string;
   mimetype: string;
@@ -68,8 +77,8 @@ export class DocumentsService {
       throw new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields: { file: 'Thiếu tệp tải lên' } });
     }
     if (file.size > MAX_DOCUMENT_BYTES) throw new AppError(ErrorCode.FILE_TOO_LARGE);
-    // Multer decodes multipart filenames as latin1; recover UTF-8 and drop any directory part.
-    const fileName = path.basename(Buffer.from(file.originalname, 'latin1').toString('utf8').replace(/\\/g, '/'));
+    // Drop any directory part (the interceptor already decodes the name as UTF-8).
+    const fileName = capFileName(path.basename(file.originalname.replace(/\\/g, '/')));
     const ext = path.extname(fileName).toLowerCase();
     if (!EXTENSIONS[file.mimetype]?.includes(ext)) throw new AppError(ErrorCode.FILE_TYPE_NOT_ALLOWED);
 
