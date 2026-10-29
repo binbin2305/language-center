@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, isValidObjectId, Model } from 'mongoose';
-import { AuditAction, ConvertLeadResultDto, ErrorCode, LeadStatus, removeVietnameseTones, vnDay } from '@lc/shared';
+import { AuditAction, ConvertLeadResultDto, ErrorCode, LeadStatus, vnDay } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
 import { ClockService } from '../../common/clock/clock.service';
@@ -31,18 +31,18 @@ export class ConvertService {
   ) {}
 
   /** Throws the precise error for a lead that cannot be converted (404 / 409 / 422). */
-  private async assertConvertible(id: string): Promise<void> {
+  private async assertConvertible(id: string) {
     const lead = isValidObjectId(id) ? await this.leads.findOne({ _id: id, deletedAt: null }).lean() : null;
     if (!lead) throw new AppError(ErrorCode.LEAD_NOT_FOUND);
     if (lead.status === LeadStatus.PROFILE_CREATED || lead.studentId) throw new AppError(ErrorCode.PROFILE_EXISTS);
     if (lead.status !== LeadStatus.NEW) throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION);
+    return lead;
   }
 
   async convert(user: AuthUser, id: string, force: boolean): Promise<ConvertLeadResultDto> {
-    await this.assertConvertible(id);
+    const current = await this.assertConvertible(id);
     if (!force) {
-      const lead = await this.leads.findById(id).lean();
-      const duplicates = await this.duplicates.find({ phone: lead!.phone, email: lead!.email }, { leadId: lead!._id });
+      const duplicates = await this.duplicates.find({ phone: current.phone, email: current.email }, { leadId: current._id });
       if (duplicates.length) {
         // A concurrent convert of this very lead may have created the matching student: report that instead.
         await this.assertConvertible(id);
@@ -72,7 +72,6 @@ export class ConvertService {
           {
             code,
             fullName: lead.fullName,
-            fullNameSearch: removeVietnameseTones(lead.fullName).toLowerCase().trim(),
             dob: lead.dob,
             gender: lead.gender,
             phone: lead.phone,

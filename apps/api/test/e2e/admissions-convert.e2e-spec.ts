@@ -9,7 +9,8 @@ describe('FR-ADM-03..05 Tạo hồ sơ từ lead', () => {
   let staff: string;
   let manager: string;
   let teacher: string;
-  let hr: string;
+  let admin: string;
+  let student: string;
   let courseId: string;
   let http: ReturnType<TestApp['http']>;
   let seq = 0;
@@ -21,7 +22,8 @@ describe('FR-ADM-03..05 Tạo hồ sơ từ lead', () => {
     staff = (await loginAs(t, Role.ACADEMIC_STAFF)).token;
     manager = (await loginAs(t, Role.MANAGER)).token;
     teacher = (await loginAs(t, Role.TEACHER)).token;
-    hr = (await loginAs(t, Role.STUDENT)).token;
+    admin = (await loginAs(t, Role.ADMIN)).token;
+    student = (await loginAs(t, Role.STUDENT)).token;
     courseId = (await makeCourse(t.conn))._id.toString();
   });
   afterAll(async () => {
@@ -68,6 +70,27 @@ describe('FR-ADM-03..05 Tạo hồ sơ từ lead', () => {
     expect(res.body.error.code).toBe('DUPLICATE_PERSON');
     expect(res.body.error.details.duplicates[0]).toMatchObject({ kind: 'STUDENT', matchedOn: ['phone'] });
     await convert(staff, lead._id.toString(), '?force=true').expect(201);
+    expect(await m().Student.countDocuments({ phone: other.phone })).toBe(2);
+  });
+
+  it('email trùng student khác (SĐT khác) → 409 DUPLICATE_PERSON matchedOn email', async () => {
+    const other = await makeStudent(t.conn, { email: 'dup-only@mail.com' });
+    const lead = await newLead({ email: 'Dup-Only@Mail.com' });
+    const res = await convert(staff, lead._id.toString()).expect(409);
+    expect(res.body.error.code).toBe('DUPLICATE_PERSON');
+    expect(res.body.error.details.duplicates).toEqual([
+      expect.objectContaining({ kind: 'STUDENT', id: other._id.toString(), matchedOn: ['email'] }),
+    ]);
+  });
+
+  it('SĐT trùng lead khác chưa hủy → 409 DUPLICATE_PERSON; lead đã hủy thì không tính', async () => {
+    const phone = `097${String(2_000_000 + ++seq)}`;
+    const other = await newLead({ phone });
+    const lead = await newLead({ phone });
+    const res = await convert(staff, lead._id.toString()).expect(409);
+    expect(res.body.error.details.duplicates[0]).toMatchObject({ kind: 'LEAD', id: other._id.toString() });
+    await m().Lead.updateOne({ _id: other._id }, { status: 'CANCELLED' });
+    await convert(staff, lead._id.toString()).expect(201);
   });
 
   it('lead không tự trùng với chính nó (D10)', async () => {
@@ -117,9 +140,9 @@ describe('FR-ADM-03..05 Tạo hồ sơ từ lead', () => {
     expect(log).toBeTruthy();
   });
 
-  it('TEACHER, STUDENT → 403', async () => {
+  it.each([Role.TEACHER, Role.STUDENT, Role.ADMIN])('%s → 403', async (role) => {
     const lead = await newLead();
-    await convert(teacher, lead._id.toString()).expect(403);
-    await convert(hr, lead._id.toString()).expect(403);
+    const token = role === Role.TEACHER ? teacher : role === Role.STUDENT ? student : admin;
+    await convert(token, lead._id.toString()).expect(403);
   });
 });
