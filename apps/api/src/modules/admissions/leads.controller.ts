@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nes
 import {
   CancelLeadInput,
   CreateLeadInput,
+  ConvertLeadQuery,
   CreateLeadQuery,
   ListLeadsQuery,
   Role,
@@ -11,12 +12,16 @@ import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { ConvertService } from './convert.service';
 import { LeadsService } from './leads.service';
 
 @Controller('leads')
 @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
 export class LeadsController {
-  constructor(private readonly svc: LeadsService) {}
+  constructor(
+    private readonly svc: LeadsService,
+    private readonly convertSvc: ConvertService,
+  ) {}
 
   @Post()
   @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
@@ -55,5 +60,15 @@ export class LeadsController {
     @Body(new ZodValidationPipe(CancelLeadInput)) body: CancelLeadInput,
   ) {
     return { data: await this.svc.cancel(user, id, body) };
+  }
+
+  @Post(':id/convert')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async convert(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query(new ZodValidationPipe(ConvertLeadQuery)) q: ConvertLeadQuery,
+  ) {
+    return { data: await this.convertSvc.convert(user, id, q.force) };
   }
 }
