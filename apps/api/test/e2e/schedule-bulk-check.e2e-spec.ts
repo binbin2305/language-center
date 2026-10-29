@@ -1,4 +1,4 @@
-import { ErrorCode, Role } from '@lc/shared';
+import { ClassStatus, ErrorCode, Role } from '@lc/shared';
 import { makeClass, makeSession } from '../factories/academic.factory';
 import { makeRoom } from '../factories/catalog.factory';
 import { makeUser } from '../factories/user.factory';
@@ -63,6 +63,15 @@ describe('FR-SCH-03 POST /sessions/bulk/check-conflicts (dry-run lịch lặp)',
     const res = await post(token, { ...s.body, fromDate: '2025-12-01' });
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe(ErrorCode.SESSION_OUTSIDE_CLASS_RANGE);
+  });
+
+  it.each([ClassStatus.FINISHED, ClassStatus.INACTIVE])('lớp %s -> 422 CLASS_NOT_OPEN', async (status) => {
+    const { token } = await loginAs(t, Role.MANAGER);
+    const s = await seed();
+    await t.conn.model('Class').updateOne({ _id: s.cls._id }, { $set: { status } });
+    const res = await post(token, s.body);
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe(ErrorCode.CLASS_NOT_OPEN);
   });
 
   it.each([Role.TEACHER, Role.STUDENT, Role.ADMIN])('%s -> 403', async (role) => {

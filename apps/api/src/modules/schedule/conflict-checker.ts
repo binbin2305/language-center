@@ -49,7 +49,7 @@ export class MongoScheduleConflictChecker implements ScheduleConflictChecker {
       endAt: { $gt: q.startAt },
       $or: [{ roomId: q.roomId }, { teacherId: q.teacherId }],
     };
-    const [sessions, tests] = await Promise.all([
+    const findSessions = () =>
       this.sessions
         .find({
           ...window,
@@ -57,7 +57,8 @@ export class MongoScheduleConflictChecker implements ScheduleConflictChecker {
           ...(q.excludeSessionId ? { _id: { $ne: q.excludeSessionId } } : {}),
         })
         .session(s ?? null)
-        .lean(),
+        .lean();
+    const findTests = () =>
       this.placementTests
         .find({
           ...window,
@@ -65,8 +66,9 @@ export class MongoScheduleConflictChecker implements ScheduleConflictChecker {
           ...(q.excludePlacementTestId ? { _id: { $ne: q.excludePlacementTestId } } : {}),
         })
         .session(s ?? null)
-        .lean(),
-    ]);
+        .lean();
+    // A ClientSession must not run concurrent operations, so reads inside a transaction go one by one.
+    const [sessions, tests] = s ? [await findSessions(), await findTests()] : await Promise.all([findSessions(), findTests()]);
 
     const classIds = [...new Set(sessions.map((x) => String(x.classId)))];
     const classRows = classIds.length

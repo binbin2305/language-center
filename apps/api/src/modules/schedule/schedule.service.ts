@@ -3,6 +3,7 @@ import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Connection, Model, Types } from 'mongoose';
 import {
   AuditAction,
+  ClassStatus,
   type BulkCreateSessionsInput,
   type BulkCreateSessionsResultDto,
   type CheckConflictsInput,
@@ -44,6 +45,8 @@ import { toSessionDto, toSessionViewDto } from './schedule.mapper';
 import { ScheduleNotifier } from './schedule-notifier';
 
 const MAX_RANGE_DAYS = 92;
+/** Sessions can only be scheduled for classes that are still running or about to start. */
+const OPEN_CLASS_STATUSES: ClassStatus[] = [ClassStatus.PLANNED, ClassStatus.ONGOING];
 
 interface Range {
   startAt: Date;
@@ -336,12 +339,17 @@ export class ScheduleService {
     input: { classId: string; roomId: string; teacherId: string },
     s?: ClientSession,
   ): Promise<Resolved> {
-    const [cls, room, teacher] = await Promise.all([
-      this.classes.findById(input.classId).session(s ?? null),
-      this.rooms.findById(input.roomId).session(s ?? null),
-      this.users.findById(input.teacherId).session(s ?? null),
-    ]);
+    const loaders = [
+      () => this.classes.findById(input.classId).session(s ?? null),
+      () => this.rooms.findById(input.roomId).session(s ?? null),
+      () => this.users.findById(input.teacherId).session(s ?? null),
+    ] as const;
+    // A ClientSession must not run concurrent operations, so reads inside a transaction go one by one.
+    const [cls, room, teacher] = s
+      ? [await loaders[0](), await loaders[1](), await loaders[2]()]
+      : await Promise.all([loaders[0](), loaders[1](), loaders[2]()]);
     if (!cls) throw new AppError(ErrorCode.NOT_FOUND);
+    if (!OPEN_CLASS_STATUSES.includes(cls.status)) throw new AppError(ErrorCode.CLASS_NOT_OPEN);
     if (!room || room.status !== RoomStatus.ACTIVE) throw fieldError('roomId', 'INVALID_ROOM');
     if (!teacher || teacher.deletedAt || teacher.role !== Role.TEACHER || teacher.status !== UserStatus.ACTIVE) {
       throw fieldError('teacherId', 'NOT_AN_ACTIVE_TEACHER');

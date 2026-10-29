@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { AuditAction, ErrorCode, Role, RoomStatus } from '@lc/shared';
+import { AuditAction, ClassStatus, ErrorCode, Role, RoomStatus } from '@lc/shared';
 import { makeClass, makeSession } from '../factories/academic.factory';
 import { makeRoom } from '../factories/catalog.factory';
 import { makeUser } from '../factories/user.factory';
@@ -160,9 +160,35 @@ describe('FR-SCH-01..03 Tạo buổi học và lịch lặp', () => {
       const res = await post('/bulk', manager, bulkBody(s, { classId: String(new Types.ObjectId()) }));
       expect(res.status).toBe(404);
     });
+
+    it.each([ClassStatus.FINISHED, ClassStatus.INACTIVE])('FR-SCH-02 lớp %s -> 422 CLASS_NOT_OPEN, không ghi gì', async (status) => {
+      const s = await seed();
+      await t.conn.model('Class').updateOne({ _id: s.cls._id }, { $set: { status } });
+      const before = await count();
+      const res = await post('/bulk', manager, bulkBody(s));
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCode.CLASS_NOT_OPEN);
+      expect(await count()).toBe(before);
+    });
+
+    it('FR-SCH-02 lớp ONGOING -> 201', async () => {
+      const s = await seed();
+      await t.conn.model('Class').updateOne({ _id: s.cls._id }, { $set: { status: ClassStatus.ONGOING } });
+      expect((await post('/bulk', manager, bulkBody(s, { weekdays: [2] }))).status).toBe(201);
+    });
   });
 
   describe('POST /sessions', () => {
+    it.each([ClassStatus.FINISHED, ClassStatus.INACTIVE])('FR-SCH-01 lớp %s -> 422 CLASS_NOT_OPEN', async (status) => {
+      const s = await seed();
+      await t.conn.model('Class').updateOne({ _id: s.cls._id }, { $set: { status } });
+      const before = await count();
+      const res = await post('', manager, singleBody(s));
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCode.CLASS_NOT_OPEN);
+      expect(await count()).toBe(before);
+    });
+
     it('FR-SCH-01 tạo một buổi -> 201 CreateSessionResultDto, ghi audit', async () => {
       const s = await seed();
       const res = await post('', staff, singleBody(s));

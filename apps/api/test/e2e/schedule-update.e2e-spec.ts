@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { AuditAction, ErrorCode, Role } from '@lc/shared';
+import { AuditAction, ClassStatus, ErrorCode, Role } from '@lc/shared';
 import { makeClass, makeSession } from '../factories/academic.factory';
 import { makeRoom } from '../factories/catalog.factory';
 import { makeUser } from '../factories/user.factory';
@@ -82,6 +82,14 @@ describe('FR-SCH-04..05 Sửa và hủy buổi học', () => {
       const res = await patch(s.id, manager, { teacherId: String(notTeacher._id) });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe(ErrorCode.VALIDATION_FAILED);
+    });
+
+    it.each([ClassStatus.FINISHED, ClassStatus.INACTIVE])('FR-SCH-04 sửa buổi của lớp %s -> 422 CLASS_NOT_OPEN', async (status) => {
+      const { cls, id } = await seed();
+      await t.conn.model('Class').updateOne({ _id: cls._id }, { $set: { status } });
+      const res = await patch(id, manager, { startAt: '2026-01-06T12:00:00.000Z', endAt: '2026-01-06T13:30:00.000Z' });
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCode.CLASS_NOT_OPEN);
     });
 
     it('FR-SCH-04 id không tồn tại -> 404', async () => {
