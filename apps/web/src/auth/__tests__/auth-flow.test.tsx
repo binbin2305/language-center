@@ -8,6 +8,9 @@ import { makeUser } from '../../../test/users';
 import { resetViewport } from '../../../test/media';
 import { tokenStore } from '@/lib/api';
 
+// The first render of a lazy route compiles its chunk; 1s (RTL default) is too tight under load.
+const PAGE = { timeout: 5000 };
+
 const unauthenticated = () =>
   http.post('*/api/v1/auth/refresh', () =>
     HttpResponse.json(
@@ -95,7 +98,7 @@ describe('đăng nhập', () => {
     await user.type(await screen.findByLabelText('Email hoặc mã học viên'), 'm@center.local');
     await user.type(screen.getByLabelText('Mật khẩu'), 'Passw0rdx');
     await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
-    expect(await screen.findByRole('heading', { name: 'Lớp học' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Lớp học' }, PAGE)).toBeInTheDocument();
   });
 
   it('mustChangePassword sau đăng nhập chuyển sang /change-password', async () => {
@@ -112,7 +115,7 @@ describe('đăng nhập', () => {
     await user.type(await screen.findByLabelText('Email hoặc mã học viên'), 'HV1');
     await user.type(screen.getByLabelText('Mật khẩu'), 'Passw0rdx');
     await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
-    expect(await screen.findByRole('heading', { name: 'Đổi mật khẩu' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Đổi mật khẩu' }, PAGE)).toBeInTheDocument();
   });
 });
 
@@ -120,7 +123,7 @@ describe('khởi động phiên', () => {
   it('có cookie hợp lệ: vào thẳng trang chủ', async () => {
     server.use(session(makeUser('MANAGER')));
     renderApp({ route: '/' });
-    expect(await screen.findByRole('heading', { name: 'Tổng quan' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Tổng quan' }, PAGE)).toBeInTheDocument();
   });
 });
 
@@ -128,7 +131,7 @@ describe('bảo vệ route', () => {
   it('user mustChangePassword vào /classes bị chuyển sang /change-password', async () => {
     server.use(session(makeUser('MANAGER', { mustChangePassword: true })));
     renderApp({ route: '/classes' });
-    expect(await screen.findByRole('heading', { name: 'Đổi mật khẩu' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Đổi mật khẩu' }, PAGE)).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Menu chính' })).not.toBeInTheDocument();
   });
 
@@ -144,22 +147,22 @@ describe('bảo vệ route', () => {
 
   it('/ với HỌC VIÊN render StudentHome', async () => {
     renderApp({ route: '/', user: makeUser('STUDENT') });
-    expect(await screen.findByRole('heading', { name: 'Trang của tôi' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Trang của tôi' }, PAGE)).toBeInTheDocument();
   });
 
   it('/ với GIÁO VIÊN render TeacherHome', async () => {
     renderApp({ route: '/', user: makeUser('TEACHER') });
-    expect(await screen.findByRole('heading', { name: 'Hôm nay của tôi' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hôm nay của tôi' }, PAGE)).toBeInTheDocument();
   });
 
   it('/ với MANAGER render StaffDashboard', async () => {
     renderApp({ route: '/', user: makeUser('MANAGER') });
-    expect(await screen.findByRole('heading', { name: 'Tổng quan' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Tổng quan' }, PAGE)).toBeInTheDocument();
   });
 
   it('/ với ADMIN chuyển sang Tài khoản', async () => {
     renderApp({ route: '/', user: makeUser('ADMIN') });
-    expect(await screen.findByRole('heading', { name: 'Tài khoản' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Tài khoản' }, PAGE)).toBeInTheDocument();
   });
 
   it('đăng xuất đưa về /login', async () => {
@@ -209,6 +212,6 @@ describe('đăng nhập khi boot đang tải', () => {
     await user.type(await screen.findByLabelText('Email hoặc mã học viên'), 'm@center.local');
     await user.type(screen.getByLabelText('Mật khẩu'), 'Passw0rdx');
     await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
-    expect(await screen.findByRole('heading', { name: 'Thông báo' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Thông báo' }, PAGE)).toBeInTheDocument();
   });
 });

@@ -5,6 +5,9 @@ import { server } from '../../../test/msw/server';
 import { renderApp } from '../../../test/render';
 import { makeUser } from '../../../test/users';
 
+// The first render of a lazy route compiles its chunk; 1s (RTL default) is too tight under load.
+const PAGE = { timeout: 5000 };
+
 const forced = makeUser('TEACHER', { mustChangePassword: true });
 
 describe('đổi mật khẩu', () => {
@@ -60,7 +63,7 @@ describe('đổi mật khẩu', () => {
     await user.type(screen.getByLabelText('Mật khẩu mới'), 'Newpass12');
     await user.type(screen.getByLabelText('Nhập lại mật khẩu mới'), 'Newpass12');
     await user.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }));
-    expect(await screen.findByRole('heading', { name: 'Hôm nay của tôi' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hôm nay của tôi' }, PAGE)).toBeInTheDocument();
   });
 });
 

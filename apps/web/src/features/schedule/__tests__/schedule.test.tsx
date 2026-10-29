@@ -283,7 +283,16 @@ describe('tab Lịch học trong lớp', () => {
         classId = new URL(request.url).searchParams.get('classId');
         return HttpResponse.json({ data: [] });
       }),
-      http.get(`*/api/v1/classes/${CLASS_ID}`, () => HttpResponse.json({ data: { id: CLASS_ID } })),
+      http.get(`*/api/v1/classes/${CLASS_ID}`, () =>
+        HttpResponse.json({
+          data: {
+            id: CLASS_ID, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+            code: 'IELTS-01', name: 'IELTS Foundation 01', courseId: '65000000000000000000e001',
+            level: 'Foundation', teacherId: TEACHER_ID, defaultRoomId: null, maxCapacity: 20,
+            currentSize: 0, startDate: '2026-01-05', endDate: '2026-04-05', status: 'ONGOING',
+          },
+        }),
+      ),
     );
     renderApp({ route: `/classes/${CLASS_ID}?tab=schedule`, user: makeUser('MANAGER') });
     await waitFor(() => expect(classId).toBe(CLASS_ID));

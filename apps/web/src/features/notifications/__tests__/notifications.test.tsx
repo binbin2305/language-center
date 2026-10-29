@@ -84,11 +84,15 @@ describe('trang thông báo', () => {
         HttpResponse.json({ data: [note(ID1, { refType: 'CLASS', refId: ID2 })], meta }),
       ),
       http.post('*/api/v1/notifications/:id/read', () => HttpResponse.json({ data: note(ID1) })),
+      // The class page itself is not under test here; a handled 404 keeps the output clean.
+      http.get(`*/api/v1/classes/${ID2}`, () =>
+        HttpResponse.json({ error: { code: 'NOT_FOUND', message: 'Not found' } }, { status: 404 }),
+      ),
     );
     const user = userEvent.setup();
     renderApp({ route: '/notifications', user: makeUser('MANAGER') });
     await user.click(await screen.findByText('Thông báo a'));
-    expect(await screen.findByRole('heading', { name: 'Chi tiết lớp' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Chi tiết lớp' }, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('"Đánh dấu tất cả đã đọc" gọi read-all', async () => {
