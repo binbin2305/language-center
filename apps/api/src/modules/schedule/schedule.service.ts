@@ -19,6 +19,7 @@ import {
   vnDay,
 } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
+import { CounterService } from '../../common/db/counter.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { SCHEDULE_CONFLICT_CHECKER, type ScheduleConflictChecker } from '../../common/contracts/schedule-conflict-checker';
 import { withTransaction } from '../../common/db/transaction';
@@ -56,6 +57,7 @@ export class ScheduleService {
     @InjectModel(Models.User) private readonly users: Model<User>,
     @Inject(SCHEDULE_CONFLICT_CHECKER) private readonly checker: ScheduleConflictChecker,
     private readonly audit: AuditService,
+    private readonly counters: CounterService,
   ) {}
 
   async checkConflicts(input: CheckConflictsInput): Promise<CheckConflictsResultDto> {
@@ -77,6 +79,7 @@ export class ScheduleService {
     return withTransaction(this.conn, async (s) => {
       const { cls, warnings } = await this.resolve(input, s);
       this.assertInClassRange(cls, [range]);
+      await this.lockSchedule({ classId: input.classId, roomId: input.roomId, teacherId: input.teacherId }, s);
       await this.assertNoConflicts(input.roomId, input.teacherId, [range], cls, s);
       const [doc] = await this.sessions.create(
         [{ classId: cls._id, roomId: input.roomId, teacherId: input.teacherId, ...range, createdBy: actor.id }],
@@ -98,6 +101,7 @@ export class ScheduleService {
       const ranges = expandWeekly(input);
       if (ranges.length === 0) throw fieldError('weekdays', 'NO_MATCHING_DAYS');
       this.assertInClassRange(cls, ranges);
+      await this.lockSchedule({ classId: input.classId, roomId: input.roomId, teacherId: input.teacherId }, s);
       await this.assertNoConflicts(input.roomId, input.teacherId, ranges, cls, s);
 
       const seriesId = new Types.ObjectId();
@@ -147,6 +151,21 @@ export class ScheduleService {
     this.assertDaysInClassRange(cls, ranges.flatMap((r) => [vnDay(r.startAt), vnDay(r.endAt)]));
   }
 
+  /**
+   * Serializes concurrent writers for the same class/room/teacher: bumping a shared counter doc forces a
+   * write-write conflict, so the losing transaction aborts, is retried by withTransaction and then
+   * sees the winner's insert in its conflict check. Call before assertNoConflicts; reused by S-03.
+   */
+  protected async lockSchedule(
+    { classId, roomId, teacherId }: { classId: string; roomId: string; teacherId: string },
+    s: ClientSession,
+  ): Promise<void> {
+    // The classes lane bumps the same class key on delete, so an insert racing a class delete conflicts too.
+    await this.counters.next(`lock:class:${classId}`, s);
+    await this.counters.next(`lock:room:${roomId}`, s);
+    await this.counters.next(`lock:teacher:${teacherId}`, s);
+  }
+
   /** Checks DB conflicts (inside the caller's transaction) and conflicts among the candidates themselves. */
   private async assertNoConflicts(
     roomId: string,
@@ -169,6 +188,7 @@ export class ScheduleService {
         conflicts.push(c);
       }
     }
+    // Defensive: expandWeekly never yields overlapping candidates, so this path is currently unreachable.
     const slots = ranges.map((r) => ({ roomId, teacherId, ...r }));
     slots.forEach((slot, i) => {
       for (const { slot: other, kind } of findSlotConflicts(slot, slots.slice(i + 1))) {

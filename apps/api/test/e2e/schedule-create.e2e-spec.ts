@@ -1,8 +1,7 @@
 import { Types } from 'mongoose';
 import { AuditAction, ErrorCode, Role, RoomStatus } from '@lc/shared';
-import { makeClass } from '../factories/academic.factory';
+import { makeClass, makeSession } from '../factories/academic.factory';
 import { makeRoom } from '../factories/catalog.factory';
-import { makeSession } from '../factories/academic.factory';
 import { makeUser } from '../factories/user.factory';
 import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
@@ -218,6 +217,24 @@ describe('FR-SCH-01..03 Tạo buổi học và lịch lặp', () => {
       const res = await post('', manager, singleBody(s, { roomId: String(room._id) }));
       expect(res.status).toBe(400);
       expect(res.body.error.details.fields.roomId).toBeDefined();
+    });
+  });
+
+  describe('Đồng thời (FR-SCH-03)', () => {
+    it('hai POST /sessions song song cùng phòng+GV+giờ -> [201, 409], count +1', async () => {
+      const s = await seed();
+      const before = await count();
+      const rs = await Promise.all([post('', manager, singleBody(s)), post('', staff, singleBody(s))]);
+      expect(rs.map((r) => r.status).sort()).toEqual([201, 409]);
+      expect(await count()).toBe(before + 1);
+    });
+
+    it('hai POST /sessions/bulk chồng nhau song song -> một 201, một 409', async () => {
+      const s = await seed();
+      const before = await count();
+      const rs = await Promise.all([post('/bulk', manager, bulkBody(s)), post('/bulk', staff, bulkBody(s))]);
+      expect(rs.map((r) => r.status).sort()).toEqual([201, 409]);
+      expect(await count()).toBe(before + 12);
     });
   });
 
