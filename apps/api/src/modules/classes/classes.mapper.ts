@@ -6,7 +6,7 @@ export type ClassLean = Class & { _id: Types.ObjectId; createdAt: Date; updatedA
 
 export function toDto(
   c: ClassLean,
-  names: { courseName?: string; teacherName?: string } = {},
+  names: { courseName?: string; teacherName?: string; defaultRoomName?: string } = {},
 ): ClassDto {
   return {
     id: c._id.toString(),

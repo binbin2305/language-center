@@ -149,20 +149,35 @@ describe('chi tiết lớp', () => {
 });
 
 describe('chi tiết lớp theo vai trò', () => {
-  it('TEACHER xem chi tiết lớp không gọi GET /rooms và không thấy dòng Phòng', async () => {
-    let roomsCalled = false;
+  it.each(['TEACHER', 'MANAGER'] as const)(
+    '%s thấy Phòng từ defaultRoomName (R22), không gọi GET /rooms',
+    async (role) => {
+      let roomsCalled = false;
+      server.use(
+        http.get('*/api/v1/rooms', () => {
+          roomsCalled = true;
+          return page([]);
+        }),
+        http.get('*/api/v1/classes/:id', () =>
+          HttpResponse.json({ data: cls({ defaultRoomId: '65000000000000000000a0a0', defaultRoomName: 'Phòng 101' }) }),
+        ),
+        http.get('*/api/v1/classes/:id/students', () => page([])),
+      );
+      renderApp({ route: `/classes/${CLASS_ID}`, user: makeUser(role) });
+      const label = await screen.findByText('Phòng', {}, { timeout: 5000 });
+      expect(label.nextElementSibling).toHaveTextContent('Phòng 101');
+      expect(roomsCalled).toBe(false);
+    },
+  );
+
+  it('lớp chưa có phòng → "Chưa chọn"', async () => {
     server.use(
-      http.get('*/api/v1/rooms', () => {
-        roomsCalled = true;
-        return page([]);
-      }),
-      http.get('*/api/v1/classes/:id', () => HttpResponse.json({ data: cls({ defaultRoomId: 'x' }) })),
+      http.get('*/api/v1/classes/:id', () => HttpResponse.json({ data: cls({ defaultRoomId: null }) })),
       http.get('*/api/v1/classes/:id/students', () => page([])),
     );
     renderApp({ route: `/classes/${CLASS_ID}`, user: makeUser('TEACHER') });
-    expect(await screen.findByText('Giáo viên')).toBeInTheDocument();
-    expect(screen.queryByText('Phòng')).not.toBeInTheDocument();
-    expect(roomsCalled).toBe(false);
+    const label = await screen.findByText('Phòng', {}, { timeout: 5000 });
+    expect(label.nextElementSibling).toHaveTextContent('Chưa chọn');
   });
 });
 

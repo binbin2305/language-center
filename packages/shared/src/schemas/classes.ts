@@ -63,6 +63,8 @@ export const ClassDto = z.object({
   status: z.nativeEnum(ClassStatus),
   courseName: z.string().optional(),
   teacherName: z.string().optional(),
+  /** Name of `defaultRoomId`, for the class header (all roles; GET /rooms is M, S only). */
+  defaultRoomName: z.string().nullish(),
 });
 export type ClassDto = z.infer<typeof ClassDto>;
 

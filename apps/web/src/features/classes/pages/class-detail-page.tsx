@@ -18,7 +18,6 @@ import { errorMessage } from '@/lib/error-messages';
 import { formatDate } from '@/lib/format';
 import { toast } from 'sonner';
 import { DeleteClassDialog } from '../components/delete-class-dialog';
-import { useRooms } from '@/features/rooms/hooks';
 import { useClass, useDeactivateClass } from '../hooks';
 
 const ClassFormDialog = lazy(() =>
@@ -35,11 +34,7 @@ export default function ClassDetailPage() {
   const cls = useClass(id);
   const deactivate = useDeactivateClass();
   const manage = can(user, 'classes.manage');
-  // GET /rooms is M, S only.
-  const rooms = useRooms({ limit: 100 }, manage);
   const c = cls.data;
-
-  const room = c?.defaultRoomId ? rooms.data?.data.find((r) => r.id === c.defaultRoomId) : undefined;
 
   const header = cls.isError ? (
     <ErrorState description={errorMessage(cls.error)} onRetry={() => void cls.refetch()} />
@@ -56,12 +51,10 @@ export default function ClassDetailPage() {
           <dt className="text-muted-foreground">Giáo viên</dt>
           <dd>{c.teacherName ?? ''}</dd>
         </div>
-        {manage ? (
-          <div>
-            <dt className="text-muted-foreground">Phòng</dt>
-            <dd>{room ? `${room.code} - ${room.name}` : 'Chưa chọn'}</dd>
-          </div>
-        ) : null}
+        <div>
+          <dt className="text-muted-foreground">Phòng</dt>
+          <dd>{c.defaultRoomName ?? 'Chưa chọn'}</dd>
+        </div>
         <div>
           <dt className="text-muted-foreground">Thời gian</dt>
           <dd>{`${formatDate(c.startDate)} - ${formatDate(c.endDate)}`}</dd>

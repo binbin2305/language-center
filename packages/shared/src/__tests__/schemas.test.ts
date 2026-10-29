@@ -151,6 +151,11 @@ describe('smoke: mỗi file schema', () => {
     expect(S.ListClassesQuery.parse({ hasSeat: 'true' })).toMatchObject({ hasSeat: true });
     expect(S.ClassRosterQuery.safeParse({}).success).toBe(true);
     expect(S.ClassDto.safeParse({ ...c, id: id(5), currentSize: 0, status: 'PLANNED', createdAt: ts, updatedAt: ts }).success).toBe(true);
+    // R22: optional room name for the class header (all roles).
+    const dto = { ...c, id: id(5), currentSize: 0, status: 'PLANNED', createdAt: ts, updatedAt: ts };
+    expect(S.ClassDto.parse({ ...dto, defaultRoomName: 'Phòng 101' }).defaultRoomName).toBe('Phòng 101');
+    expect(S.ClassDto.safeParse({ ...dto, defaultRoomName: null }).success).toBe(true);
+    expect(S.ClassDto.parse(dto).defaultRoomName).toBeUndefined();
     expect(S.ClassStudentDto.safeParse({ studentId: id(1), enrollmentId: id(2), studentCode: 'HV1', fullName: 'A', absenceRate: 0.1, warning: false }).success).toBe(true);
   });
   it('sessions', () => {

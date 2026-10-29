@@ -176,17 +176,21 @@ export class ClassesService {
     this.assertSort(q.sort);
     const page = await paginate(this.classes, and.length ? { $and: and } : {}, q);
     const rows = page.data as unknown as ClassLean[];
-    const [courses, teachers] = await Promise.all([
+    const roomIds = rows.flatMap((r) => (r.defaultRoomId ? [r.defaultRoomId] : []));
+    const [courses, teachers, rooms] = await Promise.all([
       this.courses.find({ _id: { $in: rows.map((r) => r.courseId) } }, { name: 1 }).lean(),
       this.users.find({ _id: { $in: rows.map((r) => r.teacherId) } }, { fullName: 1 }).lean(),
+      this.rooms.find({ _id: { $in: roomIds } }, { name: 1 }).lean(),
     ]);
     const courseName = new Map(courses.map((c) => [String(c._id), c.name]));
     const teacherName = new Map(teachers.map((u) => [String(u._id), u.fullName]));
+    const roomName = new Map(rooms.map((r) => [String(r._id), r.name]));
     return {
       data: rows.map((r) =>
         toDto(r, {
           courseName: courseName.get(String(r.courseId)),
           teacherName: teacherName.get(String(r.teacherId)),
+          ...(r.defaultRoomId ? { defaultRoomName: roomName.get(String(r.defaultRoomId)) } : {}),
         }),
       ),
       meta: page.meta,
@@ -496,10 +500,15 @@ export class ClassesService {
   }
 
   private async present(c: ClassLean): Promise<ClassDto> {
-    const [course, teacher] = await Promise.all([
+    const [course, teacher, room] = await Promise.all([
       this.courses.findById(c.courseId, { name: 1 }).lean(),
       this.users.findById(c.teacherId, { fullName: 1 }).lean(),
+      c.defaultRoomId ? this.rooms.findById(c.defaultRoomId, { name: 1 }).lean() : null,
     ]);
-    return toDto(c, { courseName: course?.name, teacherName: teacher?.fullName });
+    return toDto(c, {
+      courseName: course?.name,
+      teacherName: teacher?.fullName,
+      ...(room ? { defaultRoomName: room.name } : {}),
+    });
   }
 }

@@ -268,6 +268,29 @@ describe('FR-CLS-01..03 Lớp học', () => {
     });
   });
 
+  describe('R22 tên phòng mặc định', () => {
+    it('GET /classes/:id và GET /classes trả defaultRoomName; GV của lớp cũng thấy; lớp không phòng → không có', async () => {
+      const room = await makeRoom(t.conn, { name: 'Phòng R22' });
+      const teacher = await loginAs(t, Role.TEACHER);
+      const withRoom = await makeClass(t.conn, {
+        courseId: course._id, code: 'R22-ROOM', defaultRoomId: room._id, teacherId: teacher.user._id,
+      });
+      const noRoom = await makeClass(t.conn, { courseId: course._id, code: 'R22-NONE', defaultRoomId: undefined });
+      const one = await t.http().get(`/api/v1/classes/${withRoom._id}`).set(auth(manager.token)).expect(200);
+      expect(one.body.data.defaultRoomName).toBe('Phòng R22');
+      const asTeacher = await t.http().get(`/api/v1/classes/${withRoom._id}`).set(auth(teacher.token)).expect(200);
+      expect(asTeacher.body.data.defaultRoomName).toBe('Phòng R22');
+      const list = await t.http().get('/api/v1/classes?q=R22-').set(auth(manager.token)).expect(200);
+      const byCode = Object.fromEntries(
+        (list.body.data as Array<{ code: string; defaultRoomName?: string }>).map((c) => [c.code, c]),
+      );
+      expect(byCode['R22-ROOM'].defaultRoomName).toBe('Phòng R22');
+      expect(byCode['R22-NONE']).not.toHaveProperty('defaultRoomName');
+      const none = await t.http().get(`/api/v1/classes/${noRoom._id}`).set(auth(manager.token)).expect(200);
+      expect(none.body.data).not.toHaveProperty('defaultRoomName');
+    });
+  });
+
   describe('phân quyền', () => {
     it.each([Role.TEACHER, Role.STUDENT])('%s POST/PATCH trả 403', async (role) => {
       const u = await loginAs(t, role);
