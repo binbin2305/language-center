@@ -11,6 +11,7 @@ export * from './filter-bar';
 export * from './form-field';
 export * from './money-input';
 export * from './money-text';
+export * from './option-select';
 export * from './page-header';
 export * from './placeholder-page';
 export * from './reason-dialog';

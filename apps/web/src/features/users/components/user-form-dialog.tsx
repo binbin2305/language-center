@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { errorMessage } from '@/lib/error-messages';
-import { applyServerFieldErrors, OptionSelect, viParams } from '@/features/settings/catalog-shared';
+import { OptionSelect } from '@/components/common/option-select';
+import { applyServerFieldErrors, viParams } from '@/lib/forms';
 import { useCreateUser } from '../hooks';
 import { CREATABLE_ROLES, hasTeacherProfile, ROLE_LABELS } from '../roles';
 

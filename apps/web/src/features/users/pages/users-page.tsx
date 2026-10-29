@@ -13,7 +13,7 @@ import { useAuth } from '@/auth/use-auth';
 import { errorMessage } from '@/lib/error-messages';
 import { StatusBadge } from '@/components/common/status-badge';
 import { statusLabel } from '@/lib/status';
-import { OptionSelect } from '@/features/settings/catalog-shared';
+import { OptionSelect } from '@/components/common/option-select';
 import { TempPasswordDialog } from '../components/temp-password-dialog';
 import { UserFormDialog } from '../components/user-form-dialog';
 import { useLockUser, useResetPassword, useUnlockUser, useUsers } from '../hooks';

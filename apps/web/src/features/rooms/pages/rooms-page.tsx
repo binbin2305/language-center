@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/use-auth';
 import { StatusBadge } from '@/components/common/status-badge';
 import { statusLabel } from '@/lib/status';
-import { OptionSelect } from '@/features/settings/catalog-shared';
+import { OptionSelect } from '@/components/common/option-select';
 import { RoomFormDialog } from '../components/room-form-dialog';
 import { useRooms } from '../hooks';
 

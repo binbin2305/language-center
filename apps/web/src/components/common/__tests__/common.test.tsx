@@ -8,7 +8,7 @@ import { renderWithProviders } from '../../../../test/render';
 import { server } from '../../../../test/msw/server';
 import {
   DataTable, MoneyInput, SearchInput, ReasonDialog, CapacityBar, StatusBadge, ConfirmDialog,
-  ConflictList, EntitySelect, DatePicker, TimeInput, MoneyText, FormField, PageHeader,
+  ConflictList, EntitySelect, DatePicker, TimeInput, MoneyText, FormField, PageHeader, OptionSelect,
 } from '..';
 
 afterEach(() => vi.useRealTimers());
@@ -183,6 +183,30 @@ describe('StatusBadge', () => {
   ] as const)('nhóm %s %s → "%s"', (group, value, label, cls) => {
     renderWithProviders(<StatusBadge group={group} value={value} />);
     expect(screen.getByText(label)).toHaveClass(cls);
+  });
+});
+
+describe('OptionSelect', () => {
+  beforeAll(() => {
+    Element.prototype.hasPointerCapture ??= () => false;
+    Element.prototype.releasePointerCapture ??= () => undefined;
+  });
+  it('mục "Tất cả" ứng với chuỗi rỗng; chọn mục khác trả value', async () => {
+    const onValueChange = vi.fn();
+    renderWithProviders(
+      <OptionSelect
+        aria-label="Trạng thái"
+        allLabel="Tất cả"
+        value=""
+        onValueChange={onValueChange}
+        options={[{ value: 'ACTIVE', label: 'Đang hoạt động' }]}
+      />,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Trạng thái' });
+    expect(trigger).toHaveTextContent('Tất cả');
+    await userEvent.click(trigger);
+    await userEvent.click(await screen.findByRole('option', { name: 'Đang hoạt động' }));
+    expect(onValueChange).toHaveBeenCalledWith('ACTIVE');
   });
 });
 

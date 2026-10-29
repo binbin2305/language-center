@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/auth/use-auth';
 import { errorMessage } from '@/lib/error-messages';
-import { applyServerFieldErrors, viParams } from '../catalog-shared';
+import { applyServerFieldErrors, viParams } from '@/lib/forms';
 import { useSettings, useUpdateSettings } from '../hooks';
 
 // The threshold is stored as a 0..1 ratio but edited as a percentage; converted on submit.

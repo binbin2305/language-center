@@ -14,9 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { errorMessage } from '@/lib/error-messages';
 import { statusLabel } from '@/lib/status';
-import {
-  applyServerFieldErrors, OptionSelect, viParams,
-} from '@/features/settings/catalog-shared';
+import { OptionSelect } from '@/components/common/option-select';
+import { applyServerFieldErrors, viParams } from '@/lib/forms';
 import { useCreateCourse, useUpdateCourse } from '../hooks';
 
 // The form edits levels as comma separated text; the shared schema receives the array.

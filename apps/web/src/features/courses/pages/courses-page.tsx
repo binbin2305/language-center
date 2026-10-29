@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/use-auth';
 import { StatusBadge } from '@/components/common/status-badge';
 import { statusLabel } from '@/lib/status';
-import { OptionSelect } from '@/features/settings/catalog-shared';
+import { OptionSelect } from '@/components/common/option-select';
 import { CourseFormDialog } from '../components/course-form-dialog';
 import { useCourses } from '../hooks';
 

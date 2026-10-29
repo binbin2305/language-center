@@ -12,9 +12,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { errorMessage } from '@/lib/error-messages';
 import { statusLabel } from '@/lib/status';
-import {
-  applyServerFieldErrors, OptionSelect, viParams,
-} from '@/features/settings/catalog-shared';
+import { OptionSelect } from '@/components/common/option-select';
+import { applyServerFieldErrors, viParams } from '@/lib/forms';
 import { useCreateRoom, useUpdateRoom } from '../hooks';
 
 type FormInput = z.input<typeof CreateRoomInput>;
