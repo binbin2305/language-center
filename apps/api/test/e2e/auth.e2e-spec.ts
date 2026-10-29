@@ -56,10 +56,22 @@ describe('auth', () => {
       expect(a.body.error.code).toBe('INVALID_CREDENTIALS');
       expect(a.body).toEqual(b.body);
     });
-    it('tài khoản LOCKED/DISABLED → 401 INVALID_CREDENTIALS (không lộ trạng thái)', async () => {
-      for (const status of [UserStatus.LOCKED, UserStatus.DISABLED]) {
-        const u = await makeUser(t.conn, { status });
-        const res = await login(u.username);
+    it('FR-USR-01 user LOCKED đăng nhập đúng mật khẩu → 423 ACCOUNT_LOCKED', async () => {
+      const u = await makeUser(t.conn, { status: UserStatus.LOCKED });
+      const res = await login(u.username);
+      expect(res.status).toBe(423);
+      expect(res.body.error.code).toBe('ACCOUNT_LOCKED');
+    });
+    it('user LOCKED sai mật khẩu → 401 INVALID_CREDENTIALS', async () => {
+      const u = await makeUser(t.conn, { status: UserStatus.LOCKED });
+      const res = await login(u.username, 'Wrong1234');
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
+    });
+    it('user DISABLED → 401', async () => {
+      const u = await makeUser(t.conn, { status: UserStatus.DISABLED });
+      for (const pw of [undefined, 'Wrong1234']) {
+        const res = await login(u.username, pw);
         expect(res.status).toBe(401);
         expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
       }

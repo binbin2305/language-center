@@ -66,7 +66,11 @@ export class AuthService {
       throw new AppError(ErrorCode.ACCOUNT_LOCKED, undefined, { lockedUntil: user.lockedUntil.toISOString() });
     }
     const valid = await verifyPassword(input.password, user.passwordHash);
-    if (user.status !== UserStatus.ACTIVE) throw new AppError(ErrorCode.INVALID_CREDENTIALS);
+    if (user.status !== UserStatus.ACTIVE) {
+      // D4: an admin-locked account reveals itself only to someone holding the right password.
+      if (user.status === UserStatus.LOCKED && valid) throw new AppError(ErrorCode.ACCOUNT_LOCKED);
+      throw new AppError(ErrorCode.INVALID_CREDENTIALS);
+    }
     if (!valid) {
       const locked = await this.recordFailure(user._id, now);
       if (locked) throw new AppError(ErrorCode.ACCOUNT_LOCKED, undefined, { lockedUntil: locked.toISOString() });
