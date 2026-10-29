@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { Gender, LeadStatus } from '../enums';
 import { zBoolQuery, zDateOnly, zDtoBase, zEmail, zObjectId, zPagination, zReason, zVnPhone } from './common';
+import { DuplicateMatchDto, DuplicatePersonDetails } from './duplicates';
 import { StudentDto } from './students';
+
+// Defined in ./duplicates (shared with students.ts without an import cycle); re-exported here.
+export { DuplicateMatchDto, DuplicatePersonDetails };
 
 export const CreateLeadInput = z.object({
   fullName: z.string().trim().min(2).max(100),

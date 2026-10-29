@@ -8,4 +8,5 @@ export * from './money';
 export * from './grading';
 export * from './text';
 export * from './transitions';
+export * from './attendance-rate';
 export * from './schemas';

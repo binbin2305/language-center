@@ -169,7 +169,7 @@ describe('smoke: mỗi file schema', () => {
     expect(S.ListSessionsQuery.safeParse({ from: '2026-01-01' }).success).toBe(false);
     expect(S.SessionDto.safeParse({ ...s, id: id(7), status: 'SCHEDULED', cancelReason: null, seriesId: null, attendanceTakenAt: null, attendanceNote: '', createdAt: ts, updatedAt: ts }).success).toBe(true);
     expect(S.SessionConflictDto.safeParse({ sessionId: id(1), kind: 'ROOM', startAt: ts, endAt: ts, roomId: id(2), teacherId: id(3) }).success).toBe(true);
-    expect(S.BulkCreateSessionsResultDto.safeParse({ seriesId: id(1), sessions: [] }).success).toBe(true);
+    expect(S.BulkCreateSessionsResultDto.safeParse({ seriesId: id(1), sessions: [], warnings: [] }).success).toBe(true);
     expect(S.CheckConflictsResultDto.safeParse({ conflicts: [] }).success).toBe(true);
   });
   it('attendance', () => {
@@ -256,3 +256,41 @@ const paymentDto = {
   id: id(1), code: 'PT2026010001', invoiceId: id(2), studentId: id(3), amount: 100, method: 'CASH', paidAt: ts, note: '', status: 'VALID',
   voidReason: null, voidedBy: null, voidedAt: null, recordedBy: id(4), createdAt: ts, updatedAt: ts,
 };
+
+describe('wave 1 contracts', () => {
+  const match = {
+    kind: 'LEAD',
+    id: id(1),
+    fullName: 'A',
+    phone: '0912345678',
+    email: null,
+    status: 'NEW',
+    matchedOn: ['phone'],
+  };
+  it('DuplicateMatchDto: matchedOn rỗng → fail', () => {
+    expect(S.DuplicateMatchDto.safeParse(match).success).toBe(true);
+    expect(S.DuplicateMatchDto.safeParse({ ...match, matchedOn: [] }).success).toBe(false);
+    expect(S.DuplicateMatchDto.safeParse({ ...match, kind: 'USER' }).success).toBe(false);
+    expect(S.DuplicatePersonDetails.safeParse({ duplicates: [match] }).success).toBe(true);
+  });
+  it('ClassDependencyReason là enum đóng', () => {
+    for (const r of ['ACTIVE_STUDENTS', 'ENROLLMENT_HISTORY', 'SESSIONS', 'GRADES', 'INVOICES'])
+      expect(S.ClassDependencyReason.safeParse(r).success).toBe(true);
+    expect(S.ClassDependencyReason.safeParse('OTHER').success).toBe(false);
+  });
+  it('SessionWarning / CreateSessionResultDto', () => {
+    expect(
+      S.SessionWarning.safeParse({ code: 'ROOM_TOO_SMALL', roomCapacity: 10, classMaxCapacity: 20 }).success,
+    ).toBe(true);
+    expect(S.SessionWarning.safeParse({ code: 'X', roomCapacity: 10, classMaxCapacity: 20 }).success).toBe(false);
+    expect(S.CreateSessionResultDto.shape.warnings).toBeDefined();
+    expect(S.BulkCreateSessionsResultDto.shape.warnings).toBeDefined();
+  });
+  it('ListClassesQuery.includePast, StudentBriefDto dob/phone, UpdateStudentResultDto', () => {
+    expect(S.ListClassesQuery.parse({ includePast: 'true' }).includePast).toBe(true);
+    expect(S.StudentBriefDto.shape.dob).toBeDefined();
+    expect(S.StudentBriefDto.shape.phone).toBeDefined();
+    expect(S.StudentTeacherViewDto.shape.enrollments).toBeDefined();
+    expect(S.UpdateStudentResultDto.shape.warnings).toBeDefined();
+  });
+});

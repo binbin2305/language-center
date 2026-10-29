@@ -26,10 +26,22 @@ export const ListClassesQuery = zPagination.extend({
   level: z.string().trim().optional(),
   status: z.nativeEnum(ClassStatus).optional(),
   hasSeat: zBoolQuery.optional(),
+  /** CL-03: only meaningful for STUDENT — include classes the student left or completed. */
+  includePast: zBoolQuery.optional(),
   teacherId: zObjectId.optional(),
   q: z.string().trim().max(100).optional(),
 });
 export type ListClassesQuery = z.infer<typeof ListClassesQuery>;
+
+/** CLASS_HAS_DEPENDENCIES details.reasons (D9) */
+export const ClassDependencyReason = z.enum([
+  'ACTIVE_STUDENTS',
+  'ENROLLMENT_HISTORY',
+  'SESSIONS',
+  'GRADES',
+  'INVOICES',
+]);
+export type ClassDependencyReason = z.infer<typeof ClassDependencyReason>;
 
 /** GET /classes/:id/students */
 export const ClassRosterQuery = zPagination.extend({});

@@ -103,9 +103,21 @@ export type SessionConflictDto = z.infer<typeof SessionConflictDto>;
 export const CheckConflictsResultDto = z.object({ conflicts: z.array(SessionConflictDto) });
 export type CheckConflictsResultDto = z.infer<typeof CheckConflictsResultDto>;
 
+export const SessionWarning = z.object({
+  code: z.literal('ROOM_TOO_SMALL'),
+  roomCapacity: z.number().int(),
+  classMaxCapacity: z.number().int(),
+});
+export type SessionWarning = z.infer<typeof SessionWarning>;
+
+/** POST /sessions, PATCH /sessions/:id (D2) */
+export const CreateSessionResultDto = z.object({ session: SessionDto, warnings: z.array(SessionWarning) });
+export type CreateSessionResultDto = z.infer<typeof CreateSessionResultDto>;
+
 export const BulkCreateSessionsResultDto = z.object({
   seriesId: zObjectId,
   sessions: z.array(SessionDto),
+  warnings: z.array(SessionWarning),
 });
 export type BulkCreateSessionsResultDto = z.infer<typeof BulkCreateSessionsResultDto>;
 

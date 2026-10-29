@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Gender, StudentStatus } from '../enums';
 import { zDateOnly, zDateTime, zDtoBase, zEmail, zMoney, zObjectId, zPagination, zVnPhone } from './common';
 import { EnrollmentDto } from './enrollments';
+import { DuplicateMatchDto } from './duplicates';
 
 export const StudentDocumentDto = z.object({
   id: zObjectId,
@@ -46,9 +47,15 @@ export const StudentBriefDto = z.object({
   id: zObjectId,
   code: z.string(),
   fullName: z.string(),
+  dob: zDateOnly,
+  phone: z.string(),
   status: z.nativeEnum(StudentStatus),
 });
 export type StudentBriefDto = z.infer<typeof StudentBriefDto>;
+
+/** GET /students/:id for TEACHER: brief fields + enrollments in the teacher's own classes. */
+export const StudentTeacherViewDto = StudentBriefDto.extend({ enrollments: z.array(EnrollmentDto) });
+export type StudentTeacherViewDto = z.infer<typeof StudentTeacherViewDto>;
 
 export const ListStudentsQuery = zPagination.extend({
   q: z.string().trim().max(100).optional(),
@@ -84,6 +91,13 @@ export const UpdateStudentContactInput = z
   .partial()
   .strict();
 export type UpdateStudentContactInput = z.infer<typeof UpdateStudentContactInput>;
+
+/** PATCH /students/:id and /students/me/contact result; warnings are non-blocking (D2). */
+export const UpdateStudentResultDto = z.object({
+  student: StudentDto,
+  warnings: z.object({ duplicates: z.array(DuplicateMatchDto) }).optional(),
+});
+export type UpdateStudentResultDto = z.infer<typeof UpdateStudentResultDto>;
 
 export const StudentAuditQuery = zPagination;
 export type StudentAuditQuery = z.infer<typeof StudentAuditQuery>;
