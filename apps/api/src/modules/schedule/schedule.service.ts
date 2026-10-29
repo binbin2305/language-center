@@ -148,7 +148,7 @@ export class ScheduleService {
       };
     });
     const sorted = result.sessions.map((x) => new Date(x.startAt)).sort((a, b) => a.getTime() - b.getTime());
-    await this.notifier.seriesCreated(input.classId, sorted.length, sorted[0], sorted[sorted.length - 1]);
+    await this.notifier.seriesCreated(input.classId, sorted.length, sorted[0], sorted[sorted.length - 1], [input.teacherId]);
     return result;
   }
 
@@ -224,16 +224,18 @@ export class ScheduleService {
         .sort({ startAt: 1 })
         .session(s);
       let cancelled = 0;
+      const teacherIds = new Set<string>();
       for (const before of future) {
         const updated = await this.cancelOne(before._id, trimmed, s);
         if (!updated) continue;
         await this.auditCancel(before, updated, actor, s);
         cancelled += 1;
+        teacherIds.add(String(updated.teacherId));
       }
-      return { cancelled };
+      return { cancelled, teacherIds: [...teacherIds] };
     });
-    if (result.cancelled > 0) await this.notifier.futureCancelled(classId, result.cancelled, trimmed);
-    return result;
+    if (result.cancelled > 0) await this.notifier.futureCancelled(classId, result.cancelled, trimmed, result.teacherIds);
+    return { cancelled: result.cancelled };
   }
 
   /** GET /sessions (FR-SCH-06): sessions in [from, to] VN days, limited to the caller's scope. */

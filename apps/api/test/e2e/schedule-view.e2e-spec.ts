@@ -268,6 +268,29 @@ describe('FR-SCH-06..08 Xem lịch theo phạm vi và thông báo', () => {
       expect(await notes(s.cls._id)).toHaveLength(4);
     });
 
+    it('FR-SCH-07 tạo bulk với GV không phải GV của lớp -> GV đó cũng nhận thông báo', async () => {
+      const s = await seedClass();
+      const sub = await makeUser(t.conn, { role: Role.TEACHER });
+      const res = await send('post', 'sessions/bulk', manager, {
+        classId: String(s.cls._id), roomId: String(s.room._id), teacherId: String(sub._id),
+        weekdays: [2], startTime: '18:00', endTime: '19:30', fromDate: '2026-01-05', toDate: '2026-01-16',
+      });
+      expect(res.status).toBe(201);
+      expect(userSet(await notes(s.cls._id))).toEqual([...s.expected, String(sub._id)].sort());
+    });
+
+    it('FR-SCH-07 cancel-future -> GV dạy thay một buổi bị hủy cũng nhận thông báo; GV dạy thay buổi không bị hủy thì không', async () => {
+      const s = await seedClass();
+      const sub = await makeUser(t.conn, { role: Role.TEACHER });
+      const pastSub = await makeUser(t.conn, { role: Role.TEACHER });
+      await makeSession(t.conn, { classId: s.cls._id, roomId: s.room._id, teacherId: s.teacher._id, ...future(2) });
+      await makeSession(t.conn, { classId: s.cls._id, roomId: s.room._id, teacherId: sub._id, ...future(3) });
+      await makeSession(t.conn, { classId: s.cls._id, roomId: s.room._id, teacherId: pastSub._id, ...future(-1) });
+      const res = await send('post', `classes/${s.cls._id}/sessions/cancel-future`, manager, { reason: 'Nghỉ lễ' });
+      expect(res.body.data.cancelled).toBe(2);
+      expect(userSet(await notes(s.cls._id))).toEqual([...s.expected, String(sub._id)].sort());
+    });
+
     it('FR-SCH-07 giao dịch thất bại (xung đột) -> không gửi thông báo', async () => {
       const s = await seedClass();
       const body = {

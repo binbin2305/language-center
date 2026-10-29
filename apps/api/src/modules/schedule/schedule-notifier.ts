@@ -15,12 +15,14 @@ const fmtDay = (d: Date): string => vnDay(d).split('-').reverse().join('/');
 /** 'HH:mm dd/MM/yyyy' of the instant in Vietnam time. */
 const fmtDateTime = (d: Date): string => `${HHMM.format(d)} ${fmtDay(d)}`;
 
+type Recipient = Types.ObjectId | string;
+
 interface SessionRef {
   id: Types.ObjectId | string;
   classId: Types.ObjectId | string;
   startAt: Date;
   /** Session's own teacher (may be a substitute) plus any extra people to notify, e.g. the previous teacher. */
-  extraRecipients?: Array<Types.ObjectId | string>;
+  extraRecipients?: Recipient[];
 }
 
 /**
@@ -55,16 +57,25 @@ export class ScheduleNotifier {
     );
   }
 
-  /** One notification per recipient for a whole series. */
-  seriesCreated(classId: Types.ObjectId | string, count: number, first: Date, last: Date) {
-    return this.forClass(classId, NotificationType.SESSION_CREATED, 'Lịch học mới', (code) =>
-      `Lớp ${code}: ${count} buổi từ ${fmtDay(first)} đến ${fmtDay(last)}`,
+  /** One notification per recipient for a whole series; extra = the series' teacher (may not teach the class). */
+  seriesCreated(classId: Types.ObjectId | string, count: number, first: Date, last: Date, extra: Recipient[] = []) {
+    return this.forClass(
+      classId,
+      NotificationType.SESSION_CREATED,
+      'Lịch học mới',
+      (code) => `Lớp ${code}: ${count} buổi từ ${fmtDay(first)} đến ${fmtDay(last)}`,
+      extra,
     );
   }
 
-  futureCancelled(classId: Types.ObjectId | string, count: number, reason: string) {
-    return this.forClass(classId, NotificationType.SESSION_CANCELLED, 'Các buổi học bị hủy', (code) =>
-      `Lớp ${code}: đã hủy ${count} buổi sắp tới. Lý do: ${reason}`,
+  /** extra = teachers of the cancelled sessions (substitutes included). */
+  futureCancelled(classId: Types.ObjectId | string, count: number, reason: string, extra: Recipient[] = []) {
+    return this.forClass(
+      classId,
+      NotificationType.SESSION_CANCELLED,
+      'Các buổi học bị hủy',
+      (code) => `Lớp ${code}: đã hủy ${count} buổi sắp tới. Lý do: ${reason}`,
+      extra,
     );
   }
 
@@ -72,8 +83,14 @@ export class ScheduleNotifier {
     return this.send(s.classId, type, title, body, NotificationRefType.SESSION, s.id, s.extraRecipients);
   }
 
-  private forClass(classId: Types.ObjectId | string, type: NotificationType, title: string, body: (code: string) => string) {
-    return this.send(classId, type, title, body, NotificationRefType.CLASS, classId);
+  private forClass(
+    classId: Types.ObjectId | string,
+    type: NotificationType,
+    title: string,
+    body: (code: string) => string,
+    extra: Recipient[],
+  ) {
+    return this.send(classId, type, title, body, NotificationRefType.CLASS, classId, extra);
   }
 
   private async send(
@@ -83,7 +100,7 @@ export class ScheduleNotifier {
     body: (code: string) => string,
     refType: NotificationRefType,
     refId: Types.ObjectId | string,
-    extra: Array<Types.ObjectId | string> = [],
+    extra: Recipient[] = [],
   ): Promise<void> {
     try {
       const cls = await this.classes.findById(classId, { code: 1, teacherId: 1, assistantTeacherId: 1 }).lean();
