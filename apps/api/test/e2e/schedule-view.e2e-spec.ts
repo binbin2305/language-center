@@ -46,8 +46,11 @@ describe('FR-SCH-06..08 Xem lịch theo phạm vi và thông báo', () => {
     it('FR-SCH-06 to - from = 92 ngày -> 200', async () => {
       expect((await get('?from=2026-01-01&to=2026-04-03', manager)).status).toBe(200);
     });
-    it('FR-SCH-06 to < from -> 400', async () => {
-      expect((await get('?from=2026-01-10&to=2026-01-09', manager)).status).toBe(400);
+    it('FR-SCH-06 to < from -> 400 VALIDATION_FAILED fields.to', async () => {
+      const res = await get('?from=2026-01-10&to=2026-01-09', manager);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe(ErrorCode.VALIDATION_FAILED);
+      expect(res.body.error.details.fields.to).toBeDefined();
     });
     it('FR-SCH-06 cửa sổ theo ngày VN: 00:00 VN thuộc ngày đó, 24:00 thì không', async () => {
       const cls = await makeClass(t.conn);
@@ -64,6 +67,9 @@ describe('FR-SCH-06..08 Xem lịch theo phạm vi và thông báo', () => {
     it('FR-SCH-06 ADMIN -> 403', async () => {
       const { token } = await loginAs(t, Role.ADMIN);
       expect((await get(Q, token)).status).toBe(403);
+      const cls = await makeClass(t.conn);
+      const session = await makeSession(t.conn, { classId: cls._id, roomId: (await makeRoom(t.conn))._id, ...future(1) });
+      expect((await get(`/${session._id}`, token)).status).toBe(403);
     });
 
     it('FR-SCH-06 HV: buổi tương lai lớp ENROLLED; buổi đã qua lớp TRANSFERRED; không thấy buổi tương lai lớp TRANSFERRED', async () => {
@@ -208,12 +214,36 @@ describe('FR-SCH-06..08 Xem lịch theo phạm vi và thông báo', () => {
       let rows = await notes(session._id);
       expect(userSet(rows)).toEqual(s.expected);
       expect(new Set(rows.map((r) => r.type))).toEqual(new Set([NotificationType.SESSION_UPDATED]));
+      expect(rows[0]).toMatchObject({ refType: NotificationRefType.SESSION, refId: session._id });
 
       const can = await send('post', `sessions/${session._id}/cancel`, manager, { reason: 'GV ốm' });
       expect(can.status).toBe(200);
       rows = (await notes(session._id)).filter((r) => r.type === NotificationType.SESSION_CANCELLED);
       expect(userSet(rows)).toEqual(s.expected);
       expect(rows[0].body).toContain('GV ốm');
+      expect(rows[0]).toMatchObject({ refType: NotificationRefType.SESSION, refId: session._id });
+    });
+
+    it('FR-SCH-07 buổi dạy thay: tạo và hủy báo cho GV dạy thay; đổi GV báo cả GV cũ và mới', async () => {
+      const s = await seedClass();
+      const sub = await makeUser(t.conn, { role: Role.TEACHER });
+      const sub2 = await makeUser(t.conn, { role: Role.TEACHER });
+      const created = await send('post', 'sessions', manager, {
+        classId: String(s.cls._id), roomId: String(s.room._id), teacherId: String(sub._id),
+        startAt: '2026-01-08T11:00:00.000Z', endAt: '2026-01-08T12:30:00.000Z',
+      });
+      expect(created.status).toBe(201);
+      const sid = new Types.ObjectId(created.body.data.session.id);
+      expect(userSet(await notes(sid))).toEqual([...s.expected, String(sub._id)].sort());
+
+      const upd = await send('patch', `sessions/${sid}`, manager, { teacherId: String(sub2._id) });
+      expect(upd.status).toBe(200);
+      const updated = (await notes(sid)).filter((r) => r.type === NotificationType.SESSION_UPDATED);
+      expect(userSet(updated)).toEqual([...s.expected, String(sub._id), String(sub2._id)].sort());
+
+      expect((await send('post', `sessions/${sid}/cancel`, manager, { reason: 'x' })).status).toBe(200);
+      const cancelled = (await notes(sid)).filter((r) => r.type === NotificationType.SESSION_CANCELLED);
+      expect(userSet(cancelled)).toEqual([...s.expected, String(sub2._id)].sort());
     });
 
     it('FR-SCH-07 PATCH không thay đổi gì -> không gửi thông báo', async () => {

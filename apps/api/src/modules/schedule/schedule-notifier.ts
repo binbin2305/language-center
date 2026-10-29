@@ -19,6 +19,8 @@ interface SessionRef {
   id: Types.ObjectId | string;
   classId: Types.ObjectId | string;
   startAt: Date;
+  /** Session's own teacher (may be a substitute) plus any extra people to notify, e.g. the previous teacher. */
+  extraRecipients?: Array<Types.ObjectId | string>;
 }
 
 /**
@@ -67,7 +69,7 @@ export class ScheduleNotifier {
   }
 
   private forSession(s: SessionRef, type: NotificationType, title: string, body: (code: string) => string) {
-    return this.send(s.classId, type, title, body, NotificationRefType.SESSION, s.id);
+    return this.send(s.classId, type, title, body, NotificationRefType.SESSION, s.id, s.extraRecipients);
   }
 
   private forClass(classId: Types.ObjectId | string, type: NotificationType, title: string, body: (code: string) => string) {
@@ -81,6 +83,7 @@ export class ScheduleNotifier {
     body: (code: string) => string,
     refType: NotificationRefType,
     refId: Types.ObjectId | string,
+    extra: Array<Types.ObjectId | string> = [],
   ): Promise<void> {
     try {
       const cls = await this.classes.findById(classId, { code: 1, teacherId: 1, assistantTeacherId: 1 }).lean();
@@ -89,7 +92,7 @@ export class ScheduleNotifier {
       const studentUsers = rows.length
         ? await this.students.find({ _id: { $in: rows.map((r) => r.studentId) }, userId: { $exists: true } }, { userId: 1 }).lean()
         : [];
-      const recipients = [cls.teacherId, cls.assistantTeacherId, ...studentUsers.map((u) => u.userId)].filter(
+      const recipients = [cls.teacherId, cls.assistantTeacherId, ...studentUsers.map((u) => u.userId), ...extra.map((e) => new Types.ObjectId(String(e)))].filter(
         (id): id is Types.ObjectId => !!id,
       );
       await this.notifications.notify(recipients, { type, title, body: body(cls.code), refType, refId: new Types.ObjectId(String(refId)) });

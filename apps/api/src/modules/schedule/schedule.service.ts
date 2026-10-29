@@ -103,7 +103,7 @@ export class ScheduleService {
       await this.audit.log({ actor, action: AuditAction.CREATE, entity: Models.Session, entityId: doc._id, after: doc.toObject() }, s);
       return { session: toSessionDto(doc), warnings };
     });
-    await this.notifier.sessionCreated({ id: result.session.id, classId: input.classId, startAt: range.startAt });
+    await this.notifier.sessionCreated({ id: result.session.id, classId: input.classId, startAt: range.startAt, extraRecipients: [input.teacherId] });
     return result;
   }
 
@@ -141,7 +141,7 @@ export class ScheduleService {
   }
 
   async update(id: string, input: UpdateSessionInput, actor: AuthUser): Promise<CreateSessionResultDto> {
-    const { result, changed } = await withTransaction(this.conn, async (s) => {
+    const { result, changed, previousTeacherId } = await withTransaction(this.conn, async (s) => {
       const current = await this.findOrThrow(id, s);
       if (current.status === SessionStatus.CANCELLED) throw new AppError(ErrorCode.SESSION_LOCKED);
       const changes = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
@@ -159,7 +159,7 @@ export class ScheduleService {
       };
       if (merged.endAt <= merged.startAt) throw fieldError('endAt', 'MUST_BE_AFTER_START');
       const { cls, warnings } = await this.resolve(merged, s);
-      if (Object.keys(changes).length === 0) return { result: { session: toSessionDto(current), warnings }, changed: false };
+      if (Object.keys(changes).length === 0) return { result: { session: toSessionDto(current), warnings }, changed: false, previousTeacherId: null };
 
       const range = { startAt: merged.startAt, endAt: merged.endAt };
       this.assertInClassRange(cls, [range]);
@@ -176,10 +176,15 @@ export class ScheduleService {
         { actor, action: AuditAction.UPDATE, entity: Models.Session, entityId: updated._id, before: current.toObject(), after: updated.toObject() },
         s,
       );
-      return { result: { session: toSessionDto(updated), warnings }, changed: true };
+      return { result: { session: toSessionDto(updated), warnings }, changed: true, previousTeacherId: current.teacherId.toString() };
     });
     if (changed) {
-      await this.notifier.sessionUpdated({ id: result.session.id, classId: result.session.classId, startAt: new Date(result.session.startAt) });
+      await this.notifier.sessionUpdated({
+        id: result.session.id,
+        classId: result.session.classId,
+        startAt: new Date(result.session.startAt),
+        extraRecipients: [result.session.teacherId, ...(previousTeacherId ? [previousTeacherId] : [])],
+      });
     }
     return result;
   }
@@ -193,7 +198,7 @@ export class ScheduleService {
       await this.auditCancel(current, updated, actor, s);
       return toSessionDto(updated);
     });
-    await this.notifier.sessionCancelled({ id: dto.id, classId: dto.classId, startAt: new Date(dto.startAt) }, trimmed);
+    await this.notifier.sessionCancelled({ id: dto.id, classId: dto.classId, startAt: new Date(dto.startAt), extraRecipients: [dto.teacherId] }, trimmed);
     return dto;
   }
 
