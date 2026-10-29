@@ -47,6 +47,9 @@ const mockSessions = (list: SessionDto[]) =>
   server.use(http.get('*/api/v1/sessions', () => HttpResponse.json({ data: list })));
 const mockCheck = (conflicts: SessionConflictDto[]) =>
   server.use(http.post('*/api/v1/sessions/check-conflicts', () => HttpResponse.json({ data: { conflicts } })));
+/** Recurring dry-run is a single request to the bulk endpoint. */
+const mockBulkCheck = (conflicts: SessionConflictDto[]) =>
+  server.use(http.post('*/api/v1/sessions/bulk/check-conflicts', () => HttpResponse.json({ data: { conflicts } })));
 
 const DEFAULTS = { classId: CLASS_ID, roomId: ROOM_ID, teacherId: TEACHER_ID, fromDate: '2026-01-05', toDate: '2026-01-30' };
 
@@ -78,7 +81,7 @@ describe('FR-SCH-02 xem trước số buổi lặp', () => {
 
 describe('FR-SCH-03 kiểm tra xung đột trước khi tạo', () => {
   it('có xung đột → ConflictList hiển thị và nút "Tạo" disabled', async () => {
-    mockCheck([conflict]);
+    mockBulkCheck([conflict]);
     const user = await openRecurring();
     await user.click(screen.getByRole('button', { name: 'Kiểm tra xung đột' }));
     expect(await screen.findByLabelText('Danh sách xung đột lịch')).toBeInTheDocument();
@@ -86,11 +89,11 @@ describe('FR-SCH-03 kiểm tra xung đột trước khi tạo', () => {
   });
 
   it('đổi giờ sau khi có xung đột → nút Tạo vẫn disabled tới khi kiểm tra lại', async () => {
-    mockCheck([conflict]);
+    mockBulkCheck([conflict]);
     const user = await openRecurring();
     await user.click(screen.getByRole('button', { name: 'Kiểm tra xung đột' }));
     await screen.findByLabelText('Danh sách xung đột lịch');
-    mockCheck([]);
+    mockBulkCheck([]);
     fireEvent.change(screen.getByLabelText(/^Giờ bắt đầu/), { target: { value: '20:00' } });
     fireEvent.change(screen.getByLabelText(/^Giờ kết thúc/), { target: { value: '21:30' } });
     expect(screen.getByRole('button', { name: 'Tạo' })).toBeDisabled();
@@ -99,7 +102,7 @@ describe('FR-SCH-03 kiểm tra xung đột trước khi tạo', () => {
   });
 
   it('kiểm tra sạch rồi sửa form → Tạo bị khóa lại', async () => {
-    mockCheck([]);
+    mockBulkCheck([]);
     const user = await openRecurring();
     await user.click(screen.getByRole('button', { name: 'Kiểm tra xung đột' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Tạo' })).toBeEnabled());
@@ -108,7 +111,7 @@ describe('FR-SCH-03 kiểm tra xung đột trước khi tạo', () => {
   });
 
   it('tạo thành công gọi POST /sessions/bulk với thứ ISO và giờ HH:mm', async () => {
-    mockCheck([]);
+    mockBulkCheck([]);
     let body: unknown;
     server.use(
       http.post('*/api/v1/sessions/bulk', async ({ request }) => {
@@ -124,6 +127,81 @@ describe('FR-SCH-03 kiểm tra xung đột trước khi tạo', () => {
       expect(body).toEqual({
         classId: CLASS_ID, roomId: ROOM_ID, teacherId: TEACHER_ID,
         weekdays: [1, 3, 5], startTime: '18:00', endTime: '19:30', fromDate: '2026-01-05', toDate: '2026-01-30',
+      }),
+    );
+  });
+
+  it('tạo bị 409 SCHEDULE_CONFLICT sau dry-run cũ → hiện ConflictList và Tạo disabled', async () => {
+    mockBulkCheck([]);
+    server.use(
+      http.post('*/api/v1/sessions/bulk', () =>
+        HttpResponse.json(
+          { error: { code: 'SCHEDULE_CONFLICT', message: 'x', details: { conflicts: [conflict] } } },
+          { status: 409 },
+        ),
+      ),
+    );
+    const user = await openRecurring();
+    await user.click(screen.getByRole('button', { name: 'Kiểm tra xung đột' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tạo' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Tạo' }));
+    expect(await screen.findByLabelText('Danh sách xung đột lịch')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tạo' })).toBeDisabled();
+  });
+
+  it('một buổi: kiểm tra sạch → Tạo bật → POST /sessions với giờ VN đổi sang UTC', async () => {
+    mockCheck([]);
+    let body: unknown;
+    server.use(
+      http.post('*/api/v1/sessions', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ data: { session: session(), warnings: [] } }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SessionFormDialog open onOpenChange={() => undefined} defaults={{ ...DEFAULTS, fromDate: '2026-01-05' }} />, {
+      user: makeUser('MANAGER'),
+    });
+    fireEvent.change(screen.getByLabelText(/^Giờ bắt đầu/), { target: { value: '18:00' } });
+    fireEvent.change(screen.getByLabelText(/^Giờ kết thúc/), { target: { value: '19:30' } });
+    expect(screen.getByRole('button', { name: 'Tạo' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Kiểm tra xung đột' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tạo' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Tạo' }));
+    await waitFor(() =>
+      expect(body).toEqual({
+        classId: CLASS_ID, roomId: ROOM_ID, teacherId: TEACHER_ID,
+        startAt: '2026-01-05T11:00:00.000Z', endAt: '2026-01-05T12:30:00.000Z',
+      }),
+    );
+  });
+
+  it('sửa buổi: dry-run gửi excludeSessionId, sạch → Lưu → PATCH', async () => {
+    let checkBody: Record<string, unknown> = {};
+    let patchBody: unknown;
+    server.use(
+      http.post('*/api/v1/sessions/check-conflicts', async ({ request }) => {
+        checkBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: { conflicts: [] } });
+      }),
+      http.patch(`*/api/v1/sessions/${SESSION_ID}`, async ({ request }) => {
+        patchBody = await request.json();
+        return HttpResponse.json({ data: { session: session(), warnings: [] } });
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SessionFormDialog open onOpenChange={() => undefined} session={session()} />, {
+      user: makeUser('MANAGER'),
+    });
+    expect(screen.getByRole('button', { name: 'Lưu' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Kiểm tra xung đột' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu' })).toBeEnabled());
+    expect(checkBody.excludeSessionId).toBe(SESSION_ID);
+    await user.click(screen.getByRole('button', { name: 'Lưu' }));
+    await waitFor(() =>
+      expect(patchBody).toEqual({
+        roomId: ROOM_ID, teacherId: TEACHER_ID,
+        startAt: '2026-01-06T11:00:00.000Z', endAt: '2026-01-06T12:30:00.000Z',
       }),
     );
   });

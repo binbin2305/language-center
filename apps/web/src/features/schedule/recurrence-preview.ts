@@ -1,4 +1,4 @@
-import { addVnDays, BulkCreateSessionsInput, vnDateTime } from '@lc/shared';
+import { addVnDays, BulkCreateSessionsInput } from '@lc/shared';
 
 type Recurrence = Pick<BulkCreateSessionsInput, 'weekdays' | 'fromDate' | 'toDate'>;
 
@@ -26,14 +26,4 @@ export function recurrenceDays({ weekdays, fromDate, toDate }: Recurrence): stri
 
 export function countRecurrence(input: Recurrence): number {
   return recurrenceDays(input).length;
-}
-
-/** Concrete [startAt, endAt] ISO instants (Vietnam wall-clock) for each recurrence day. */
-export function recurrenceSlots(
-  input: Recurrence & Pick<BulkCreateSessionsInput, 'startTime' | 'endTime'>,
-): Array<{ startAt: string; endAt: string }> {
-  return recurrenceDays(input).map((day) => ({
-    startAt: vnDateTime(day, input.startTime).toISOString(),
-    endAt: vnDateTime(day, input.endTime).toISOString(),
-  }));
 }

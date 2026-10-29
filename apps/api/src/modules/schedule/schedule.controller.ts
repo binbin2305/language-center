@@ -46,6 +46,13 @@ export class ScheduleController {
     return { data: await this.svc.createBulk(body, user) };
   }
 
+  @Post('bulk/check-conflicts')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  @HttpCode(200)
+  async checkBulkConflicts(@Body(new ZodValidationPipe(BulkCreateSessionsInput)) body: BulkCreateSessionsInput) {
+    return { data: await this.svc.checkBulkConflicts(body) };
+  }
+
   @Post('check-conflicts')
   @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
   @HttpCode(200)

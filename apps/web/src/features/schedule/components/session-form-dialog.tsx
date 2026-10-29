@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Controller, useForm, useWatch, type Control, type FieldErrors, type FieldPath, type FieldValues } from 'react-hook-form';
+import { Controller, useForm, useWatch, type FieldPath, type FieldValues, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import {
@@ -23,9 +23,8 @@ import { ApiError } from '@/lib/api';
 import { errorMessage } from '@/lib/error-messages';
 import { formatTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { scheduleApi } from '../api';
-import { useCreateBulkSessions, useCreateSession, useUpdateSession } from '../hooks';
-import { countRecurrence, recurrenceSlots } from '../recurrence-preview';
+import { useCheckBulkConflicts, useCheckConflicts, useCreateBulkSessions, useCreateSession, useUpdateSession } from '../hooks';
+import { countRecurrence } from '../recurrence-preview';
 import {
   RecurringFormSchema,
   scheduleParseParams,
@@ -57,32 +56,35 @@ const WEEKDAYS = [
   { value: 5, label: 'T6' }, { value: 6, label: 'T7' }, { value: 7, label: 'CN' },
 ] as const;
 
-const DRY_RUN_BATCH = 8;
-
 const warningText = (w: SessionWarning) =>
   `Phòng chỉ có ${w.roomCapacity} chỗ, nhỏ hơn sĩ số tối đa của lớp (${w.classMaxCapacity}).`;
 
+/** Order-independent identity of the values a dry-run covered (explicit field list, not object key order). */
+const singleKey = (v: Partial<SingleFormValues>) =>
+  [v.classId, v.roomId, v.teacherId, v.date, v.startTime, v.endTime].join('|');
+const recurringKey = (v: Partial<RecurringFormValues>) =>
+  [
+    v.classId, v.roomId, v.teacherId, [...new Set(v.weekdays ?? [])].sort().join(','),
+    v.startTime, v.endTime, v.fromDate, v.toDate,
+  ].join('|');
+
 /** Remembers the dry-run outcome for one exact set of form values; any edit makes it stale. */
-function useDryRun(values: unknown) {
-  const key = JSON.stringify(values);
+function useDryRun(currentKey: string) {
   const [result, setResult] = useState<{ key: string; conflicts: SessionConflictDto[] } | null>(null);
-  const fresh = result?.key === key ? result.conflicts : null;
+  const fresh = result?.key === currentKey ? result.conflicts : null;
   return {
     /** Conflicts of the latest check when the form has not changed since; null otherwise. */
     fresh,
     canCreate: fresh !== null && fresh.length === 0,
-    record: (submitted: unknown, conflicts: SessionConflictDto[]) => {
-      const seen = new Set<string>();
-      const unique = conflicts.filter((c) => {
-        const id = `${c.sessionId ?? c.placementTestId ?? `${c.startAt}`}-${c.kind}`;
-        return seen.has(id) ? false : (seen.add(id), true);
-      });
-      setResult({ key: JSON.stringify(submitted), conflicts: unique });
-    },
+    record: (key: string, conflicts: SessionConflictDto[]) => setResult({ key, conflicts }),
   };
 }
 
-function applyServerError(e: unknown, setError: (name: never, err: { message: string }) => void, onConflicts: (c: SessionConflictDto[]) => void) {
+function applyServerError<T extends FieldValues>(
+  e: unknown,
+  form: UseFormReturn<T>,
+  onConflicts: (c: SessionConflictDto[]) => void,
+) {
   if (e instanceof ApiError && e.code === 'SCHEDULE_CONFLICT') {
     const conflicts = (e.details as { conflicts?: SessionConflictDto[] } | undefined)?.conflicts ?? [];
     onConflicts(conflicts);
@@ -90,45 +92,43 @@ function applyServerError(e: unknown, setError: (name: never, err: { message: st
     return;
   }
   if (e instanceof ApiError && e.details?.fields) {
-    for (const [name, message] of Object.entries(e.details.fields)) setError(name as never, { message });
+    const known = Object.keys(form.getValues());
+    const isField = (name: string): name is FieldPath<T> => known.includes(name);
+    for (const [name, message] of Object.entries(e.details.fields)) {
+      if (isField(name)) form.setError(name, { message });
+    }
     return;
   }
   toast.error(errorMessage(e));
 }
 
-function PickerFields<T extends FieldValues>({
-  control, errors, lockClass,
-}: {
-  control: Control<T>;
-  errors: FieldErrors<T>;
-  lockClass?: boolean;
-}) {
-  const field = (name: 'classId' | 'roomId' | 'teacherId', label: string, entity: 'class' | 'room' | 'teacher', locked = false) => (
-    <FormField label={label} required error={errors[name]?.message as string | undefined}>
-      {(p) => (
-        <Controller
-          control={control}
-          name={name as FieldPath<T>}
-          render={({ field: f }) => (
-            <EntitySelect
-              {...p}
-              entity={entity}
-              value={(f.value as string) || null}
-              onChange={(id) => f.onChange(id ?? '')}
-              disabled={locked}
-              selectedLabel={locked ? 'Lớp hiện tại' : undefined}
-              placeholder={`Chọn ${label.toLowerCase()}`}
-            />
-          )}
-        />
-      )}
-    </FormField>
-  );
+interface PickerItem {
+  label: string;
+  entity: 'class' | 'room' | 'teacher';
+  value: string;
+  onChange: (id: string) => void;
+  error?: string;
+  locked?: boolean;
+}
+
+function EntityPickers({ items }: { items: PickerItem[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      {field('classId', 'Lớp học', 'class', lockClass)}
-      {field('roomId', 'Phòng học', 'room')}
-      {field('teacherId', 'Giáo viên', 'teacher')}
+      {items.map((it) => (
+        <FormField key={it.entity} label={it.label} required error={it.error}>
+          {(p) => (
+            <EntitySelect
+              {...p}
+              entity={it.entity}
+              value={it.value || null}
+              onChange={(id) => it.onChange(id ?? '')}
+              disabled={it.locked}
+              selectedLabel={it.locked ? 'Lớp hiện tại' : undefined}
+              placeholder={`Chọn ${it.label.toLowerCase()}`}
+            />
+          )}
+        </FormField>
+      ))}
     </div>
   );
 }
@@ -171,10 +171,12 @@ function RecurringForm({ defaults, lockClass, onDone }: { defaults?: SessionForm
   });
   const { control, formState: { errors } } = form;
   const watched = useWatch({ control });
-  const normalise = (v: Partial<RecurringFormValues>) => ({ ...v, weekdays: [...(v.weekdays ?? [])].sort() });
-  const dry = useDryRun(normalise(watched));
+  const setPicker = (name: 'classId' | 'roomId' | 'teacherId') => (id: string) =>
+    form.setValue(name, id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
+  const dry = useDryRun(recurringKey(watched));
   const [checking, setChecking] = useState(false);
   const create = useCreateBulkSessions();
+  const checkBulk = useCheckBulkConflicts();
 
   const count = countRecurrence({
     weekdays: watched.weekdays ?? [], fromDate: watched.fromDate ?? '', toDate: watched.toDate ?? '',
@@ -184,17 +186,8 @@ function RecurringForm({ defaults, lockClass, onDone }: { defaults?: SessionForm
   const check = form.handleSubmit(async (v) => {
     setChecking(true);
     try {
-      const slots = recurrenceSlots(v);
-      const found: SessionConflictDto[] = [];
-      for (let i = 0; i < slots.length; i += DRY_RUN_BATCH) {
-        const results = await Promise.all(
-          slots.slice(i, i + DRY_RUN_BATCH).map((s) =>
-            scheduleApi.checkConflicts(CheckConflictsInput.parse({ ...s, classId: v.classId, roomId: v.roomId, teacherId: v.teacherId })),
-          ),
-        );
-        for (const r of results) found.push(...r.conflicts);
-      }
-      dry.record(normalise(v), found);
+      const res = await checkBulk.mutateAsync(v);
+      dry.record(recurringKey(v), res.conflicts);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -210,13 +203,19 @@ function RecurringForm({ defaults, lockClass, onDone }: { defaults?: SessionForm
       res.warnings.forEach((w) => toast.warning(warningText(w)));
       onDone();
     } catch (e) {
-      applyServerError(e, form.setError, (c) => dry.record(normalise(v), c));
+      applyServerError(e, form, (c) => dry.record(recurringKey(v), c));
     }
   });
 
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      <PickerFields control={control} errors={errors} lockClass={lockClass} />
+      <EntityPickers
+        items={[
+          { label: 'Lớp học', entity: 'class', value: watched.classId ?? '', onChange: setPicker('classId'), error: errors.classId?.message, locked: lockClass },
+          { label: 'Phòng học', entity: 'room', value: watched.roomId ?? '', onChange: setPicker('roomId'), error: errors.roomId?.message },
+          { label: 'Giáo viên', entity: 'teacher', value: watched.teacherId ?? '', onChange: setPicker('teacherId'), error: errors.teacherId?.message },
+        ]}
+      />
       <FormField label="Thứ trong tuần" required error={errors.weekdays?.message}>
         {(p) => (
           <Controller
@@ -297,7 +296,11 @@ function SingleForm({
         },
   });
   const { control, formState: { errors } } = form;
-  const dry = useDryRun(useWatch({ control }));
+  const watched = useWatch({ control });
+  const setPicker = (name: 'classId' | 'roomId' | 'teacherId') => (id: string) =>
+    form.setValue(name, id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted });
+  const dry = useDryRun(singleKey(watched));
+  const checkOne = useCheckConflicts();
   const [checking, setChecking] = useState(false);
   const create = useCreateSession();
   const update = useUpdateSession();
@@ -310,12 +313,12 @@ function SingleForm({
   const check = form.handleSubmit(async (v) => {
     setChecking(true);
     try {
-      const res = await scheduleApi.checkConflicts(
+      const res = await checkOne.mutateAsync(
         CheckConflictsInput.parse({
           ...instants(v), classId: v.classId, roomId: v.roomId, teacherId: v.teacherId, excludeSessionId: session?.id,
         }),
       );
-      dry.record(v, res.conflicts);
+      dry.record(singleKey(v), res.conflicts);
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -333,13 +336,19 @@ function SingleForm({
       res.warnings.forEach((w) => toast.warning(warningText(w)));
       onDone();
     } catch (e) {
-      applyServerError(e, form.setError, (c) => dry.record(v, c));
+      applyServerError(e, form, (c) => dry.record(singleKey(v), c));
     }
   });
 
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      <PickerFields control={control} errors={errors} lockClass={lockClass || !!session} />
+      <EntityPickers
+        items={[
+          { label: 'Lớp học', entity: 'class', value: watched.classId ?? '', onChange: setPicker('classId'), error: errors.classId?.message, locked: lockClass || !!session },
+          { label: 'Phòng học', entity: 'room', value: watched.roomId ?? '', onChange: setPicker('roomId'), error: errors.roomId?.message },
+          { label: 'Giáo viên', entity: 'teacher', value: watched.teacherId ?? '', onChange: setPicker('teacherId'), error: errors.teacherId?.message },
+        ]}
+      />
       <div className="grid gap-3 sm:grid-cols-3">
         <FormField label="Ngày" required error={errors.date?.message}>
           {(p) => (

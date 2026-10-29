@@ -107,6 +107,18 @@ export class ScheduleService {
     return result;
   }
 
+  /** Dry-run of createBulk: same validation and expansion, no writes and no schedule locks. */
+  async checkBulkConflicts(input: BulkCreateSessionsInput): Promise<CheckConflictsResultDto> {
+    if (input.endTime <= input.startTime) throw fieldError('endTime', 'MUST_BE_AFTER_START');
+    if (input.fromDate > input.toDate) throw fieldError('toDate', 'MUST_BE_ON_OR_AFTER_FROM');
+    const { cls } = await this.resolve(input);
+    this.assertDaysInClassRange(cls, [input.fromDate, input.toDate]);
+    const ranges = expandWeekly(input);
+    if (ranges.length === 0) throw fieldError('weekdays', 'NO_MATCHING_DAYS');
+    this.assertInClassRange(cls, ranges);
+    return { conflicts: await this.collectConflicts(input.roomId, input.teacherId, ranges, cls) };
+  }
+
   async createBulk(input: BulkCreateSessionsInput, actor: AuthUser): Promise<BulkCreateSessionsResultDto> {
     if (input.endTime <= input.startTime) throw fieldError('endTime', 'MUST_BE_AFTER_START');
     if (input.fromDate > input.toDate) throw fieldError('toDate', 'MUST_BE_ON_OR_AFTER_FROM');
@@ -320,12 +332,12 @@ export class ScheduleService {
 
   private async resolve(
     input: { classId: string; roomId: string; teacherId: string },
-    s: ClientSession,
+    s?: ClientSession,
   ): Promise<Resolved> {
     const [cls, room, teacher] = await Promise.all([
-      this.classes.findById(input.classId).session(s),
-      this.rooms.findById(input.roomId).session(s),
-      this.users.findById(input.teacherId).session(s),
+      this.classes.findById(input.classId).session(s ?? null),
+      this.rooms.findById(input.roomId).session(s ?? null),
+      this.users.findById(input.teacherId).session(s ?? null),
     ]);
     if (!cls) throw new AppError(ErrorCode.NOT_FOUND);
     if (!room || room.status !== RoomStatus.ACTIVE) throw fieldError('roomId', 'INVALID_ROOM');
@@ -364,7 +376,7 @@ export class ScheduleService {
     await this.counters.next(`lock:teacher:${teacherId}`, s);
   }
 
-  /** Checks DB conflicts (inside the caller's transaction) and conflicts among the candidates themselves. */
+  /** Throws SCHEDULE_CONFLICT when the candidates clash with stored sessions or with each other. */
   private async assertNoConflicts(
     roomId: string,
     teacherId: string,
@@ -373,6 +385,19 @@ export class ScheduleService {
     s: ClientSession,
     excludeSessionId?: Types.ObjectId,
   ): Promise<void> {
+    const conflicts = await this.collectConflicts(roomId, teacherId, ranges, cls, s, excludeSessionId);
+    if (conflicts.length > 0) throw new AppError(ErrorCode.SCHEDULE_CONFLICT, undefined, { conflicts });
+  }
+
+  /** DB conflicts (inside the caller's transaction when given) plus conflicts among the candidates, ascending. */
+  private async collectConflicts(
+    roomId: string,
+    teacherId: string,
+    ranges: Range[],
+    cls: ClassDoc,
+    s?: ClientSession,
+    excludeSessionId?: Types.ObjectId,
+  ): Promise<SessionConflictDto[]> {
     const conflicts: SessionConflictDto[] = [];
     const seen = new Set<string>();
     for (const r of ranges) {
@@ -402,9 +427,6 @@ export class ScheduleService {
         });
       }
     });
-    if (conflicts.length > 0) {
-      conflicts.sort((a, b) => a.startAt.localeCompare(b.startAt));
-      throw new AppError(ErrorCode.SCHEDULE_CONFLICT, undefined, { conflicts });
-    }
+    return conflicts.sort((a, b) => a.startAt.localeCompare(b.startAt));
   }
 }

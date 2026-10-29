@@ -10,7 +10,6 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { addVnDays, VN_TZ, type SessionDto } from '@lc/shared';
 import { EmptyState } from '@/components/common/empty-state';
 import { ErrorState } from '@/components/common/error-state';
-import { toYmd } from '@/components/common/date-utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSessions } from '../hooks';
 
@@ -62,8 +61,9 @@ export function ScheduleCalendar({ filters, initialDate, onSelectSession }: Sche
   const events = useMemo(() => sessions.map(toEvent), [sessions]);
 
   const onDatesSet = (arg: DatesSetArg) => {
-    const from = toYmd(arg.start);
-    const to = addVnDays(toYmd(arg.end), -1);
+    // The date part of startStr/endStr is the calendar day as displayed, independent of the browser zone.
+    const from = arg.startStr.slice(0, 10);
+    const to = addVnDays(arg.endStr.slice(0, 10), -1);
     setRange((r) => (r?.from === from && r.to === to ? r : { from, to }));
   };
   const onEventClick = (arg: EventClickArg) => {

@@ -20,6 +20,8 @@ export const scheduleApi = {
   list: (params: SessionListParams) => apiGet<SessionDto[]>('sessions', params),
   checkConflicts: (body: CheckConflictsInput) =>
     apiPost<CheckConflictsResultDto>('sessions/check-conflicts', body),
+  checkBulkConflicts: (body: BulkCreateSessionsInput) =>
+    apiPost<CheckConflictsResultDto>('sessions/bulk/check-conflicts', body),
   create: (body: CreateSessionInput) => apiPost<CreateSessionResultDto>('sessions', body),
   createBulk: (body: BulkCreateSessionsInput) => apiPost<BulkCreateSessionsResultDto>('sessions/bulk', body),
   update: (id: string, body: UpdateSessionInput) => apiPatch<CreateSessionResultDto>(`sessions/${id}`, body),
