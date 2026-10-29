@@ -6,7 +6,7 @@ import type { Lead } from '../../database/schemas/lead.schema';
 
 export type LeadLean = Lead & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 
-export function toLeadDto(l: LeadLean): LeadDto {
+export function toLeadDto(l: LeadLean, createdByName?: string): LeadDto {
   return {
     id: l._id.toString(),
     fullName: l.fullName,
@@ -20,6 +20,7 @@ export function toLeadDto(l: LeadLean): LeadDto {
     status: l.status,
     studentId: l.studentId?.toString() ?? null,
     createdBy: l.createdBy?.toString(),
+    ...(createdByName ? { createdByName } : {}),
     createdAt: l.createdAt.toISOString(),
     updatedAt: l.updatedAt.toISOString(),
   };

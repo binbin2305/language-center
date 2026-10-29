@@ -44,6 +44,16 @@ describe('FR-ADM-01/02/08 Lead', () => {
     expect(got.body.data.id).toBe(res.body.data.id);
   });
 
+  it('L-ADMISSIONS-1: createdByName (người tiếp nhận) có trong POST, GET /leads/:id và GET /leads', async () => {
+    const receiver = await loginAs(t, Role.ACADEMIC_STAFF, { fullName: 'Lê Tiếp Nhận' });
+    const created = await post(receiver.token, body({ fullName: 'Người Hỏi Nhận' })).expect(201);
+    expect(created.body.data.createdByName).toBe('Lê Tiếp Nhận');
+    const got = await t.http().get(`/api/v1/leads/${created.body.data.id}`).set(auth(manager)).expect(200);
+    expect(got.body.data.createdByName).toBe('Lê Tiếp Nhận');
+    const list = await t.http().get('/api/v1/leads?q=Người Hỏi Nhận').set(auth(manager)).expect(200);
+    expect(list.body.data.map((l: { createdByName?: string }) => l.createdByName)).toEqual(['Lê Tiếp Nhận']);
+  });
+
   it.each(['fullName', 'dob', 'gender', 'phone', 'interestedCourseId'])('thiếu %s → 400 VALIDATION_FAILED theo trường', async (field) => {
     const b = body();
     delete (b as Record<string, unknown>)[field];

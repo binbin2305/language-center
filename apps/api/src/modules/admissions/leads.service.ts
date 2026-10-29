@@ -23,6 +23,7 @@ import { paginate } from '../../common/pagination';
 import { Models } from '../../database/models';
 import { Course } from '../../database/schemas/course.schema';
 import { Lead } from '../../database/schemas/lead.schema';
+import { User } from '../../database/schemas/user.schema';
 import { LeadLean, toLeadDto } from './admissions.mapper';
 import { DuplicatesService } from './duplicates.service';
 
@@ -54,9 +55,23 @@ export class LeadsService {
   constructor(
     @InjectModel(Models.Lead) private readonly leads: Model<Lead>,
     @InjectModel(Models.Course) private readonly courses: Model<Course>,
+    @InjectModel(Models.User) private readonly users: Model<User>,
     private readonly duplicates: DuplicatesService,
     private readonly audit: AuditService,
   ) {}
+
+  /** Maps leads to DTOs with the creator's name (one batched user lookup). */
+  private async present(rows: LeadLean[]): Promise<LeadDto[]> {
+    const ids = rows.flatMap((l) => (l.createdBy ? [l.createdBy] : []));
+    const users = ids.length ? await this.users.find({ _id: { $in: ids } }, { fullName: 1 }).lean() : [];
+    const names = new Map(users.map((u) => [String(u._id), u.fullName]));
+    return rows.map((l) => toLeadDto(l, l.createdBy ? names.get(String(l.createdBy)) : undefined));
+  }
+
+  private async presentOne(lead: LeadLean): Promise<LeadDto> {
+    const [dto] = await this.present([lead]);
+    return dto;
+  }
 
   private async assertCourseUsable(courseId: string): Promise<void> {
     const course = await this.courses.findById(courseId).lean();
@@ -81,7 +96,7 @@ export class LeadsService {
       status: LeadStatus.NEW,
       createdBy: user.id,
     });
-    return toLeadDto(doc.toObject() as unknown as LeadLean);
+    return this.presentOne(doc.toObject() as unknown as LeadLean);
   }
 
   async list(q: ListLeadsQuery) {
@@ -104,7 +119,7 @@ export class LeadsService {
       limit: q.limit,
       sort: q.sort && SORTS.has(q.sort) ? q.sort : '-createdAt',
     });
-    return { data: (page.data as unknown as LeadLean[]).map(toLeadDto), meta: page.meta };
+    return { data: await this.present(page.data as unknown as LeadLean[]), meta: page.meta };
   }
 
   private async findLean(id: string): Promise<LeadLean> {
@@ -115,7 +130,7 @@ export class LeadsService {
   }
 
   async get(id: string): Promise<LeadDto> {
-    return toLeadDto(await this.findLean(id));
+    return this.presentOne(await this.findLean(id));
   }
 
   async update(id: string, input: UpdateLeadInput): Promise<LeadDto> {
@@ -130,7 +145,7 @@ export class LeadsService {
       .findOneAndUpdate({ _id: id, deletedAt: null }, { $set: set }, { new: true, runValidators: true })
       .lean();
     if (!updated) throw new AppError(ErrorCode.NOT_FOUND);
-    return toLeadDto(updated as unknown as LeadLean);
+    return this.presentOne(updated as unknown as LeadLean);
   }
 
   async cancel(user: AuthUser, id: string, input: CancelLeadInput): Promise<LeadDto> {
@@ -152,6 +167,6 @@ export class LeadsService {
       before: { status: LeadStatus.NEW },
       after: { status: LeadStatus.CANCELLED, reason: input.reason },
     });
-    return toLeadDto(updated as unknown as LeadLean);
+    return this.presentOne(updated as unknown as LeadLean);
   }
 }

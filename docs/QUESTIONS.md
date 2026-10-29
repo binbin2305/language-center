@@ -1,3 +1,4 @@
 # Questions
 
 - D8 (Wave 1): FR-ADM-04 says a converted student may log in with email as well as the student code. Auth currently logs in by `username` only (the student code), and `createStudentAccount` is unchanged in Wave 1. Email login is deferred to Wave 3 (Lead). Open question: should login accept email for every role, or only STUDENT?
+- L-ADMISSIONS-1 item 5 (Wave 1 merge): the "lớp hiện tại" column and class picker on `/students` (DESIGN §4.4) are deferred to Wave 3 (Lead). `StudentDto` has no current-class field; adding it needs a rule for students with several ENROLLED enrollments and a teacher-scoped variant. Until then the class filter is reachable via `?classId=` only. (Item 2, `LeadDto.createdByName`, was done at the merge.)

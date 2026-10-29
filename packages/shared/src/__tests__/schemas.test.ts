@@ -106,6 +106,12 @@ describe('smoke: mỗi file schema', () => {
     expect(S.ListLeadsQuery.safeParse({ status: 'NEW', from: '2026-01-01' }).success).toBe(true);
     expect(S.CancelLeadInput.safeParse({ reason: 'x' }).success).toBe(true);
     expect(S.ConvertLeadResultDto.safeParse({ student: { ...studentDto }, tempPassword: 'x' }).success).toBe(true);
+    // L-ADMISSIONS-1 item 2: receiver ("người tiếp nhận") name.
+    const lead = {
+      ...l, id: id(3), email: null, status: 'NEW', studentId: null, createdBy: id(4), createdAt: ts, updatedAt: ts,
+    };
+    expect(S.LeadDto.parse({ ...lead, createdByName: 'Lê Tiếp Nhận' }).createdByName).toBe('Lê Tiếp Nhận');
+    expect(S.LeadDto.parse(lead).createdByName).toBeUndefined();
   });
   it('students', () => {
     expect(S.UpdateStudentContactInput.safeParse({ phone: '0912345678', email: 'a@b.vn' }).success).toBe(true);

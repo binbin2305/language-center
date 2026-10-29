@@ -72,6 +72,12 @@ export default function LeadsPage() {
         meta: { hideOnMobile: true },
         cell: ({ row }) => formatDate(row.original.createdAt),
       },
+      {
+        id: 'createdBy',
+        header: 'Người tiếp nhận',
+        meta: { hideOnMobile: true },
+        cell: ({ row }) => row.original.createdByName ?? '—',
+      },
       { id: 'status', header: 'Trạng thái', cell: ({ row }) => <StatusBadge group="lead" value={row.original.status} /> },
     ],
     [courseName],

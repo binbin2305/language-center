@@ -56,6 +56,8 @@ export const LeadDto = z.object({
   status: z.nativeEnum(LeadStatus),
   studentId: zObjectId.nullable(),
   createdBy: zObjectId.optional(),
+  /** Full name of `createdBy` ("người tiếp nhận", DESIGN §4.3). */
+  createdByName: z.string().optional(),
 });
 export type LeadDto = z.infer<typeof LeadDto>;
 

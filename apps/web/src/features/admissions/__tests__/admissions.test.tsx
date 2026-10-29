@@ -75,6 +75,15 @@ describe('danh sách lead (FR-ADM-01)', () => {
     await user.click(await screen.findByRole('option', { name: 'Mới' }));
     await waitFor(() => expect(seen).toContain('NEW'));
   });
+
+  it('cột "Người tiếp nhận" hiện createdByName (L-ADMISSIONS-1)', async () => {
+    mockCourses();
+    server.use(http.get('*/api/v1/leads', () => HttpResponse.json(page([lead({ createdByName: 'Lê Tiếp Nhận' })]))));
+    renderApp({ route: '/admissions/leads', user: makeUser('ACADEMIC_STAFF') });
+    const row = (await screen.findByText('Nguyễn Thị Lan', undefined, { timeout: 5000 })).closest('tr') as HTMLElement;
+    expect(screen.getByRole('columnheader', { name: 'Người tiếp nhận' })).toBeInTheDocument();
+    expect(within(row).getByText('Lê Tiếp Nhận')).toBeInTheDocument();
+  });
 });
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
