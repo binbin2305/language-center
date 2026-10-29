@@ -10,18 +10,18 @@ describe('FR-SCH-04..05 Sửa và hủy buổi học', () => {
   let t: TestApp;
   let manager: string;
   let staff: string;
-  let teacherTok: string;
   beforeAll(async () => {
     t = await createTestApp();
     manager = (await loginAs(t, Role.MANAGER)).token;
     staff = (await loginAs(t, Role.ACADEMIC_STAFF)).token;
-    teacherTok = (await loginAs(t, Role.TEACHER)).token;
   });
   beforeEach(() => t.clock.set(DEFAULT_NOW));
   afterAll(async () => {
     await t.close();
   });
 
+  const tokenFor = async (role: Role) =>
+    (await loginAs(t, role, role === Role.STUDENT ? { studentId: new Types.ObjectId() } : {})).token;
   const auth = (req: import('supertest').Test, token: string) => req.set('Authorization', `Bearer ${token}`);
   const patch = (id: string, token: string, body: object) => auth(t.http().patch(`/api/v1/sessions/${id}`), token).send(body);
   const cancel = (id: string, token: string, body: object) => auth(t.http().post(`/api/v1/sessions/${id}/cancel`), token).send(body);
@@ -117,9 +117,20 @@ describe('FR-SCH-04..05 Sửa và hủy buổi học', () => {
       expect(res.body.error.code).toBe(ErrorCode.SESSION_LOCKED);
     });
 
-    it('FR-SCH-04 giáo viên -> 403', async () => {
+    it('FR-SCH-04 buổi đã khóa trả 422 SESSION_LOCKED dù payload phòng/GV không hợp lệ', async () => {
+      const s = await seed({ startAt: new Date('2026-01-03T11:00:00Z'), endAt: new Date('2026-01-03T12:30:00Z') });
+      const badRoom = await patch(s.id, manager, { roomId: String(new Types.ObjectId()) });
+      expect(badRoom.status).toBe(422);
+      expect(badRoom.body.error.code).toBe(ErrorCode.SESSION_LOCKED);
+      const notTeacher = await makeUser(t.conn, { role: Role.ACADEMIC_STAFF });
+      const badTeacher = await patch(s.id, manager, { teacherId: String(notTeacher._id) });
+      expect(badTeacher.status).toBe(422);
+      expect(badTeacher.body.error.code).toBe(ErrorCode.SESSION_LOCKED);
+    });
+
+    it.each([Role.TEACHER, Role.STUDENT, Role.ADMIN])('FR-SCH-04 %s -> 403', async (role) => {
       const s = await seed();
-      expect((await patch(s.id, teacherTok, { roomId: String(s.room._id) })).status).toBe(403);
+      expect((await patch(s.id, await tokenFor(role), { roomId: String(s.room._id) })).status).toBe(403);
     });
   });
 
@@ -157,9 +168,9 @@ describe('FR-SCH-04..05 Sửa và hủy buổi học', () => {
       expect((await cancel(String(new Types.ObjectId()), manager, { reason: 'x' })).status).toBe(404);
     });
 
-    it('FR-SCH-05 giáo viên -> 403', async () => {
+    it.each([Role.TEACHER, Role.STUDENT, Role.ADMIN])('FR-SCH-05 %s -> 403', async (role) => {
       const s = await seed();
-      expect((await cancel(s.id, teacherTok, { reason: 'x' })).status).toBe(403);
+      expect((await cancel(s.id, await tokenFor(role), { reason: 'x' })).status).toBe(403);
     });
   });
 
@@ -197,9 +208,9 @@ describe('FR-SCH-04..05 Sửa và hủy buổi học', () => {
       expect((await cancelFuture(String(new Types.ObjectId()), manager, { reason: 'x' })).status).toBe(404);
     });
 
-    it('FR-SCH-05 giáo viên -> 403', async () => {
+    it.each([Role.TEACHER, Role.STUDENT, Role.ADMIN])('FR-SCH-05 %s -> 403', async (role) => {
       const cls = await makeClass(t.conn);
-      expect((await cancelFuture(String(cls._id), teacherTok, { reason: 'x' })).status).toBe(403);
+      expect((await cancelFuture(String(cls._id), await tokenFor(role), { reason: 'x' })).status).toBe(403);
     });
   });
 });

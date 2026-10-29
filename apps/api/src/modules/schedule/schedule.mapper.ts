@@ -24,3 +24,19 @@ export function toSessionDto(doc: SessionDoc): SessionDto {
     updatedAt: s.updatedAt.toISOString(),
   };
 }
+
+/** Read-model DTO (FR-SCH-06/08): adds display names and the derived `completed` flag. */
+export function toSessionViewDto(
+  doc: SessionDoc,
+  now: Date,
+  names: { classCode?: string; roomName?: string; teacherName?: string },
+): SessionDto {
+  const dto = toSessionDto(doc);
+  return {
+    ...dto,
+    completed: dto.attendanceTakenAt !== null && new Date(dto.endAt) < now,
+    ...(names.classCode !== undefined ? { classCode: names.classCode } : {}),
+    ...(names.roomName !== undefined ? { roomName: names.roomName } : {}),
+    ...(names.teacherName !== undefined ? { teacherName: names.teacherName } : {}),
+  };
+}

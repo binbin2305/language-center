@@ -1,9 +1,10 @@
-import { Body, Controller, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   BulkCreateSessionsInput,
   CancelSessionInput,
   CheckConflictsInput,
   CreateSessionInput,
+  ListSessionsQuery,
   Role,
   UpdateSessionInput,
 } from '@lc/shared';
@@ -17,6 +18,18 @@ import { ScheduleService } from './schedule.service';
 @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
 export class ScheduleController {
   constructor(private readonly svc: ScheduleService) {}
+
+  @Get()
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER, Role.STUDENT)
+  async list(@CurrentUser() user: AuthUser, @Query(new ZodValidationPipe(ListSessionsQuery)) query: ListSessionsQuery) {
+    return { data: await this.svc.list(query, user) };
+  }
+
+  @Get(':id')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER, Role.STUDENT)
+  async getOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return { data: await this.svc.getOne(id, user) };
+  }
 
   @Post()
   @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)

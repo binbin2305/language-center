@@ -265,7 +265,7 @@ describe('FR-SCH-01..03 Tạo buổi học và lịch lặp', () => {
   });
 
   describe('Phân quyền', () => {
-    it.each([Role.TEACHER, Role.STUDENT])('%s -> 403 trên cả 3 endpoint', async (role) => {
+    it.each([Role.TEACHER, Role.STUDENT, Role.ADMIN])('FR-SCH-01 %s -> 403 trên cả 3 endpoint', async (role) => {
       const { token } = await loginAs(t, role, role === Role.STUDENT ? { studentId: new Types.ObjectId() } : {});
       const s = await seed();
       expect((await post('', token, singleBody(s))).status).toBe(403);

@@ -21,7 +21,11 @@ import {
   toDateOnly,
   UserStatus,
   vnDay,
+  addVnDays,
+  startOfVnDay,
+  type ListSessionsQuery,
 } from '@lc/shared';
+import { ScopeService } from '../../common/scope/scope.service';
 import { ClockService } from '../../common/clock/clock.service';
 import { AuditService } from '../../common/audit/audit.service';
 import { CounterService } from '../../common/db/counter.service';
@@ -36,7 +40,10 @@ import type { Session, SessionDoc } from '../../database/schemas/session.schema'
 import type { User } from '../../database/schemas/user.schema';
 import { findSlotConflicts } from './conflict-checker';
 import { expandWeekly } from './recurrence';
-import { toSessionDto } from './schedule.mapper';
+import { toSessionDto, toSessionViewDto } from './schedule.mapper';
+import { ScheduleNotifier } from './schedule-notifier';
+
+const MAX_RANGE_DAYS = 92;
 
 interface Range {
   startAt: Date;
@@ -64,6 +71,8 @@ export class ScheduleService {
     private readonly audit: AuditService,
     private readonly counters: CounterService,
     private readonly clock: ClockService,
+    private readonly scope: ScopeService,
+    private readonly notifier: ScheduleNotifier,
   ) {}
 
   async checkConflicts(input: CheckConflictsInput): Promise<CheckConflictsResultDto> {
@@ -82,7 +91,7 @@ export class ScheduleService {
     const range = { startAt: new Date(input.startAt), endAt: new Date(input.endAt) };
     if (range.endAt <= range.startAt) throw fieldError('endAt', 'MUST_BE_AFTER_START');
 
-    return withTransaction(this.conn, async (s) => {
+    const result = await withTransaction(this.conn, async (s) => {
       const { cls, warnings } = await this.resolve(input, s);
       this.assertInClassRange(cls, [range]);
       await this.lockSchedule({ classId: input.classId, roomId: input.roomId, teacherId: input.teacherId }, s);
@@ -94,13 +103,15 @@ export class ScheduleService {
       await this.audit.log({ actor, action: AuditAction.CREATE, entity: Models.Session, entityId: doc._id, after: doc.toObject() }, s);
       return { session: toSessionDto(doc), warnings };
     });
+    await this.notifier.sessionCreated({ id: result.session.id, classId: input.classId, startAt: range.startAt });
+    return result;
   }
 
   async createBulk(input: BulkCreateSessionsInput, actor: AuthUser): Promise<BulkCreateSessionsResultDto> {
     if (input.endTime <= input.startTime) throw fieldError('endTime', 'MUST_BE_AFTER_START');
     if (input.fromDate > input.toDate) throw fieldError('toDate', 'MUST_BE_ON_OR_AFTER_FROM');
 
-    return withTransaction(this.conn, async (s) => {
+    const result = await withTransaction(this.conn, async (s) => {
       const { cls, warnings } = await this.resolve(input, s);
       // Bound the expansion by the class window before generating anything.
       this.assertDaysInClassRange(cls, [input.fromDate, input.toDate]);
@@ -124,13 +135,21 @@ export class ScheduleService {
         warnings,
       };
     });
+    const sorted = result.sessions.map((x) => new Date(x.startAt)).sort((a, b) => a.getTime() - b.getTime());
+    await this.notifier.seriesCreated(input.classId, sorted.length, sorted[0], sorted[sorted.length - 1]);
+    return result;
   }
 
   async update(id: string, input: UpdateSessionInput, actor: AuthUser): Promise<CreateSessionResultDto> {
-    return withTransaction(this.conn, async (s) => {
+    const { result, changed } = await withTransaction(this.conn, async (s) => {
       const current = await this.findOrThrow(id, s);
       if (current.status === SessionStatus.CANCELLED) throw new AppError(ErrorCode.SESSION_LOCKED);
       const changes = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
+      const now = this.clock.now();
+      // Lock check precedes resolve() so a locked session is 422 even when the payload is otherwise invalid.
+      if (Object.keys(changes).length > 0 && (current.attendanceTakenAt || current.startAt <= now)) {
+        throw new AppError(ErrorCode.SESSION_LOCKED);
+      }
       const merged = {
         classId: current.classId.toString(),
         roomId: input.roomId ?? current.roomId.toString(),
@@ -140,10 +159,8 @@ export class ScheduleService {
       };
       if (merged.endAt <= merged.startAt) throw fieldError('endAt', 'MUST_BE_AFTER_START');
       const { cls, warnings } = await this.resolve(merged, s);
-      if (Object.keys(changes).length === 0) return { session: toSessionDto(current), warnings };
+      if (Object.keys(changes).length === 0) return { result: { session: toSessionDto(current), warnings }, changed: false };
 
-      const now = this.clock.now();
-      if (current.attendanceTakenAt || current.startAt <= now) throw new AppError(ErrorCode.SESSION_LOCKED);
       const range = { startAt: merged.startAt, endAt: merged.endAt };
       this.assertInClassRange(cls, [range]);
       await this.lockSchedule(merged, s);
@@ -159,25 +176,31 @@ export class ScheduleService {
         { actor, action: AuditAction.UPDATE, entity: Models.Session, entityId: updated._id, before: current.toObject(), after: updated.toObject() },
         s,
       );
-      return { session: toSessionDto(updated), warnings };
+      return { result: { session: toSessionDto(updated), warnings }, changed: true };
     });
+    if (changed) {
+      await this.notifier.sessionUpdated({ id: result.session.id, classId: result.session.classId, startAt: new Date(result.session.startAt) });
+    }
+    return result;
   }
 
   async cancel(id: string, reason: string, actor: AuthUser): Promise<SessionDto> {
     const trimmed = this.requireReason(reason);
-    return withTransaction(this.conn, async (s) => {
+    const dto = await withTransaction(this.conn, async (s) => {
       const current = await this.findOrThrow(id, s);
       const updated = await this.cancelOne(current._id, trimmed, s);
       if (!updated) throw new AppError(ErrorCode.SESSION_NOT_CANCELLABLE);
       await this.auditCancel(current, updated, actor, s);
       return toSessionDto(updated);
     });
+    await this.notifier.sessionCancelled({ id: dto.id, classId: dto.classId, startAt: new Date(dto.startAt) }, trimmed);
+    return dto;
   }
 
   async cancelFuture(classId: string, reason: string, actor: AuthUser): Promise<CancelFutureSessionsResultDto> {
     const trimmed = this.requireReason(reason);
     if (!Types.ObjectId.isValid(classId)) throw new AppError(ErrorCode.NOT_FOUND);
-    return withTransaction(this.conn, async (s) => {
+    const result = await withTransaction(this.conn, async (s) => {
       if (!(await this.classes.exists({ _id: classId }).session(s))) throw new AppError(ErrorCode.NOT_FOUND);
       const future = await this.sessions
         .find({ classId, status: SessionStatus.SCHEDULED, startAt: { $gt: this.clock.now() } })
@@ -192,6 +215,74 @@ export class ScheduleService {
       }
       return { cancelled };
     });
+    if (result.cancelled > 0) await this.notifier.futureCancelled(classId, result.cancelled, trimmed);
+    return result;
+  }
+
+  /** GET /sessions (FR-SCH-06): sessions in [from, to] VN days, limited to the caller's scope. */
+  async list(query: ListSessionsQuery, user: AuthUser): Promise<SessionDto[]> {
+    const fromAt = startOfVnDay(query.from);
+    if (query.to < query.from) throw fieldError('to', 'MUST_BE_ON_OR_AFTER_FROM');
+    if (query.to > addVnDays(query.from, MAX_RANGE_DAYS)) throw fieldError('to', 'RANGE_TOO_LONG');
+    const toAt = startOfVnDay(addVnDays(query.to, 1));
+
+    const and: object[] = [{ startAt: { $gte: fromAt, $lt: toAt } }, await this.scopeFilter(user)];
+    if (query.classId) and.push({ classId: new Types.ObjectId(query.classId) });
+    if (query.teacherId) and.push({ teacherId: new Types.ObjectId(query.teacherId) });
+    if (query.roomId) and.push({ roomId: new Types.ObjectId(query.roomId) });
+    const docs = await this.sessions.find({ $and: and }).sort({ startAt: 1, _id: 1 });
+    return this.toViewDtos(docs);
+  }
+
+  /** GET /sessions/:id (FR-SCH-06): 404 when outside the caller's scope. */
+  async getOne(id: string, user: AuthUser): Promise<SessionDto> {
+    if (!Types.ObjectId.isValid(id)) throw new AppError(ErrorCode.NOT_FOUND);
+    const doc = await this.sessions.findOne({ $and: [{ _id: id }, await this.scopeFilter(user)] });
+    if (!doc) throw new AppError(ErrorCode.NOT_FOUND);
+    return (await this.toViewDtos([doc]))[0];
+  }
+
+  private async scopeFilter(user: AuthUser): Promise<object> {
+    const now = this.clock.now();
+    switch (user.role) {
+      case Role.STUDENT: {
+        if (!user.studentId) return { _id: { $in: [] } };
+        const [current, history] = await Promise.all([
+          this.scope.studentClassIds(user.studentId, 'current'),
+          this.scope.studentClassIds(user.studentId, 'history'),
+        ]);
+        return {
+          $or: [
+            { classId: { $in: current }, startAt: { $gt: now } },
+            { classId: { $in: history }, startAt: { $lte: now } },
+          ],
+        };
+      }
+      case Role.TEACHER:
+        return { $or: [{ classId: { $in: await this.scope.teacherClassIds(user.id) } }, { teacherId: user.id }] };
+      default:
+        return {};
+    }
+  }
+
+  private async toViewDtos(docs: SessionDoc[]): Promise<SessionDto[]> {
+    const ids = (pick: (d: SessionDoc) => Types.ObjectId) => [...new Set(docs.map((d) => String(pick(d))))].map((x) => new Types.ObjectId(x));
+    const [classes, rooms, teachers] = await Promise.all([
+      this.classes.find({ _id: { $in: ids((d) => d.classId) } }, { code: 1 }).lean(),
+      this.rooms.find({ _id: { $in: ids((d) => d.roomId) } }, { name: 1 }).lean(),
+      this.users.find({ _id: { $in: ids((d) => d.teacherId) } }, { fullName: 1 }).lean(),
+    ]);
+    const classCode = new Map(classes.map((c) => [String(c._id), c.code]));
+    const roomName = new Map(rooms.map((r) => [String(r._id), r.name]));
+    const teacherName = new Map(teachers.map((u) => [String(u._id), u.fullName]));
+    const now = this.clock.now();
+    return docs.map((d) =>
+      toSessionViewDto(d, now, {
+        classCode: classCode.get(String(d.classId)),
+        roomName: roomName.get(String(d.roomId)),
+        teacherName: teacherName.get(String(d.teacherId)),
+      }),
+    );
   }
 
   private requireReason(reason: string): string {
