@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { can } from '@lc/shared';
+import { can, CourseStatus } from '@lc/shared';
 import { ErrorState } from '@/components/common/error-state';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,10 @@ import { useAuth } from '@/auth/use-auth';
 import { formatDate } from '@/lib/format';
 import { ConvertDialog } from '../components/convert-dialog';
 import { StatusBadge } from '@/components/common/status-badge';
-import { useCourseOptions } from '../course-options';
+import { useCourses } from '@/features/courses/hooks';
 import { useLead } from '../hooks';
+
+const ACTIVE_COURSES = { status: CourseStatus.ACTIVE, limit: 100 };
 
 const GENDERS = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' } as const;
 
@@ -18,7 +20,7 @@ export default function LeadDetailPage() {
   const { id = '' } = useParams();
   const { user } = useAuth();
   const lead = useLead(id);
-  const courses = useCourseOptions();
+  const courses = useCourses(ACTIVE_COURSES);
   const [convertOpen, setConvertOpen] = useState(false);
 
   if (lead.isLoading || lead.isError || !lead.data)
@@ -33,7 +35,7 @@ export default function LeadDetailPage() {
       </>
     );
   const l = lead.data;
-  const courseName = courses.data?.find((c) => c.id === l.interestedCourseId)?.name ?? '—';
+  const courseName = courses.data?.data.find((c) => c.id === l.interestedCourseId)?.name ?? '—';
   const rows: Array<[string, string]> = [
     ['Họ tên', l.fullName],
     ['Ngày sinh', formatDate(l.dob)],

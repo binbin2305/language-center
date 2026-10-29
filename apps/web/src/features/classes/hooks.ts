@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateClassInput, UpdateClassInput } from '@lc/shared';
-import { catalogApi, classesApi, type ClassListParams } from './api';
+import { classesApi, type ClassListParams } from './api';
 
 const KEY = 'classes';
 
@@ -51,12 +51,3 @@ export function useDeactivateClass() {
   const invalidate = useInvalidate();
   return useMutation({ mutationFn: classesApi.deactivate, onSuccess: invalidate });
 }
-
-// TODO W1-MERGE: use catalog hooks
-export const useTeacherOptions = () =>
-  useQuery({ queryKey: ['catalog', 'teachers'], queryFn: catalogApi.teachers, select: (r) => r.data });
-export const useCourseOptions = () =>
-  useQuery({ queryKey: ['catalog', 'courses'], queryFn: catalogApi.courses, select: (r) => r.data });
-/** `GET /rooms` is M,S only: pass `enabled=false` for other roles. */
-export const useRoomOptions = (enabled = true) =>
-  useQuery({ queryKey: ['catalog', 'rooms'], queryFn: catalogApi.rooms, select: (r) => r.data, enabled });

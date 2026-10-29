@@ -16,11 +16,13 @@ import {
 } from '@/components/ui/select';
 import { ApiError } from '@/lib/api';
 import { errorMessage } from '@/lib/error-messages';
-import {
-  useCourseOptions, useCreateClass, useRoomOptions, useTeacherOptions, useUpdateClass,
-} from '../hooks';
+import { useCourses } from '@/features/courses/hooks';
+import { useRooms } from '@/features/rooms/hooks';
+import { useTeachers } from '@/features/users/hooks';
+import { useCreateClass, useUpdateClass } from '../hooks';
 
 const NO_VALUE = '__none__';
+const CATALOG_PARAMS = { limit: 100 };
 const REQUIRED = 'Vui lòng nhập thông tin này';
 const PICK = 'Vui lòng chọn một giá trị';
 const PICK_DATE = 'Vui lòng chọn ngày';
@@ -144,9 +146,10 @@ export function ClassFormDialog({ open, onOpenChange, cls }: ClassFormDialogProp
   const editing = Boolean(cls);
   const create = useCreateClass();
   const update = useUpdateClass(cls?.id ?? '');
-  const teachers = useTeacherOptions();
-  const courses = useCourseOptions();
-  const rooms = useRoomOptions();
+  // Only rendered for classes.manage (M, S), who may read teachers and rooms.
+  const teachers = useTeachers();
+  const courses = useCourses(CATALOG_PARAMS);
+  const rooms = useRooms(CATALOG_PARAMS);
   const form = useForm<FormValues, unknown, FormOutput>({
     resolver: async (values, ctx, opts) => {
       const res = await zodResolver(buildSchema(cls?.currentSize ?? 0), { errorMap, path: [], async: false })(values, ctx, opts);
@@ -166,8 +169,8 @@ export function ClassFormDialog({ open, onOpenChange, cls }: ClassFormDialogProp
   }, [open, cls, form]);
 
   const teacherOptions = (teachers.data ?? []).map((t) => ({ id: t.id, label: t.fullName }));
-  const courseOptions = (courses.data ?? []).map((c) => ({ id: c.id, label: `${c.code} - ${c.name}` }));
-  const roomOptions = (rooms.data ?? []).map((r) => ({ id: r.id, label: `${r.code} - ${r.name}` }));
+  const courseOptions = (courses.data?.data ?? []).map((c) => ({ id: c.id, label: `${c.code} - ${c.name}` }));
+  const roomOptions = (rooms.data?.data ?? []).map((r) => ({ id: r.id, label: `${r.code} - ${r.name}` }));
 
   const onSubmit = form.handleSubmit(async (v) => {
     try {

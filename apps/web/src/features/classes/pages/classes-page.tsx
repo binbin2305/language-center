@@ -18,7 +18,10 @@ import {
 import { useAuth } from '@/auth/use-auth';
 import { formatDate } from '@/lib/format';
 import { STATUS_LABELS } from '@/lib/status';
-import { useClasses, useCourseOptions } from '../hooks';
+import { useCourses } from '@/features/courses/hooks';
+import { useClasses } from '../hooks';
+
+const COURSE_PARAMS = { limit: 100 };
 
 const ClassFormDialog = lazy(() =>
   import('../components/class-form-dialog').then((m) => ({ default: m.ClassFormDialog })),
@@ -64,7 +67,7 @@ export default function ClassesPage() {
   const [status, setStatus] = useState<ClassStatus | ''>('');
   const [hasSeat, setHasSeat] = useState(false);
   const [creating, setCreating] = useState(false);
-  const courses = useCourseOptions();
+  const courses = useCourses(COURSE_PARAMS);
   const list = useClasses({
     page,
     limit: LIMIT,
@@ -100,7 +103,7 @@ export default function ClassesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Tất cả khóa học</SelectItem>
-            {(courses.data ?? []).map((c) => (
+            {(courses.data?.data ?? []).map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.name}
               </SelectItem>

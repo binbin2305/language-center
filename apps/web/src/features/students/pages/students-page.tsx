@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
-  ALL_STUDENT_STATUSES, type StudentBriefDto, type StudentDto, type StudentStatus,
+  ALL_STUDENT_STATUSES, CourseStatus, type StudentBriefDto, type StudentDto, type StudentStatus,
 } from '@lc/shared';
 import { DataTable } from '@/components/common/data-table';
 import { FilterBar } from '@/components/common/filter-bar';
@@ -10,11 +10,12 @@ import { PageHeader } from '@/components/common/page-header';
 import { SearchInput } from '@/components/common/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDate } from '@/lib/format';
-// TODO W1-MERGE: use useCourses from features/courses (L-CATALOG).
-import { useCourseOptions } from '@/features/admissions/course-options';
+import { useCourses } from '@/features/courses/hooks';
 import { StatusBadge } from '@/components/common/status-badge';
 import { useStudents } from '../hooks';
 import { statusLabel } from '@/lib/status';
+
+const ACTIVE_COURSES = { status: CourseStatus.ACTIVE, limit: 100 };
 
 const ALL = 'ALL';
 const LIMIT = 20;
@@ -28,7 +29,7 @@ export default function StudentsPage() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<StudentStatus | undefined>();
   const [courseId, setCourseId] = useState<string | undefined>();
-  const courses = useCourseOptions();
+  const courses = useCourses(ACTIVE_COURSES);
   const students = useStudents({ page, limit: LIMIT, q: q || undefined, status, courseId, classId });
 
   const columns = useMemo<ColumnDef<Row>[]>(
@@ -86,7 +87,7 @@ export default function StudentsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Tất cả khóa học</SelectItem>
-            {(courses.data ?? []).map((c) => (
+            {(courses.data?.data ?? []).map((c) => (
               <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
             ))}
           </SelectContent>

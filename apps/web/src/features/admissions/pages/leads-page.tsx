@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ALL_LEAD_STATUSES, can, type LeadDto, type LeadStatus } from '@lc/shared';
+import { ALL_LEAD_STATUSES, can, CourseStatus, type LeadDto, type LeadStatus } from '@lc/shared';
 import { DataTable } from '@/components/common/data-table';
 import type { DateRangeValue } from '@/components/common/date-range-picker';
 import { FilterBar } from '@/components/common/filter-bar';
@@ -11,10 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/auth/use-auth';
 import { formatDate } from '@/lib/format';
-import { useCourseOptions } from '../course-options';
+import { useCourses } from '@/features/courses/hooks';
 import { useLeads } from '../hooks';
 import { StatusBadge } from '@/components/common/status-badge';
 import { statusLabel } from '@/lib/status';
+
+const ACTIVE_COURSES = { status: CourseStatus.ACTIVE, limit: 100 };
 
 // Calendar + date-fns locale are heavy; load them only once the list page is on screen.
 const DateRangePicker = lazy(() =>
@@ -31,7 +33,7 @@ export default function LeadsPage() {
   const [status, setStatus] = useState<LeadStatus | undefined>();
   const [courseId, setCourseId] = useState<string | undefined>();
   const [range, setRange] = useState<DateRangeValue>({ from: null, to: null });
-  const courses = useCourseOptions();
+  const courses = useCourses(ACTIVE_COURSES);
   const leads = useLeads({
     page,
     limit: LIMIT,
@@ -43,7 +45,7 @@ export default function LeadsPage() {
   });
 
   const courseName = useMemo(
-    () => new Map((courses.data ?? []).map((c) => [c.id, c.name])),
+    () => new Map((courses.data?.data ?? []).map((c) => [c.id, c.name])),
     [courses.data],
   );
   const columns = useMemo<ColumnDef<LeadDto>[]>(
@@ -112,7 +114,7 @@ export default function LeadsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Tất cả khóa học</SelectItem>
-            {(courses.data ?? []).map((c) => (
+            {(courses.data?.data ?? []).map((c) => (
               <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
             ))}
           </SelectContent>

@@ -1,10 +1,8 @@
 import type {
   ClassDto,
   ClassStudentDto,
-  CourseDto,
   CreateClassInput,
   ListClassesQuery,
-  RoomDto,
   UpdateClassInput,
 } from '@lc/shared';
 import { apiDelete, apiGet, apiGetPage, apiPatch, apiPost } from '@/lib/api';
@@ -22,16 +20,4 @@ export const classesApi = {
   deactivate: (id: string) => apiPost<ClassDto>(`classes/${id}/deactivate`),
   roster: (id: string, params: { page: number; limit: number }) =>
     apiGetPage<ClassStudentDto>(`classes/${id}/students`, params),
-};
-
-export interface TeacherOption {
-  id: string;
-  fullName: string;
-}
-
-// TODO W1-MERGE: use catalog hooks
-export const catalogApi = {
-  teachers: () => apiGetPage<TeacherOption>('teachers', { limit: 100 }),
-  courses: () => apiGetPage<CourseDto>('courses', { limit: 100 }),
-  rooms: () => apiGetPage<RoomDto>('rooms', { limit: 100 }),
 };

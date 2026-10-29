@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { ALL_GENDERS, DuplicatePersonDetails, type Gender } from '@lc/shared';
+import { ALL_GENDERS, CourseStatus, DuplicatePersonDetails, type Gender } from '@lc/shared';
 import { DatePicker } from '@/components/common/date-picker';
 import { FormField } from '@/components/common/form-field';
 import { PageHeader } from '@/components/common/page-header';
@@ -13,12 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError } from '@/lib/api';
 import { errorMessage } from '@/lib/error-messages';
-import { useCourseOptions } from '../course-options';
+import { useCourses } from '@/features/courses/hooks';
 import { useCreateLead } from '../hooks';
 import { DuplicateDialog } from '../components/duplicate-dialog';
 import {
   LeadFormSchema, leadErrorMap, type LeadFormInput, type LeadFormOutput,
 } from '../lead-form-schema';
+
+const ACTIVE_COURSES = { status: CourseStatus.ACTIVE, limit: 100 };
 
 const GENDER_LABELS: Record<Gender, string> = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' };
 const FIELD_NAMES: ReadonlyArray<keyof LeadFormInput> = [
@@ -27,7 +29,7 @@ const FIELD_NAMES: ReadonlyArray<keyof LeadFormInput> = [
 
 export default function LeadFormPage() {
   const navigate = useNavigate();
-  const courses = useCourseOptions();
+  const courses = useCourses(ACTIVE_COURSES);
   const create = useCreateLead();
   const [pending, setPending] = useState<LeadFormOutput | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicatePersonDetails['duplicates']>([]);
@@ -139,7 +141,7 @@ export default function LeadFormPage() {
                     <SelectValue placeholder="Chọn khóa học" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(courses.data ?? []).map((c) => (
+                    {(courses.data?.data ?? []).map((c) => (
                       <SelectItem key={c.id} value={c.id}>{`${c.code} - ${c.name}`}</SelectItem>
                     ))}
                   </SelectContent>

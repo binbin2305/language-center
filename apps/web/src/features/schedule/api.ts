@@ -14,8 +14,8 @@ import { apiGet, apiPatch, apiPost } from '@/lib/api';
 
 export type SessionListParams = ListSessionsQuery;
 
-// Class / room / teacher pickers use the shared EntitySelect (catalog + classes endpoints).
-// TODO W1-MERGE: replace with the catalog / classes hooks once those lanes land on main.
+// Class / room / teacher pickers use the shared searchable EntitySelect (components/common), not
+// the flat catalog lists: classes and rooms can outgrow one page and the filter bar is M, S only.
 export const scheduleApi = {
   list: (params: SessionListParams) => apiGet<SessionDto[]>('sessions', params),
   checkConflicts: (body: CheckConflictsInput) =>

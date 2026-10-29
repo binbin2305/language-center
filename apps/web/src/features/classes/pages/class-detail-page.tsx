@@ -18,7 +18,8 @@ import { errorMessage } from '@/lib/error-messages';
 import { formatDate } from '@/lib/format';
 import { toast } from 'sonner';
 import { DeleteClassDialog } from '../components/delete-class-dialog';
-import { useClass, useDeactivateClass, useRoomOptions } from '../hooks';
+import { useRooms } from '@/features/rooms/hooks';
+import { useClass, useDeactivateClass } from '../hooks';
 
 const ClassFormDialog = lazy(() =>
   import('../components/class-form-dialog').then((m) => ({ default: m.ClassFormDialog })),
@@ -34,10 +35,11 @@ export default function ClassDetailPage() {
   const cls = useClass(id);
   const deactivate = useDeactivateClass();
   const manage = can(user, 'classes.manage');
-  const rooms = useRoomOptions(manage);
+  // GET /rooms is M, S only.
+  const rooms = useRooms({ limit: 100 }, manage);
   const c = cls.data;
 
-  const room = c?.defaultRoomId ? rooms.data?.find((r) => r.id === c.defaultRoomId) : undefined;
+  const room = c?.defaultRoomId ? rooms.data?.data.find((r) => r.id === c.defaultRoomId) : undefined;
 
   const header = cls.isError ? (
     <ErrorState description={errorMessage(cls.error)} onRetry={() => void cls.refetch()} />
