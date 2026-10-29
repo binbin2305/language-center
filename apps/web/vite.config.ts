@@ -17,5 +17,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./test/setup.ts'],
+    // Page tests wait up to 5s for a lazy route's first chunk; the default 5s test budget left no
+    // room for the interactions after it when the whole monorepo suite runs in parallel.
+    testTimeout: 15_000,
   },
 });
