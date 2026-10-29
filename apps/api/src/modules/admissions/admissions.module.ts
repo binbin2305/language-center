@@ -6,11 +6,13 @@ import { ConvertService } from './convert.service';
 import { DuplicatesService } from './duplicates.service';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
+import { StudentsController } from './students.controller';
+import { StudentsService } from './students.service';
 
 @Module({
   imports: [UsersModule, EnrollmentsModule],
-  controllers: [LeadsController],
-  providers: [AdmissionsService, LeadsService, DuplicatesService, ConvertService],
+  controllers: [LeadsController, StudentsController],
+  providers: [AdmissionsService, LeadsService, StudentsService, DuplicatesService, ConvertService],
   exports: [AdmissionsService, DuplicatesService],
 })
 export class AdmissionsModule {}
