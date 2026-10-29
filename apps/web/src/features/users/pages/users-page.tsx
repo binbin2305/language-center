@@ -8,24 +8,21 @@ import { DataTable } from '@/components/common/data-table';
 import { FilterBar } from '@/components/common/filter-bar';
 import { PageHeader } from '@/components/common/page-header';
 import { SearchInput } from '@/components/common/search-input';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/use-auth';
 import { errorMessage } from '@/lib/error-messages';
-import { NativeSelect } from '@/features/settings/components/native-select';
+import { CatalogStatusBadge, catalogStatusLabel, OptionSelect } from '@/features/settings/catalog-shared';
 import { TempPasswordDialog } from '../components/temp-password-dialog';
 import { UserFormDialog } from '../components/user-form-dialog';
 import { useLockUser, useResetPassword, useUnlockUser, useUsers } from '../hooks';
-import { ROLE_LABELS, USER_STATUS_LABELS } from '../roles';
+import { canActOnUser } from '../can-act-on-user';
+import { ROLE_LABELS } from '../roles';
 
 const LIMIT = 20;
 type Action = { kind: 'lock' | 'unlock' | 'reset'; user: UserDto };
 
-const STATUS_CLASS: Record<UserDto['status'], string> = {
-  ACTIVE: 'border-transparent bg-success/15 text-success',
-  LOCKED: 'border-transparent bg-destructive/15 text-destructive',
-  DISABLED: 'border-transparent bg-muted text-muted-foreground',
-};
+const STATUS_OPTIONS = (['ACTIVE', 'LOCKED', 'DISABLED'] as const).map((s) => ({ value: s, label: catalogStatusLabel(s) }));
+const ROLE_OPTIONS = ALL_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }));
 
 const COPY = {
   lock: { title: 'Khóa tài khoản', confirm: 'Khóa tài khoản', destructive: true,
@@ -56,10 +53,6 @@ export default function UsersPage() {
   const reset = useResetPassword();
   const pending = lock.isPending || unlock.isPending || reset.isPending;
 
-  // Self actions are rejected by the API; a manager cannot act on an admin account.
-  const actionable = (u: UserDto) =>
-    canManage && u.id !== me?.id && !(me?.role === 'MANAGER' && u.role === 'ADMIN');
-
   const run = async () => {
     if (!action) return;
     const { kind, user } = action;
@@ -88,18 +81,14 @@ export default function UsersPage() {
       { id: 'role', header: 'Vai trò', cell: ({ row }) => ROLE_LABELS[row.original.role] },
       {
         id: 'status', header: 'Trạng thái',
-        cell: ({ row }) => (
-          <Badge variant="outline" className={STATUS_CLASS[row.original.status]}>
-            {USER_STATUS_LABELS[row.original.status]}
-          </Badge>
-        ),
+        cell: ({ row }) => <CatalogStatusBadge value={row.original.status} />,
       },
       {
         id: 'actions',
         header: () => <span className="sr-only">Thao tác</span>,
         cell: ({ row }) => {
           const u = row.original;
-          if (!actionable(u)) return null;
+          if (!canActOnUser(me, u)) return null;
           return (
             <div className="flex flex-wrap justify-end gap-1">
               {u.status === 'ACTIVE' ? (
@@ -114,8 +103,7 @@ export default function UsersPage() {
         },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canManage, me?.id, me?.role],
+    [me],
   );
 
   return (
@@ -132,16 +120,8 @@ export default function UsersPage() {
       />
       <FilterBar>
         <SearchInput value={q} onChange={(v) => { setQ(v); setPage(1); }} placeholder="Tìm theo tên hoặc email" aria-label="Tìm tài khoản" className="w-64" />
-        <NativeSelect aria-label="Lọc theo vai trò" className="w-44" value={role} onChange={(e) => { setRole(e.target.value); setPage(1); }}>
-          <option value="">Mọi vai trò</option>
-          {ALL_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-        </NativeSelect>
-        <NativeSelect aria-label="Lọc theo trạng thái" className="w-44" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-          <option value="">Mọi trạng thái</option>
-          {(Object.keys(USER_STATUS_LABELS) as UserDto['status'][]).map((s) => (
-            <option key={s} value={s}>{USER_STATUS_LABELS[s]}</option>
-          ))}
-        </NativeSelect>
+        <OptionSelect aria-label="Lọc theo vai trò" className="w-44" allLabel="Mọi vai trò" options={ROLE_OPTIONS} value={role} onValueChange={(v) => { setRole(v); setPage(1); }} />
+        <OptionSelect aria-label="Lọc theo trạng thái" className="w-44" allLabel="Mọi trạng thái" options={STATUS_OPTIONS} value={status} onValueChange={(v) => { setStatus(v); setPage(1); }} />
       </FilterBar>
       <DataTable
         columns={columns}

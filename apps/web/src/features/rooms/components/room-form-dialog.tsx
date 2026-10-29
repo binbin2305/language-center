@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { CreateRoomInput, UpdateRoomInput, type RoomDto } from '@lc/shared';
+import type { z } from 'zod';
+import { CreateRoomInput, RoomStatus, type RoomDto } from '@lc/shared';
 import { FormField } from '@/components/common/form-field';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,65 +11,47 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { errorMessage } from '@/lib/error-messages';
-import { NativeSelect } from '@/features/settings/components/native-select';
-import { applyServerFieldErrors, schemaResolver, toNumber } from '@/features/settings/form-utils';
+import {
+  applyServerFieldErrors, catalogStatusLabel, OptionSelect, viParams,
+} from '@/features/settings/catalog-shared';
 import { useCreateRoom, useUpdateRoom } from '../hooks';
 
-interface FormValues {
-  code: string;
-  name: string;
-  capacity: string;
-  status: 'ACTIVE' | 'INACTIVE';
-}
-
-const EMPTY: FormValues = { code: '', name: '', capacity: '', status: 'ACTIVE' };
-
-const toInput = (v: FormValues) => ({
-  code: v.code,
-  name: v.name,
-  capacity: toNumber(v.capacity),
-  status: v.status,
-});
-const omitCode = (input: ReturnType<typeof toInput>) =>
-  Object.fromEntries(Object.entries(input).filter(([k]) => k !== 'code'));
+type FormInput = z.input<typeof CreateRoomInput>;
+type FormOutput = z.output<typeof CreateRoomInput>;
 
 const MESSAGES = {
   code: 'Nhập mã phòng (tối đa 30 ký tự).',
   name: 'Nhập tên phòng.',
   capacity: 'Sức chứa phải là số nguyên lớn hơn 0.',
 };
+const STATUS_OPTIONS = [RoomStatus.ACTIVE, RoomStatus.INACTIVE].map((s) => ({ value: s, label: catalogStatusLabel(s) }));
+const EMPTY: Partial<FormInput> = { code: '', name: '', status: RoomStatus.ACTIVE };
 
 export function RoomFormDialog({
   open, onOpenChange, room,
 }: { open: boolean; onOpenChange: (o: boolean) => void; room: RoomDto | null }) {
-  const editing = room !== null;
   const create = useCreateRoom();
   const update = useUpdateRoom();
-  const form = useForm<FormValues>({
+  const { register, control, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = useForm<FormInput, unknown, FormOutput>({
     defaultValues: EMPTY,
-    resolver: schemaResolver<FormValues>(editing ? UpdateRoomInput : CreateRoomInput, (v) => {
-      const input = toInput(v);
-      return editing ? omitCode(input) : input;
-    }, MESSAGES),
+    resolver: zodResolver(CreateRoomInput, viParams(MESSAGES)),
   });
-  const { register, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = form;
 
   useEffect(() => {
-    if (open) {
-      reset(room ? { code: room.code, name: room.name, capacity: String(room.capacity), status: room.status } : EMPTY);
-    }
+    if (open) reset(room ? { code: room.code, name: room.name, capacity: room.capacity, status: room.status } : EMPTY);
   }, [open, room, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
-    const input = toInput(values);
     try {
       if (room) {
-        await update.mutateAsync({ id: room.id, input: UpdateRoomInput.parse(omitCode(input)) });
+        // code is immutable: the strict update schema on the server rejects it
+        const { code, ...rest } = values;
+        void code;
+        await update.mutateAsync({ id: room.id, input: rest });
         toast.success(`Đã cập nhật phòng ${room.code}`);
       } else {
-        const parsed = CreateRoomInput.parse(input);
-        await create.mutateAsync(parsed);
-        toast.success(`Đã tạo phòng ${parsed.code}`);
+        await create.mutateAsync(values);
+        toast.success(`Đã tạo phòng ${values.code}`);
       }
       onOpenChange(false);
     } catch (e) {
@@ -79,25 +63,28 @@ export function RoomFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editing ? 'Sửa phòng học' : 'Thêm phòng học'}</DialogTitle>
+          <DialogTitle>{room ? 'Sửa phòng học' : 'Thêm phòng học'}</DialogTitle>
           <DialogDescription>Mã phòng không đổi được sau khi tạo.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3" noValidate>
           <FormField label="Mã" required error={errors.code?.message}>
-            {(p) => <Input {...p} {...register('code')} disabled={editing} />}
+            {(p) => <Input {...p} {...register('code')} readOnly={room !== null} />}
           </FormField>
           <FormField label="Tên phòng" required error={errors.name?.message}>
             {(p) => <Input {...p} {...register('name')} />}
           </FormField>
           <FormField label="Sức chứa" required error={errors.capacity?.message}>
-            {(p) => <Input {...p} inputMode="numeric" {...register('capacity')} />}
+            {(p) => <Input {...p} inputMode="numeric" {...register('capacity', { valueAsNumber: true })} />}
           </FormField>
           <FormField label="Trạng thái">
             {(p) => (
-              <NativeSelect {...p} {...register('status')}>
-                <option value="ACTIVE">Đang hoạt động</option>
-                <option value="INACTIVE">Ngừng hoạt động</option>
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="status"
+                render={({ field }) => (
+                  <OptionSelect {...p} options={STATUS_OPTIONS} value={field.value ?? RoomStatus.ACTIVE} onValueChange={field.onChange} />
+                )}
+              />
             )}
           </FormField>
           <DialogFooter>

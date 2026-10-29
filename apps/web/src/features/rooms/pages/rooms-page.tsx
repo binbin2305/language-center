@@ -8,12 +8,12 @@ import { PageHeader } from '@/components/common/page-header';
 import { SearchInput } from '@/components/common/search-input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/use-auth';
-import { ActiveBadge } from '@/features/settings/components/active-badge';
-import { NativeSelect } from '@/features/settings/components/native-select';
+import { CatalogStatusBadge, catalogStatusLabel, OptionSelect } from '@/features/settings/catalog-shared';
 import { RoomFormDialog } from '../components/room-form-dialog';
 import { useRooms } from '../hooks';
 
 const LIMIT = 20;
+const STATUS_OPTIONS = (['ACTIVE', 'INACTIVE'] as const).map((s) => ({ value: s, label: catalogStatusLabel(s) }));
 
 export default function RoomsPage() {
   const { user } = useAuth();
@@ -31,7 +31,7 @@ export default function RoomsPage() {
       { accessorKey: 'code', header: 'Mã' },
       { accessorKey: 'name', header: 'Tên phòng' },
       { accessorKey: 'capacity', header: 'Sức chứa' },
-      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <ActiveBadge value={row.original.status} /> },
+      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <CatalogStatusBadge value={row.original.status} /> },
       ...(canManage
         ? [{
             id: 'actions',
@@ -64,11 +64,7 @@ export default function RoomsPage() {
       />
       <FilterBar>
         <SearchInput value={q} onChange={(v) => { setQ(v); setPage(1); }} placeholder="Tìm theo mã hoặc tên" aria-label="Tìm phòng học" className="w-64" />
-        <NativeSelect aria-label="Lọc theo trạng thái" className="w-48" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-          <option value="">Mọi trạng thái</option>
-          <option value="ACTIVE">Đang hoạt động</option>
-          <option value="INACTIVE">Ngừng hoạt động</option>
-        </NativeSelect>
+        <OptionSelect aria-label="Lọc theo trạng thái" className="w-48" allLabel="Mọi trạng thái" options={STATUS_OPTIONS} value={status} onValueChange={(v) => { setStatus(v); setPage(1); }} />
       </FilterBar>
       <DataTable
         columns={columns}

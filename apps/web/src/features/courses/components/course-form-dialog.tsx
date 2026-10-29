@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { CreateCourseInput, UpdateCourseInput, type CourseDto } from '@lc/shared';
+import { z } from 'zod';
+import { CourseStatus, CreateCourseInput, type CourseDto } from '@lc/shared';
 import { FormField } from '@/components/common/form-field';
 import { MoneyInput } from '@/components/common/money-input';
 import { Button } from '@/components/ui/button';
@@ -11,49 +13,20 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { errorMessage } from '@/lib/error-messages';
-import { NativeSelect } from '@/features/settings/components/native-select';
-import { applyServerFieldErrors, schemaResolver, toNumber } from '@/features/settings/form-utils';
+import {
+  applyServerFieldErrors, catalogStatusLabel, OptionSelect, viParams,
+} from '@/features/settings/catalog-shared';
 import { useCreateCourse, useUpdateCourse } from '../hooks';
 
-interface FormValues {
-  code: string;
-  name: string;
-  language: string;
-  levels: string; // comma separated
-  totalSessions: string;
-  baseFee: number | null;
-  description: string;
-  status: 'ACTIVE' | 'ARCHIVED';
-}
-
-const EMPTY: FormValues = {
-  code: '', name: '', language: '', levels: '', totalSessions: '', baseFee: null, description: '', status: 'ACTIVE',
-};
-
-const toForm = (c: CourseDto): FormValues => ({
-  code: c.code,
-  name: c.name,
-  language: c.language,
-  levels: c.levels.join(', '),
-  totalSessions: String(c.totalSessions),
-  baseFee: c.baseFee,
-  description: c.description ?? '',
-  status: c.status,
+// The form edits levels as comma separated text; the shared schema receives the array.
+const FormSchema = CreateCourseInput.extend({
+  levels: z
+    .string()
+    .transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean))
+    .pipe(CreateCourseInput.shape.levels),
 });
-
-const toInput = (v: FormValues) => ({
-  code: v.code,
-  name: v.name,
-  language: v.language,
-  levels: v.levels.split(',').map((s) => s.trim()).filter(Boolean),
-  totalSessions: toNumber(v.totalSessions),
-  baseFee: v.baseFee ?? Number.NaN,
-  description: v.description.trim() || undefined,
-  status: v.status,
-});
-
-const omitCode = (input: ReturnType<typeof toInput>) =>
-  Object.fromEntries(Object.entries(input).filter(([k]) => k !== 'code'));
+type FormInput = z.input<typeof FormSchema>;
+type FormOutput = z.output<typeof FormSchema>;
 
 const MESSAGES = {
   code: 'Nhập mã khóa học (tối đa 30 ký tự).',
@@ -62,39 +35,48 @@ const MESSAGES = {
   levels: 'Nhập ít nhất một trình độ, cách nhau bằng dấu phẩy.',
   totalSessions: 'Nhập tổng số buổi là số nguyên lớn hơn 0.',
   baseFee: 'Nhập học phí hợp lệ.',
+  description: 'Mô tả quá dài (tối đa 2000 ký tự).',
 };
+const STATUS_OPTIONS = [CourseStatus.ACTIVE, CourseStatus.ARCHIVED].map((s) => ({ value: s, label: catalogStatusLabel(s) }));
+
+const EMPTY: Partial<FormInput> = { code: '', name: '', language: '', levels: '', description: '', status: CourseStatus.ACTIVE };
+
+const toForm = (c: CourseDto): FormInput => ({
+  code: c.code,
+  name: c.name,
+  language: c.language,
+  levels: c.levels.join(', '),
+  totalSessions: c.totalSessions,
+  baseFee: c.baseFee,
+  description: c.description ?? '',
+  status: c.status,
+});
 
 export function CourseFormDialog({
   open, onOpenChange, course,
 }: { open: boolean; onOpenChange: (o: boolean) => void; course: CourseDto | null }) {
-  const editing = course !== null;
   const create = useCreateCourse();
   const update = useUpdateCourse();
-  const form = useForm<FormValues>({
+  const { register, control, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = useForm<FormInput, unknown, FormOutput>({
     defaultValues: EMPTY,
-    // code is immutable on edit, so the update schema (no code) applies there
-    resolver: schemaResolver<FormValues>(editing ? UpdateCourseInput : CreateCourseInput, (v) => {
-      const input = toInput(v);
-      return editing ? omitCode(input) : input;
-    }, MESSAGES),
+    resolver: zodResolver(FormSchema, viParams(MESSAGES)),
   });
-  const { register, handleSubmit, setError, reset, control, formState: { errors, isSubmitting } } = form;
 
   useEffect(() => {
     if (open) reset(course ? toForm(course) : EMPTY);
   }, [open, course, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
-    const input = toInput(values);
     try {
       if (course) {
-        // code is immutable; the update schema is strict and rejects it
-        await update.mutateAsync({ id: course.id, input: UpdateCourseInput.parse(omitCode(input)) });
+        // code is immutable: the strict update schema on the server rejects it
+        const { code, ...rest } = values;
+        void code;
+        await update.mutateAsync({ id: course.id, input: rest });
         toast.success(`Đã cập nhật khóa học ${course.code}`);
       } else {
-        const parsed = CreateCourseInput.parse(input);
-        await create.mutateAsync(parsed);
-        toast.success(`Đã tạo khóa học ${parsed.code}`);
+        await create.mutateAsync(values);
+        toast.success(`Đã tạo khóa học ${values.code}`);
       }
       onOpenChange(false);
     } catch (e) {
@@ -106,12 +88,12 @@ export function CourseFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Sửa khóa học' : 'Thêm khóa học'}</DialogTitle>
+          <DialogTitle>{course ? 'Sửa khóa học' : 'Thêm khóa học'}</DialogTitle>
           <DialogDescription>Mã khóa học không đổi được sau khi tạo.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3" noValidate>
           <FormField label="Mã" required error={errors.code?.message}>
-            {(p) => <Input {...p} {...register('code')} disabled={editing} />}
+            {(p) => <Input {...p} {...register('code')} readOnly={course !== null} />}
           </FormField>
           <FormField label="Tên khóa học" required error={errors.name?.message}>
             {(p) => <Input {...p} {...register('name')} />}
@@ -123,14 +105,14 @@ export function CourseFormDialog({
             {(p) => <Input {...p} {...register('levels')} />}
           </FormField>
           <FormField label="Tổng số buổi" required error={errors.totalSessions?.message}>
-            {(p) => <Input {...p} inputMode="numeric" {...register('totalSessions')} />}
+            {(p) => <Input {...p} inputMode="numeric" {...register('totalSessions', { valueAsNumber: true })} />}
           </FormField>
           <FormField label="Học phí" required error={errors.baseFee?.message}>
             {(p) => (
               <Controller
                 control={control}
                 name="baseFee"
-                render={({ field }) => <MoneyInput {...p} value={field.value} onChange={field.onChange} />}
+                render={({ field }) => <MoneyInput {...p} value={field.value ?? null} onChange={field.onChange} />}
               />
             )}
           </FormField>
@@ -139,10 +121,13 @@ export function CourseFormDialog({
           </FormField>
           <FormField label="Trạng thái">
             {(p) => (
-              <NativeSelect {...p} {...register('status')}>
-                <option value="ACTIVE">Đang hoạt động</option>
-                <option value="ARCHIVED">Đã lưu trữ</option>
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="status"
+                render={({ field }) => (
+                  <OptionSelect {...p} options={STATUS_OPTIONS} value={field.value ?? CourseStatus.ACTIVE} onValueChange={field.onChange} />
+                )}
+              />
             )}
           </FormField>
           <DialogFooter>

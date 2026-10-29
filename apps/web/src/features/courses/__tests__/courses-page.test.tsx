@@ -2,8 +2,9 @@ import { http, HttpResponse } from 'msw';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from '../../../../test/msw/server';
-import { renderApp } from '../../../../test/render';
+import { renderApp, renderWithProviders } from '../../../../test/render';
 import { makeUser } from '../../../../test/users';
+import CoursesPage from '../pages/courses-page';
 
 const course = (over: Record<string, unknown> = {}) => ({
   id: '65000000000000000000c001',
@@ -89,7 +90,7 @@ describe('trang khóa học (FR-CAT-01)', () => {
     expect(posted).not.toHaveBeenCalled();
   });
 
-  it('lỗi tải → hiện trạng thái lỗi; có dữ liệu → hiển thị học phí', async () => {
+  it('lỗi tải → hiện trạng thái lỗi', async () => {
     server.use(http.get('*/api/v1/courses', () => HttpResponse.json({}, { status: 500 })));
     renderApp({ route: '/settings/courses', user: makeUser('MANAGER') });
     expect(await screen.findByText('Không tải được dữ liệu')).toBeInTheDocument();
@@ -103,6 +104,14 @@ describe('trang khóa học (FR-CAT-01)', () => {
     await user.click(screen.getByRole('button', { name: 'Sửa khóa học TOEIC-1' }));
     const dialog = await screen.findByRole('dialog');
     await waitFor(() => expect(within(dialog).getByLabelText(/^Mã/)).toHaveValue('TOEIC-1'));
-    expect(within(dialog).getByLabelText(/^Mã/)).toBeDisabled();
+    expect(within(dialog).getByLabelText(/^Mã/)).toHaveAttribute('readonly');
+  });
+
+  it('vai trò không có courses.manage (giáo viên) chỉ xem, không có nút thêm/sửa', async () => {
+    server.use(http.get('*/api/v1/courses', () => HttpResponse.json(page([course()]))));
+    renderWithProviders(<CoursesPage />, { user: makeUser('TEACHER') });
+    await screen.findByText('TOEIC-1');
+    expect(screen.queryByRole('button', { name: 'Thêm khóa học' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Sửa khóa học/ })).not.toBeInTheDocument();
   });
 });

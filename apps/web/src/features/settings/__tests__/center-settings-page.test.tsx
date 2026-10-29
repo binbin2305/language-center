@@ -2,8 +2,9 @@ import { http, HttpResponse } from 'msw';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from '../../../../test/msw/server';
-import { renderApp } from '../../../../test/render';
+import { renderApp, renderWithProviders } from '../../../../test/render';
 import { makeUser } from '../../../../test/users';
+import CenterSettingsPage from '../pages/center-settings-page';
 
 const settings = {
   centerName: 'Trung tâm A',
@@ -60,5 +61,13 @@ describe('trang cài đặt trung tâm (FR-SET-01)', () => {
     server.use(http.get('*/api/v1/settings', () => HttpResponse.json({}, { status: 500 })));
     renderApp({ route: '/settings/center', user: makeUser('MANAGER') });
     expect(await screen.findByText('Không tải được dữ liệu')).toBeInTheDocument();
+  });
+
+  it('vai trò không có settings.update (giáo vụ) thấy form chỉ đọc, không có nút lưu', async () => {
+    server.use(http.get('*/api/v1/settings', () => HttpResponse.json({ data: settings })));
+    renderWithProviders(<CenterSettingsPage />, { user: makeUser('ACADEMIC_STAFF') });
+    expect(await screen.findByLabelText(/^Ngưỡng cảnh báo vắng/)).toBeDisabled();
+    expect(screen.getByLabelText(/^Tên trung tâm/)).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Lưu cài đặt' })).not.toBeInTheDocument();
   });
 });

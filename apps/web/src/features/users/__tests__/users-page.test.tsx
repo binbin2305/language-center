@@ -63,6 +63,31 @@ describe('trang tài khoản (FR-ADM)', () => {
     expect(posted).not.toHaveBeenCalled();
   });
 
+  it('email đã tồn tại (409) → lỗi dưới ô Email', async () => {
+    server.use(
+      http.get('*/api/v1/users', () => HttpResponse.json(page([]))),
+      http.post('*/api/v1/users', () =>
+        HttpResponse.json({ error: { code: 'CONFLICT', message: 'x', details: { fields: { email: 'DUPLICATE' } } } }, { status: 409 }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp({ route: '/settings/users', user: makeUser('MANAGER') });
+    await user.click(await screen.findByRole('button', { name: 'Thêm tài khoản' }));
+    const form = await screen.findByRole('dialog');
+    await user.type(within(form).getByLabelText(/^Họ tên/), 'Trần Giáo Viên');
+    await user.type(within(form).getByLabelText(/^Email/), 'gv@center.local');
+    await user.click(within(form).getByRole('button', { name: 'Tạo tài khoản' }));
+    expect(await within(form).findByText('Email này đã được dùng cho tài khoản khác')).toBeInTheDocument();
+    expect(within(form).getByLabelText(/^Email/)).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('MANAGER không thấy nút khóa trên tài khoản ADMIN', async () => {
+    server.use(http.get('*/api/v1/users', () => HttpResponse.json(page([userDto({ role: 'ADMIN', fullName: 'Admin A' })]))));
+    renderApp({ route: '/settings/users', user: makeUser('MANAGER') });
+    await screen.findByText('Admin A');
+    expect(screen.queryByRole('button', { name: 'Khóa' })).not.toBeInTheDocument();
+  });
+
   it('nút Khóa → ConfirmDialog → POST /users/:id/lock', async () => {
     const locked = vi.fn();
     server.use(

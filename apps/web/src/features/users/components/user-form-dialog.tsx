@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { CreateUserInput, Role, type CreateUserResultDto } from '@lc/shared';
+import { z } from 'zod';
+import { CreateUserInput, TeacherProfile, type CreateUserResultDto } from '@lc/shared';
 import { FormField } from '@/components/common/form-field';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,60 +11,56 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { errorMessage } from '@/lib/error-messages';
-import { NativeSelect } from '@/features/settings/components/native-select';
-import { applyServerFieldErrors, schemaResolver } from '@/features/settings/form-utils';
+import { applyServerFieldErrors, OptionSelect, viParams } from '@/features/settings/catalog-shared';
 import { useCreateUser } from '../hooks';
-import { CREATABLE_ROLES, ROLE_LABELS } from '../roles';
+import { CREATABLE_ROLES, hasTeacherProfile, ROLE_LABELS } from '../roles';
 
-interface FormValues {
-  fullName: string;
-  email: string;
-  phone: string;
-  role: Role;
-  languages: string; // comma separated
-  levels: string;
-  specialization: string;
-}
+const csv = (shape: z.ZodTypeAny) =>
+  z.string().transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean)).pipe(shape);
 
-const EMPTY: FormValues = {
-  fullName: '', email: '', phone: '', role: Role.TEACHER, languages: '', levels: '', specialization: '',
-};
-
-const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
-
-const toInput = (v: FormValues) => ({
-  email: v.email,
-  fullName: v.fullName,
-  phone: v.phone.trim() || undefined,
-  role: v.role,
-  ...(v.role === Role.TEACHER
-    ? { teacherProfile: { languages: list(v.languages), levels: list(v.levels), specialization: v.specialization.trim() || undefined } }
-    : {}),
+// Teacher profile fields are edited as flat text and re-assembled on submit.
+const FormSchema = CreateUserInput.omit({ teacherProfile: true }).extend({
+  phone: CreateUserInput.shape.phone.or(z.literal('')),
+  languages: csv(TeacherProfile.shape.languages),
+  levels: csv(TeacherProfile.shape.levels),
+  specialization: z.string().trim().max(200),
 });
+type FormInput = z.input<typeof FormSchema>;
+type FormOutput = z.output<typeof FormSchema>;
 
 const MESSAGES = {
   fullName: 'Nhập họ tên (ít nhất 2 ký tự).',
   email: 'Nhập email hợp lệ, ví dụ ten@trungtam.vn.',
   phone: 'Số điện thoại chưa đúng. Nhập số di động Việt Nam, ví dụ 0912345678.',
   role: 'Chọn vai trò.',
+  specialization: 'Chuyên môn quá dài (tối đa 200 ký tự).',
+};
+const ROLE_OPTIONS = CREATABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }));
+const EMPTY: Partial<FormInput> = {
+  fullName: '', email: '', phone: '', role: CREATABLE_ROLES[0], languages: '', levels: '', specialization: '',
 };
 
 export function UserFormDialog({
   open, onOpenChange, onCreated,
 }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (r: CreateUserResultDto) => void }) {
   const create = useCreateUser();
-  const form = useForm<FormValues>({
+  const { register, control, handleSubmit, setError, reset, watch, formState: { errors, isSubmitting } } = useForm<FormInput, unknown, FormOutput>({
     defaultValues: EMPTY,
-    resolver: schemaResolver<FormValues>(CreateUserInput, toInput, MESSAGES),
+    resolver: zodResolver(FormSchema, viParams(MESSAGES)),
   });
-  const { register, handleSubmit, setError, reset, watch, formState: { errors, isSubmitting } } = form;
   useEffect(() => {
     if (open) reset(EMPTY);
   }, [open, reset]);
 
-  const onSubmit = handleSubmit(async (values) => {
+  const onSubmit = handleSubmit(async ({ languages, levels, specialization, phone, ...base }) => {
     try {
-      const result = await create.mutateAsync(CreateUserInput.parse(toInput(values)));
+      const result = await create.mutateAsync({
+        ...base,
+        phone: phone || undefined,
+        ...(hasTeacherProfile(base.role)
+          ? { teacherProfile: { languages, levels, specialization: specialization || undefined } }
+          : {}),
+      });
       onOpenChange(false);
       onCreated(result);
     } catch (e) {
@@ -91,14 +89,16 @@ export function UserFormDialog({
           </FormField>
           <FormField label="Vai trò" required error={errors.role?.message}>
             {(p) => (
-              <NativeSelect {...p} {...register('role')}>
-                {CREATABLE_ROLES.map((r) => (
-                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                ))}
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="role"
+                render={({ field }) => (
+                  <OptionSelect {...p} options={ROLE_OPTIONS} value={field.value ?? ''} onValueChange={field.onChange} />
+                )}
+              />
             )}
           </FormField>
-          {watch('role') === Role.TEACHER ? (
+          {hasTeacherProfile(watch('role')) ? (
             <>
               <FormField label="Ngôn ngữ giảng dạy" hint="Cách nhau bằng dấu phẩy, ví dụ: Tiếng Anh, Tiếng Nhật">
                 {(p) => <Input {...p} {...register('languages')} />}
@@ -106,7 +106,7 @@ export function UserFormDialog({
               <FormField label="Trình độ giảng dạy" hint="Cách nhau bằng dấu phẩy, ví dụ: A1, B1">
                 {(p) => <Input {...p} {...register('levels')} />}
               </FormField>
-              <FormField label="Chuyên môn">
+              <FormField label="Chuyên môn" error={errors.specialization?.message}>
                 {(p) => <Input {...p} {...register('specialization')} />}
               </FormField>
             </>

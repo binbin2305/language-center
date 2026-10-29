@@ -11,8 +11,5 @@ export const ROLE_LABELS: Record<Role, string> = {
 /** Roles that POST /users accepts (ADMIN and STUDENT are rejected by the API). */
 export const CREATABLE_ROLES: Role[] = [Role.TEACHER, Role.ACADEMIC_STAFF, Role.MANAGER];
 
-export const USER_STATUS_LABELS = {
-  ACTIVE: 'Đang hoạt động',
-  LOCKED: 'Đã khóa',
-  DISABLED: 'Đã vô hiệu',
-} as const;
+/** Only teachers carry a teacher profile (languages, levels, specialization). */
+export const hasTeacherProfile = (role: Role): boolean => role === Role.TEACHER;
