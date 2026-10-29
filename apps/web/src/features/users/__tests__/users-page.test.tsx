@@ -46,6 +46,13 @@ describe('trang tài khoản (FR-ADM)', () => {
     expect(body).toMatchObject({ role: 'TEACHER', teacherProfile: { languages: ['Tiếng Anh'], levels: ['A1'] } });
   });
 
+  it('cột trạng thái dùng StatusBadge nhóm user: LOCKED → "Đã khóa"', async () => {
+    server.use(http.get('*/api/v1/users', () => HttpResponse.json(page([userDto({ status: 'LOCKED' })]))));
+    renderApp({ route: '/settings/users', user: makeUser('MANAGER') });
+    const row = (await screen.findByText('Trần Giáo Viên')).closest('tr');
+    expect(within(row as HTMLElement).getByText('Đã khóa')).toHaveClass('bg-destructive/15');
+  });
+
   it('email không hợp lệ → lỗi dưới ô, không gọi POST', async () => {
     const posted = vi.fn();
     server.use(

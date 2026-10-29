@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/auth/use-auth';
 import { formatDate } from '@/lib/format';
 import { ConvertDialog } from '../components/convert-dialog';
-import { LeadStatusBadge } from '../components/lead-status-badge';
+import { StatusBadge } from '@/components/common/status-badge';
 import { useCourseOptions } from '../course-options';
 import { useLead } from '../hooks';
 
@@ -53,7 +53,7 @@ export default function LeadDetailPage() {
         breadcrumb={[{ label: 'Tuyển sinh', to: '/admissions/leads' }, { label: 'Chi tiết lead' }]}
         actions={
           <>
-            <LeadStatusBadge status={l.status} />
+            <StatusBadge group="lead" value={l.status} />
             {l.status === 'NEW' && can(user, 'students.create') ? (
               <Button onClick={() => setConvertOpen(true)}>Tạo hồ sơ học viên</Button>
             ) : null}

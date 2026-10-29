@@ -1,5 +1,7 @@
 export type StatusTone = 'success' | 'warning' | 'info' | 'destructive' | 'muted' | 'primary';
-export type StatusGroup = 'class' | 'enrollment' | 'attendance' | 'invoice' | 'session';
+export type StatusGroup =
+  | 'class' | 'enrollment' | 'attendance' | 'invoice' | 'session'
+  | 'course' | 'room' | 'user' | 'lead' | 'student';
 export interface StatusMeta {
   label: string;
   tone: StatusTone;
@@ -44,4 +46,33 @@ export const STATUS_LABELS: Record<StatusGroup, Record<string, StatusMeta>> = {
     CANCELLED: { label: 'Đã hủy', tone: 'muted', strike: true },
     COMPLETED: { label: 'Đã học', tone: 'success' },
   },
+  // Wave 1 groups: docs/contract-requests/L-CATALOG-1.md, L-ADMISSIONS-1.md.
+  course: {
+    ACTIVE: { label: 'Đang hoạt động', tone: 'success' },
+    ARCHIVED: { label: 'Đã lưu trữ', tone: 'muted' },
+  },
+  room: {
+    ACTIVE: { label: 'Đang hoạt động', tone: 'success' },
+    INACTIVE: { label: 'Ngừng hoạt động', tone: 'muted' },
+  },
+  user: {
+    ACTIVE: { label: 'Đang hoạt động', tone: 'success' },
+    LOCKED: { label: 'Đã khóa', tone: 'destructive' },
+    DISABLED: { label: 'Đã vô hiệu', tone: 'muted' },
+  },
+  lead: {
+    NEW: { label: 'Mới', tone: 'info' },
+    PROFILE_CREATED: { label: 'Đã tạo hồ sơ', tone: 'success' },
+    CANCELLED: { label: 'Đã hủy', tone: 'muted' },
+  },
+  student: {
+    ACTIVE: { label: 'Đang học', tone: 'success' },
+    RESERVED: { label: 'Bảo lưu', tone: 'muted' },
+    DROPPED: { label: 'Đã nghỉ', tone: 'destructive' },
+    COMPLETED: { label: 'Hoàn thành', tone: 'primary' },
+  },
 };
+
+/** Vietnamese label of a status value (falls back to the raw value). */
+export const statusLabel = (group: StatusGroup, value: string): string =>
+  STATUS_LABELS[group][value]?.label ?? value;

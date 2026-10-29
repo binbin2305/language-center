@@ -13,7 +13,8 @@ import { useAuth } from '@/auth/use-auth';
 import { formatDate } from '@/lib/format';
 import { useCourseOptions } from '../course-options';
 import { useLeads } from '../hooks';
-import { LEAD_STATUS_LABELS, LeadStatusBadge } from '../components/lead-status-badge';
+import { StatusBadge } from '@/components/common/status-badge';
+import { statusLabel } from '@/lib/status';
 
 // Calendar + date-fns locale are heavy; load them only once the list page is on screen.
 const DateRangePicker = lazy(() =>
@@ -69,7 +70,7 @@ export default function LeadsPage() {
         meta: { hideOnMobile: true },
         cell: ({ row }) => formatDate(row.original.createdAt),
       },
-      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <LeadStatusBadge status={row.original.status} /> },
+      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <StatusBadge group="lead" value={row.original.status} /> },
     ],
     [courseName],
   );
@@ -101,7 +102,7 @@ export default function LeadsPage() {
           <SelectContent>
             <SelectItem value={ALL}>Tất cả trạng thái</SelectItem>
             {ALL_LEAD_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>{LEAD_STATUS_LABELS[s].label}</SelectItem>
+              <SelectItem key={s} value={s}>{statusLabel('lead', s)}</SelectItem>
             ))}
           </SelectContent>
         </Select>

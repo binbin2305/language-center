@@ -11,7 +11,9 @@ import { SearchInput } from '@/components/common/search-input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/use-auth';
 import { errorMessage } from '@/lib/error-messages';
-import { CatalogStatusBadge, catalogStatusLabel, OptionSelect } from '@/features/settings/catalog-shared';
+import { StatusBadge } from '@/components/common/status-badge';
+import { statusLabel } from '@/lib/status';
+import { OptionSelect } from '@/features/settings/catalog-shared';
 import { TempPasswordDialog } from '../components/temp-password-dialog';
 import { UserFormDialog } from '../components/user-form-dialog';
 import { useLockUser, useResetPassword, useUnlockUser, useUsers } from '../hooks';
@@ -21,7 +23,7 @@ import { ROLE_LABELS } from '../roles';
 const LIMIT = 20;
 type Action = { kind: 'lock' | 'unlock' | 'reset'; user: UserDto };
 
-const STATUS_OPTIONS = (['ACTIVE', 'LOCKED', 'DISABLED'] as const).map((s) => ({ value: s, label: catalogStatusLabel(s) }));
+const STATUS_OPTIONS = (['ACTIVE', 'LOCKED', 'DISABLED'] as const).map((s) => ({ value: s, label: statusLabel('user', s) }));
 const ROLE_OPTIONS = ALL_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }));
 
 const COPY = {
@@ -81,7 +83,7 @@ export default function UsersPage() {
       { id: 'role', header: 'Vai trò', cell: ({ row }) => ROLE_LABELS[row.original.role] },
       {
         id: 'status', header: 'Trạng thái',
-        cell: ({ row }) => <CatalogStatusBadge value={row.original.status} />,
+        cell: ({ row }) => <StatusBadge group="user" value={row.original.status} />,
       },
       {
         id: 'actions',

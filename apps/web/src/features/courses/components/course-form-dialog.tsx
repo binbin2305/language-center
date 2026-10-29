@@ -13,8 +13,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { errorMessage } from '@/lib/error-messages';
+import { statusLabel } from '@/lib/status';
 import {
-  applyServerFieldErrors, catalogStatusLabel, OptionSelect, viParams,
+  applyServerFieldErrors, OptionSelect, viParams,
 } from '@/features/settings/catalog-shared';
 import { useCreateCourse, useUpdateCourse } from '../hooks';
 
@@ -37,7 +38,7 @@ const MESSAGES = {
   baseFee: 'Nhập học phí hợp lệ.',
   description: 'Mô tả quá dài (tối đa 2000 ký tự).',
 };
-const STATUS_OPTIONS = [CourseStatus.ACTIVE, CourseStatus.ARCHIVED].map((s) => ({ value: s, label: catalogStatusLabel(s) }));
+const STATUS_OPTIONS = [CourseStatus.ACTIVE, CourseStatus.ARCHIVED].map((s) => ({ value: s, label: statusLabel('course', s) }));
 
 const EMPTY: Partial<FormInput> = { code: '', name: '', language: '', levels: '', description: '', status: CourseStatus.ACTIVE };
 

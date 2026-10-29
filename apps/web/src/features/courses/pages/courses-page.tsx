@@ -9,12 +9,14 @@ import { PageHeader } from '@/components/common/page-header';
 import { SearchInput } from '@/components/common/search-input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/use-auth';
-import { CatalogStatusBadge, catalogStatusLabel, OptionSelect } from '@/features/settings/catalog-shared';
+import { StatusBadge } from '@/components/common/status-badge';
+import { statusLabel } from '@/lib/status';
+import { OptionSelect } from '@/features/settings/catalog-shared';
 import { CourseFormDialog } from '../components/course-form-dialog';
 import { useCourses } from '../hooks';
 
 const LIMIT = 20;
-const STATUS_OPTIONS = (['ACTIVE', 'ARCHIVED'] as const).map((s) => ({ value: s, label: catalogStatusLabel(s) }));
+const STATUS_OPTIONS = (['ACTIVE', 'ARCHIVED'] as const).map((s) => ({ value: s, label: statusLabel('course', s) }));
 
 export default function CoursesPage() {
   const { user } = useAuth();
@@ -35,7 +37,7 @@ export default function CoursesPage() {
       { id: 'levels', header: 'Trình độ', meta: { hideOnMobile: true }, cell: ({ row }) => row.original.levels.join(', ') },
       { accessorKey: 'totalSessions', header: 'Số buổi', meta: { hideOnMobile: true } },
       { id: 'baseFee', header: 'Học phí', cell: ({ row }) => <MoneyText value={row.original.baseFee} /> },
-      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <CatalogStatusBadge value={row.original.status} /> },
+      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <StatusBadge group="course" value={row.original.status} /> },
       ...(canManage
         ? [{
             id: 'actions',

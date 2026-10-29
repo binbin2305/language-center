@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
 import { errorMessage } from '@/lib/error-messages';
 import { formatDate } from '@/lib/format';
-import { StudentStatusBadge } from '../components/student-status-badge';
+import { StatusBadge } from '@/components/common/status-badge';
 import { useMyProfile, useUpdateMyContact } from '../hooks';
 import { GENDER_LABELS } from '../student-labels';
 import {
@@ -103,7 +103,7 @@ export default function MyProfilePage() {
             <ReadOnly label="Ngày sinh">{formatDate(s.dob)}</ReadOnly>
             <ReadOnly label="Giới tính">{GENDER_LABELS[s.gender]}</ReadOnly>
             <ReadOnly label="Trạng thái">
-              <StudentStatusBadge status={s.status} />
+              <StatusBadge group="student" value={s.status} />
             </ReadOnly>
           </dl>
           <ContactForm student={s} />

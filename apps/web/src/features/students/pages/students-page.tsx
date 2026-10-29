@@ -12,9 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatDate } from '@/lib/format';
 // TODO W1-MERGE: use useCourses from features/courses (L-CATALOG).
 import { useCourseOptions } from '@/features/admissions/course-options';
-import { StudentStatusBadge } from '../components/student-status-badge';
+import { StatusBadge } from '@/components/common/status-badge';
 import { useStudents } from '../hooks';
-import { STUDENT_STATUS_LABELS } from '../student-labels';
+import { statusLabel } from '@/lib/status';
 
 const ALL = 'ALL';
 const LIMIT = 20;
@@ -45,7 +45,7 @@ export default function StudentsPage() {
       },
       { id: 'dob', header: 'Ngày sinh', meta: { hideOnMobile: true }, cell: ({ row }) => formatDate(row.original.dob) },
       { accessorKey: 'phone', header: 'SĐT' },
-      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <StudentStatusBadge status={row.original.status} /> },
+      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <StatusBadge group="student" value={row.original.status} /> },
     ],
     [],
   );
@@ -76,7 +76,7 @@ export default function StudentsPage() {
           <SelectContent>
             <SelectItem value={ALL}>Tất cả trạng thái</SelectItem>
             {ALL_STUDENT_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>{STUDENT_STATUS_LABELS[s].label}</SelectItem>
+              <SelectItem key={s} value={s}>{statusLabel('student', s)}</SelectItem>
             ))}
           </SelectContent>
         </Select>

@@ -11,8 +11,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { errorMessage } from '@/lib/error-messages';
+import { statusLabel } from '@/lib/status';
 import {
-  applyServerFieldErrors, catalogStatusLabel, OptionSelect, viParams,
+  applyServerFieldErrors, OptionSelect, viParams,
 } from '@/features/settings/catalog-shared';
 import { useCreateRoom, useUpdateRoom } from '../hooks';
 
@@ -24,7 +25,7 @@ const MESSAGES = {
   name: 'Nhập tên phòng.',
   capacity: 'Sức chứa phải là số nguyên lớn hơn 0.',
 };
-const STATUS_OPTIONS = [RoomStatus.ACTIVE, RoomStatus.INACTIVE].map((s) => ({ value: s, label: catalogStatusLabel(s) }));
+const STATUS_OPTIONS = [RoomStatus.ACTIVE, RoomStatus.INACTIVE].map((s) => ({ value: s, label: statusLabel('room', s) }));
 const EMPTY: Partial<FormInput> = { code: '', name: '', status: RoomStatus.ACTIVE };
 
 export function RoomFormDialog({

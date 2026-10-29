@@ -174,6 +174,16 @@ describe('StatusBadge', () => {
     renderWithProviders(<StatusBadge group="invoice" value="UNPAID" overdue />);
     expect(screen.getByText('Quá hạn')).toBeInTheDocument();
   });
+  it.each([
+    ['user', 'LOCKED', 'Đã khóa', 'bg-destructive/15'],
+    ['course', 'ARCHIVED', 'Đã lưu trữ', 'bg-muted'],
+    ['room', 'ACTIVE', 'Đang hoạt động', 'bg-success/15'],
+    ['lead', 'NEW', 'Mới', 'bg-info/15'],
+    ['student', 'COMPLETED', 'Hoàn thành', 'bg-primary/15'],
+  ] as const)('nhóm %s %s → "%s"', (group, value, label, cls) => {
+    renderWithProviders(<StatusBadge group={group} value={value} />);
+    expect(screen.getByText(label)).toHaveClass(cls);
+  });
 });
 
 describe('ConflictList', () => {

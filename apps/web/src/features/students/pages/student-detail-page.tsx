@@ -7,7 +7,7 @@ import { TabbedDetail } from '@/layouts/tabbed-detail';
 import { STUDENT_TABS } from '@/layouts/tab-slots';
 import { useAuth } from '@/auth/use-auth';
 import { StudentEditForm } from '../components/student-edit-form';
-import { StudentStatusBadge } from '../components/student-status-badge';
+import { StatusBadge } from '@/components/common/status-badge';
 import { isFullView } from '../api';
 import { useStudent } from '../hooks';
 
@@ -27,7 +27,7 @@ function StudentHeader() {
     <div className="mt-2 flex flex-wrap items-center gap-3">
       <p className="text-lg font-medium">{s.fullName}</p>
       <span className="text-sm text-muted-foreground">{s.code}</span>
-      <StudentStatusBadge status={s.status} />
+      <StatusBadge group="student" value={s.status} />
       {full && can(user, 'students.update') ? (
         <>
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>

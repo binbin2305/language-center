@@ -1,9 +1,7 @@
 // TODO W1-MERGE: this is the ONLY file other catalog features import from settings.
-// Promote applyServerFieldErrors / viParams to lib, and the badge to StatusBadge groups
-// 'course' | 'room' | 'user' (see docs/contract-requests/L-CATALOG-1.md and -2.md).
+// Promote applyServerFieldErrors / viParams / OptionSelect to lib (docs/contract-requests/L-CATALOG-2.md).
 import type { FieldValues, Path, UseFormSetError } from 'react-hook-form';
 import type { ParseParams } from 'zod';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ApiError } from '@/lib/api';
 
@@ -33,22 +31,6 @@ export function applyServerFieldErrors<V extends FieldValues>(
     setError(field as Path<V>, { type: 'server', message });
   }
   return entries.length > 0;
-}
-
-const STATUS_META = {
-  ACTIVE: { label: 'Đang hoạt động', variant: 'default' },
-  ARCHIVED: { label: 'Đã lưu trữ', variant: 'secondary' },
-  INACTIVE: { label: 'Ngừng hoạt động', variant: 'secondary' },
-  LOCKED: { label: 'Đã khóa', variant: 'destructive' },
-  DISABLED: { label: 'Đã vô hiệu', variant: 'secondary' },
-} as const;
-export type CatalogStatus = keyof typeof STATUS_META;
-export const catalogStatusLabel = (s: CatalogStatus) => STATUS_META[s].label;
-
-// TODO W1-MERGE: StatusBadge group 'course' | 'room' | 'user'
-export function CatalogStatusBadge({ value }: { value: CatalogStatus }) {
-  const m = STATUS_META[value];
-  return <Badge variant={m.variant}>{m.label}</Badge>;
 }
 
 const ALL = '__all__';

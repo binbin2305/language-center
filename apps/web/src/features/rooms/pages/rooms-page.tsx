@@ -8,12 +8,14 @@ import { PageHeader } from '@/components/common/page-header';
 import { SearchInput } from '@/components/common/search-input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth/use-auth';
-import { CatalogStatusBadge, catalogStatusLabel, OptionSelect } from '@/features/settings/catalog-shared';
+import { StatusBadge } from '@/components/common/status-badge';
+import { statusLabel } from '@/lib/status';
+import { OptionSelect } from '@/features/settings/catalog-shared';
 import { RoomFormDialog } from '../components/room-form-dialog';
 import { useRooms } from '../hooks';
 
 const LIMIT = 20;
-const STATUS_OPTIONS = (['ACTIVE', 'INACTIVE'] as const).map((s) => ({ value: s, label: catalogStatusLabel(s) }));
+const STATUS_OPTIONS = (['ACTIVE', 'INACTIVE'] as const).map((s) => ({ value: s, label: statusLabel('room', s) }));
 
 export default function RoomsPage() {
   const { user } = useAuth();
@@ -31,7 +33,7 @@ export default function RoomsPage() {
       { accessorKey: 'code', header: 'Mã' },
       { accessorKey: 'name', header: 'Tên phòng' },
       { accessorKey: 'capacity', header: 'Sức chứa' },
-      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <CatalogStatusBadge value={row.original.status} /> },
+      { id: 'status', header: 'Trạng thái', cell: ({ row }) => <StatusBadge group="room" value={row.original.status} /> },
       ...(canManage
         ? [{
             id: 'actions',

@@ -21,7 +21,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiError } from '@/lib/api';
 import { errorMessage } from '@/lib/error-messages';
 import { useUpdateStudent } from '../hooks';
-import { GENDER_LABELS, STUDENT_STATUS_LABELS } from '../student-labels';
+import { GENDER_LABELS } from '../student-labels';
+import { statusLabel } from '@/lib/status';
 import {
   StudentFormSchema, studentErrorMap, type StudentFormInput, type StudentFormOutput,
 } from '../student-form-schema';
@@ -162,7 +163,7 @@ export function StudentEditForm({ student, open, onOpenChange }: StudentEditForm
                       </SelectTrigger>
                       <SelectContent>
                         {ALL_STUDENT_STATUSES.map((s) => (
-                          <SelectItem key={s} value={s}>{STUDENT_STATUS_LABELS[s].label}</SelectItem>
+                          <SelectItem key={s} value={s}>{statusLabel('student', s)}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

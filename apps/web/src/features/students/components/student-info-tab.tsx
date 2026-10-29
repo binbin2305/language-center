@@ -6,7 +6,7 @@ import { formatDate } from '@/lib/format';
 import { useStudent } from '../hooks';
 import { isFullView as isFull } from '../api';
 import { GENDER_LABELS } from '../student-labels';
-import { StudentStatusBadge } from './student-status-badge';
+import { StatusBadge } from '@/components/common/status-badge';
 
 const Row = ({ label, children }: { label: string; children: ReactNode }) => (
   <div className="space-y-0.5">
@@ -34,7 +34,7 @@ export default function StudentInfoTab() {
         <Row label="Ngày sinh">{formatDate(s.dob)}</Row>
         <Row label="Số điện thoại">{s.phone}</Row>
         <Row label="Trạng thái">
-          <StudentStatusBadge status={s.status} />
+          <StatusBadge group="student" value={s.status} />
         </Row>
         {isFull(s) ? (
           <>
