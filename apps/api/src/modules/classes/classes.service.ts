@@ -20,7 +20,11 @@ import {
   EnrollmentStatus,
   ErrorCode,
   fromDateOnly,
+  addVnDays,
   Role,
+  SessionStatus,
+  startOfVnDay,
+  toDateOnly,
   UpdateClassInput,
   UserStatus,
 } from '@lc/shared';
@@ -345,7 +349,16 @@ export class ClassesService {
     if (statusChange) filter.status = before.status;
     if (input.maxCapacity !== undefined) filter.currentSize = { $lte: input.maxCapacity };
 
+    const datesChanged =
+      merged.startDate.getTime() !== before.startDate.getTime() ||
+      merged.endDate.getTime() !== before.endDate.getTime();
+
     const after = await withTransaction(this.conn, async (s) => {
+      if (datesChanged) {
+        // Lock-key protocol: same key as schedule writes, bumped before reading the invariant.
+        await this.counter.next(`lock:class:${before._id.toString()}`, s);
+        await this.assertSessionsWithin(before._id, merged.startDate, merged.endDate, s);
+      }
       const updated = await this.classes
         .findOneAndUpdate(filter, { $set: set }, { new: true, session: s, runValidators: true })
         .lean<ClassLean>();
@@ -380,6 +393,33 @@ export class ClassesService {
       }
     }
     return this.present(after);
+  }
+
+  /** 422 SESSION_OUTSIDE_CLASS_RANGE when a SCHEDULED session falls outside [startDate, endDate] (VN days). */
+  private async assertSessionsWithin(
+    classId: Types.ObjectId,
+    startDate: Date,
+    endDate: Date,
+    s: ClientSession,
+  ): Promise<void> {
+    const dayAfterEnd = startOfVnDay(addVnDays(toDateOnly(endDate), 1));
+    const outside = await this.sessions
+      .find(
+        {
+          classId,
+          status: SessionStatus.SCHEDULED,
+          $or: [{ startAt: { $lt: startDate } }, { endAt: { $gte: dayAfterEnd } }],
+        },
+        { _id: 1 },
+      )
+      .sort({ startAt: 1 })
+      .session(s)
+      .lean();
+    if (outside.length) {
+      throw new AppError(ErrorCode.SESSION_OUTSIDE_CLASS_RANGE, undefined, {
+        sessionIds: outside.map((x) => x._id.toString()),
+      });
+    }
   }
 
   /** Deactivate goes through the same guarded transition path as PATCH status. */

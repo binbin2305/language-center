@@ -1,9 +1,9 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Types } from 'mongoose';
-import { ClassStatus, CourseStatus, DomainEvent, Role } from '@lc/shared';
+import { ClassStatus, CourseStatus, DomainEvent, ErrorCode, Role, SessionStatus } from '@lc/shared';
 import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
-import { makeClass, makeCourse, makeRoom, makeTeacher, makeUser } from '../factories';
+import { makeClass, makeCourse, makeRoom, makeSession, makeTeacher, makeUser } from '../factories';
 import { Models } from '../../src/database/models';
 import { AuditLog } from '../../src/database/schemas/audit-log.schema';
 
@@ -206,6 +206,56 @@ describe('FR-CLS-01..03 Lớp học', () => {
         .find({ entity: 'class', entityId: c._id });
       expect(logs).toHaveLength(1);
       expect(logs[0].action).toBe('update');
+    });
+  });
+
+  describe('R-CLS thu hẹp khoảng ngày khi đã có buổi học', () => {
+    // makeClass: 2026-01-05 .. 2026-04-05 (VN days)
+    const at = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00+07:00`);
+    async function seed() {
+      const c = await makeClass(t.conn, { courseId: course._id });
+      const room = await makeRoom(t.conn);
+      const mk = (day: string, status: SessionStatus = SessionStatus.SCHEDULED) =>
+        makeSession(t.conn, { classId: c._id, roomId: room._id, startAt: at(day, '18:00'), endAt: at(day, '19:30'), status, ...(status === SessionStatus.CANCELLED ? { cancelReason: 'x' } : {}) });
+      return { c, id: String(c._id), mk };
+    }
+    const lockSeq = async (id: string) =>
+      ((await t.conn.model(Models.Counter).findById(`lock:class:${id}`).lean()) as { seq?: number } | null)?.seq ?? 0;
+
+    it('endDate sớm hơn buổi SCHEDULED -> 422 SESSION_OUTSIDE_CLASS_RANGE kèm sessionIds, lớp không đổi', async () => {
+      const { c, id, mk } = await seed();
+      await mk('2026-03-01');
+      const late = await mk('2026-03-10');
+      const res = await patch(id, { endDate: '2026-03-09' }).expect(422);
+      expect(res.body.error.code).toBe(ErrorCode.SESSION_OUTSIDE_CLASS_RANGE);
+      expect(res.body.error.details.sessionIds).toEqual([String(late._id)]);
+      const now = await t.conn.model(Models.Class).findById(c._id).lean<{ endDate: Date }>();
+      expect(now?.endDate.toISOString()).toBe(c.endDate.toISOString());
+    });
+
+    it('startDate muộn hơn buổi SCHEDULED -> 422 SESSION_OUTSIDE_CLASS_RANGE', async () => {
+      const { id, mk } = await seed();
+      const early = await mk('2026-01-06');
+      const res = await patch(id, { startDate: '2026-01-07' }).expect(422);
+      expect(res.body.error.code).toBe(ErrorCode.SESSION_OUTSIDE_CLASS_RANGE);
+      expect(res.body.error.details.sessionIds).toEqual([String(early._id)]);
+    });
+
+    it('buổi đúng ngày cuối mới vẫn hợp lệ; buổi CANCELLED ngoài khoảng không chặn; khóa lock:class được tăng', async () => {
+      const { id, mk } = await seed();
+      await mk('2026-03-09');
+      await mk('2026-03-20', SessionStatus.CANCELLED);
+      const before = await lockSeq(id);
+      const res = await patch(id, { endDate: '2026-03-09' }).expect(200);
+      expect(res.body.data.endDate).toBe('2026-03-09');
+      expect(await lockSeq(id)).toBe(before + 1);
+    });
+
+    it('chỉ đổi tên không tăng khóa lock:class', async () => {
+      const { id } = await seed();
+      const before = await lockSeq(id);
+      await patch(id, { name: 'Tên khác' }).expect(200);
+      expect(await lockSeq(id)).toBe(before);
     });
   });
 
