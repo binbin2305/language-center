@@ -21,6 +21,7 @@ import { Student } from '../../database/schemas/student.schema';
 import { EnrollmentLabels, EnrollmentLean, toEnrollmentDto } from './enrollments.mapper';
 import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
+import { CounterService } from '../../common/db/counter.service';
 import { ClockService } from '../../common/clock/clock.service';
 import { AppError } from '../../common/errors/app-error';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../../database/active-enrollment';
@@ -40,6 +41,7 @@ export class EnrollmentsService {
     @InjectConnection() private readonly conn: Connection,
     private readonly clock: ClockService,
     private readonly audit: AuditService,
+    private readonly counters: CounterService,
   ) {}
 
   async createPending(
@@ -196,7 +198,7 @@ export class EnrollmentsService {
           { new: true, session: s },
         )
         .lean());
-    if (!after) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+    if (!after) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE, undefined, { enrollmentIds: [enrollmentId.toString()] });
     await this.audit.log(
       { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: enrollmentId, before, after },
       s,
@@ -209,6 +211,8 @@ export class EnrollmentsService {
     const reason = input.reason.trim();
     if (!reason) throw new AppError(ErrorCode.REASON_REQUIRED);
     return withTransaction(this.conn, async (s) => {
+      // Serializes with PlacementService.addCandidates for the same enrollment.
+      await this.counters.next(`lock:placement-enrollment:${id}`, s);
       const before = await this.enrollments.findById(id).session(s).lean();
       if (!before) throw new AppError(ErrorCode.NOT_FOUND);
       const course = await this.courses.findById(before.courseId).session(s).select('levels').lean();

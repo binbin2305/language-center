@@ -308,6 +308,40 @@ describe('FR-PLT-01..04 Kiểm tra đầu vào', () => {
       expect(e1?.status).toBe(EnrollmentStatus.PENDING_PLACEMENT);
     });
 
+    it('thí sinh đã xếp bởi đợt này: gửi lại score null hoặc level null → 422, không lệch placementLevel', async () => {
+      const { enrollments, pt } = await scheduled(2);
+      const id = enrollments[0]._id.toString();
+      await putResults(teacher.token, pt._id, [{ enrollmentId: id, score: 8, level: 'B1' }]).expect(200);
+      for (const item of [
+        { enrollmentId: id, score: null, level: 'A2' },
+        { enrollmentId: id, score: 8, level: null },
+      ]) {
+        const res = await putResults(teacher.token, pt._id, [item]).expect(422);
+        expect(res.body.error.code).toBe(ErrorCode.ENROLLMENT_INVALID_STATE);
+        expect(res.body.error.details.enrollmentIds).toEqual([id]);
+      }
+      const e = await models(t.conn).Enrollment.findById(id).lean();
+      expect(e?.placementLevel).toBe('B1');
+      const p = await models(t.conn).PlacementTest.findById(pt._id).lean();
+      expect(p?.candidates.find((c) => c.enrollmentId.toString() === id)).toMatchObject({ score: 8, level: 'B1' });
+    });
+
+    it('thí sinh đã skip-placement không chặn đợt COMPLETED khi các thí sinh còn lại đủ kết quả', async () => {
+      const { enrollments, pt } = await scheduled(2);
+      await skip(manager, enrollments[0]._id, { level: 'A1', reason: 'Có chứng chỉ' }).expect(201);
+      const res = await putResults(teacher.token, pt._id, [
+        { enrollmentId: enrollments[1]._id.toString(), score: 9, level: 'A1' },
+      ]).expect(200);
+      expect(res.body.data.status).toBe(PlacementStatus.COMPLETED);
+    });
+
+    it('GV không được phân công gửi điểm không hợp lệ → 404 (không phải 400)', async () => {
+      const { enrollments, pt } = await scheduled(1);
+      await putResults(otherTeacher, pt._id, [
+        { enrollmentId: enrollments[0]._id.toString(), score: 11, level: 'A1' },
+      ]).expect(404);
+    });
+
     it('đợt không SCHEDULED → 422 INVALID_STATUS_TRANSITION', async () => {
       const { enrollments, pt } = await scheduled(1);
       await models(t.conn).PlacementTest.updateOne({ _id: pt._id }, { status: PlacementStatus.CANCELLED });
@@ -334,6 +368,8 @@ describe('FR-PLT-01..04 Kiểm tra đầu vào', () => {
         placementSkipped: { reason: 'Có chứng chỉ IELTS' },
         waitingSince: t.clock.now().toISOString(),
       });
+      expect(res.body.data.placementSkipped.by).toBe(res.body.data.history.at(-1).by);
+      expect(res.body.data.placementSkipped.at).toBe(t.clock.now().toISOString());
       expect(res.body.data.history.at(-1)).toMatchObject({ from: 'PENDING_PLACEMENT', to: 'WAITING_CLASS' });
     });
 

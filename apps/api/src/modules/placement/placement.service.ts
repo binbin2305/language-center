@@ -176,11 +176,10 @@ export class PlacementService {
 
   /** PUT /:id/results (D15) — overwrite per candidate; enrollment moves and test completion in one transaction. */
   async putResults(user: AuthUser, id: string, items: PutPlacementResultsInput): Promise<PlacementTestDto> {
-    const bad = items.filter((i) => i.score !== null && !isValidScore(i.score)).map((i) => i.enrollmentId);
-    if (bad.length > 0) throw new AppError(ErrorCode.SCORE_OUT_OF_RANGE, undefined, { enrollmentIds: bad });
-
     const after = await withTransaction(this.conn, async (s) => {
       const test = await this.findOrThrow(id, user, s);
+      const bad = items.filter((i) => i.score !== null && !isValidScore(i.score)).map((i) => i.enrollmentId);
+      if (bad.length > 0) throw new AppError(ErrorCode.SCORE_OUT_OF_RANGE, undefined, { enrollmentIds: bad });
       await this.counters.next(`lock:placement:${test._id}`, s);
       const fresh = await this.findOrThrow(id, user, s);
       if (fresh.status !== PlacementStatus.SCHEDULED) throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION);
@@ -197,14 +196,27 @@ export class PlacementService {
       const now = this.clock.now();
       const latest = new Map(items.map((i) => [i.enrollmentId, i]));
       const invalid: string[] = [];
+      const relevant = new Set<string>();
       const moves: Array<{ enrollmentId: string; level: string }> = [];
       for (const [eid, i] of latest) {
         const e = await this.enrollments.findById(eid).session(s).select('status placementSkipped').lean();
         const prev = byId.get(eid)!;
         const placedByThis = e?.status === EnrollmentStatus.WAITING_CLASS && !e.placementSkipped && prev.level !== null;
         const pending = e?.status === EnrollmentStatus.PENDING_PLACEMENT;
-        if (!e || !(pending || placedByThis) || (placedByThis && i.level === null)) invalid.push(eid);
+        if (!e || !(pending || placedByThis) || (placedByThis && (i.level === null || i.score === null))) invalid.push(eid);
         else if (i.score !== null && i.level !== null) moves.push({ enrollmentId: eid, level: i.level });
+      }
+      // R13: candidates whose enrollment left PENDING_PLACEMENT elsewhere (skipped, cancelled) do not block completion.
+      for (const c of fresh.candidates) {
+        const eid = c.enrollmentId.toString();
+        if (latest.has(eid)) {
+          relevant.add(eid);
+          continue;
+        }
+        const e = await this.enrollments.findById(eid).session(s).select('status placementSkipped').lean();
+        const pending = e?.status === EnrollmentStatus.PENDING_PLACEMENT;
+        const placedByThis = e?.status === EnrollmentStatus.WAITING_CLASS && !e.placementSkipped && c.level !== null;
+        if (pending || placedByThis) relevant.add(eid);
       }
       if (invalid.length > 0) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE, undefined, { enrollmentIds: invalid });
       for (const m of moves) await this.enrollmentsSvc.markPlaced(new Types.ObjectId(m.enrollmentId), m.level, user, s);
@@ -221,7 +233,8 @@ export class PlacementService {
           gradedBy: user.id,
         };
       });
-      const complete = candidates.length > 0 && candidates.every((c) => c.score !== null && c.level !== null);
+      const counted = candidates.filter((c) => relevant.has(c.enrollmentId.toString()));
+      const complete = counted.length > 0 && counted.every((c) => c.score !== null && c.level !== null);
       const updated = await this.tests
         .findOneAndUpdate(
           { _id: fresh._id, status: PlacementStatus.SCHEDULED },
