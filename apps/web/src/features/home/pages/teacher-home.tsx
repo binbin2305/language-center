@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { vnDay } from '@lc/shared';
 import { PageHeader } from '@/components/common/page-header';
@@ -10,7 +11,7 @@ import { useSessionsBetween, useUpcomingPlacementTests } from '../hooks';
 const Empty = ({ text }: { text: string }) => <p className="text-sm text-muted-foreground">{text}</p>;
 
 export default function TeacherHome() {
-  const now = new Date();
+  const [now] = useState(() => new Date());
   const today = vnDay(now);
   const sessions = useSessionsBetween(today, today);
   const pending = usePendingAssessments();

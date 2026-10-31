@@ -9,7 +9,7 @@ export const useSessionsBetween = (from: string, to: string) =>
   useQuery({ queryKey: [KEY, 'sessions', from, to], queryFn: () => homeApi.sessions(from, to), retry: noRetryOnApiError });
 
 export const useUpcomingPlacementTests = (fromIso: string) =>
-  useQuery({ queryKey: [KEY, 'placement', fromIso], queryFn: () => homeApi.upcomingPlacementTests(fromIso), retry: noRetryOnApiError });
+  useQuery({ queryKey: [KEY, 'placement', fromIso.slice(0, 10)], queryFn: () => homeApi.upcomingPlacementTests(fromIso), retry: noRetryOnApiError });
 
 export const useMyAttendanceSummary = () =>
   useQuery({ queryKey: [KEY, 'attendance'], queryFn: homeApi.attendanceSummary, retry: noRetryOnApiError });

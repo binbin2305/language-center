@@ -111,4 +111,23 @@ describe('trang chủ giáo viên', () => {
     renderApp({ route: '/', user: makeUser('TEACHER') });
     expect(await screen.findByText('Hôm nay không có buổi dạy', {}, T)).toBeInTheDocument();
   });
+
+  it('chỉ lấy đợt SCHEDULED, đợt đã hủy không hiện, và chỉ gọi /placement-tests đúng 1 lần', async () => {
+    let calls = 0;
+    let statusParam: string | null = null;
+    stub([], [], []);
+    server.use(
+      http.get('*/api/v1/placement-tests', ({ request }) => {
+        calls++;
+        statusParam = new URL(request.url).searchParams.get('status');
+        return page([placement({ status: 'CANCELLED', courseName: 'Khóa đã hủy' })].filter((t) => statusParam !== 'SCHEDULED' || t.status === 'SCHEDULED'));
+      }),
+    );
+    renderApp({ route: '/', user: makeUser('TEACHER') });
+    expect(await screen.findByText('Không có đợt kiểm tra sắp tới', {}, T)).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(statusParam).toBe('SCHEDULED');
+    expect(screen.queryByText('Khóa đã hủy')).not.toBeInTheDocument();
+    expect(calls).toBe(1);
+  });
 });

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { addVnDays, attendanceRate, vnDay } from '@lc/shared';
 import { PageHeader } from '@/components/common/page-header';
@@ -13,7 +14,7 @@ const Big = ({ children }: { children: React.ReactNode }) => <p className="text-
 const Muted = ({ children }: { children: React.ReactNode }) => <p className="text-sm text-muted-foreground">{children}</p>;
 
 export default function StudentHome() {
-  const now = new Date();
+  const [now] = useState(() => new Date());
   const today = vnDay(now);
   const sessions = useSessionsBetween(today, addVnDays(today, 14));
   const attendance = useMyAttendanceSummary();
@@ -21,7 +22,7 @@ export default function StudentHome() {
   const invoices = useMyInvoices();
 
   const next = (sessions.data ?? [])
-    .filter((s) => s.status === 'SCHEDULED' && new Date(s.endAt).getTime() > now.getTime())
+    .filter((s) => s.status === 'SCHEDULED' && new Date(s.startAt).getTime() > now.getTime())
     .sort((a, b) => a.startAt.localeCompare(b.startAt))[0];
 
   const counts = (attendance.data ?? []).reduce(
