@@ -34,4 +34,24 @@ describe('D13 enrolledAt (roster theo thời điểm)', () => {
   it('không có history -> false', () => {
     expect(enrolledAt([], d('05'))).toBe(false);
   });
+
+  it('R22: đoạn mở bằng entry có classId chỉ tính cho lớp đó (A -> bảo lưu -> B)', () => {
+    const A = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+    const B = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+    const hist = [
+      { ...h(E.WAITING_CLASS, E.ENROLLED, '01'), classId: A },
+      h(E.ENROLLED, E.RESERVED, '03'),
+      h(E.RESERVED, E.WAITING_CLASS, '04'),
+      { ...h(E.WAITING_CLASS, E.ENROLLED, '08'), classId: B },
+    ];
+    expect(enrolledAt(hist, d('02'), { classId: A, legacy: false })).toBe(true);
+    expect(enrolledAt(hist, d('09'), { classId: A, legacy: false })).toBe(false);
+    expect(enrolledAt(hist, d('02'), { classId: B, legacy: true })).toBe(false);
+    expect(enrolledAt(hist, d('09'), { classId: B, legacy: true })).toBe(true);
+  });
+  it('R22: entry cũ không có classId chỉ tính khi legacy (lớp hiện tại của enrollment)', () => {
+    const hist = [h(E.WAITING_CLASS, E.ENROLLED, '01')];
+    expect(enrolledAt(hist, d('05'), { classId: 'aaaaaaaaaaaaaaaaaaaaaaaa', legacy: true })).toBe(true);
+    expect(enrolledAt(hist, d('05'), { classId: 'aaaaaaaaaaaaaaaaaaaaaaaa', legacy: false })).toBe(false);
+  });
 });

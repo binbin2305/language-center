@@ -70,10 +70,17 @@ export class AttendanceService {
     private readonly stats: AttendanceStatsService,
   ) {}
 
-  /** D13: enrollments of the session's class that were ENROLLED at session.startAt. */
+  /**
+   * D13: enrollments that were ENROLLED in the session's class at session.startAt.
+   * R22: also enrollments that left the class (classHistory); only stints seated in this class count.
+   */
   async roster(session: Pick<SessionRec, 'classId' | 'startAt'>, s?: ClientSession): Promise<EnrollmentDoc[]> {
-    const all = await this.enrollments.find({ classId: session.classId }).session(s ?? null);
-    return all.filter((e) => enrolledAt(e.history, session.startAt));
+    const all = await this.enrollments
+      .find({ $or: [{ classId: session.classId }, { classHistory: session.classId }] })
+      .session(s ?? null);
+    return all.filter((e) =>
+      enrolledAt(e.history, session.startAt, { classId: session.classId, legacy: !!e.classId?.equals(session.classId) }),
+    );
   }
 
   /** 404 for missing sessions and for teachers outside the session's scope. */

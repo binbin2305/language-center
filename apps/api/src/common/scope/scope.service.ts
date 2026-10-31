@@ -38,14 +38,18 @@ export class ScopeService {
     return ids.some((id) => String(id) === String(session.classId));
   }
 
-  /** current = ENROLLED only; history = any enrollment that has a class. */
+  /** current = ENROLLED only; history (R22) = every class any enrollment was ever seated in: classId ∪ classHistory. */
   async studentClassIds(studentId: Types.ObjectId, mode: 'current' | 'history'): Promise<Types.ObjectId[]> {
-    const filter =
-      mode === 'current'
-        ? { studentId, classId: { $ne: null }, status: EnrollmentStatus.ENROLLED }
-        : { studentId, classId: { $ne: null } };
-    const rows = await this.enrollments.find(filter, { classId: 1 }).lean();
-    return dedupe(rows.map((r) => r.classId));
+    if (mode === 'current') {
+      const rows = await this.enrollments
+        .find({ studentId, classId: { $ne: null }, status: EnrollmentStatus.ENROLLED }, { classId: 1 })
+        .lean();
+      return dedupe(rows.map((r) => r.classId));
+    }
+    const rows = await this.enrollments
+      .find({ studentId, $or: [{ classId: { $ne: null } }, { 'classHistory.0': { $exists: true } }] }, { classId: 1, classHistory: 1 })
+      .lean();
+    return dedupe(rows.flatMap((r) => [r.classId, ...(r.classHistory ?? [])]));
   }
 
   /** Students ENROLLED or COMPLETED in the teacher's classes. */

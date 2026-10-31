@@ -97,7 +97,10 @@ export class AssignmentService {
         { _id: enrollmentId, status: EnrollmentStatus.WAITING_CLASS },
         {
           $set: set,
-          $push: { history: { from: EnrollmentStatus.WAITING_CLASS, to: EnrollmentStatus.ENROLLED, at: now, by: actor.id } },
+          $addToSet: { classHistory: cls._id },
+          $push: {
+            history: { from: EnrollmentStatus.WAITING_CLASS, to: EnrollmentStatus.ENROLLED, at: now, by: actor.id, classId: cls._id },
+          },
         },
         { new: true, session: s },
       );
@@ -173,7 +176,8 @@ export class AssignmentService {
             enrolledAt: now,
             transferredFromId: enrollmentId,
             invoiceId: before.invoiceId ?? null,
-            history: [{ from: null, to: EnrollmentStatus.ENROLLED, at: now, by: actor.id, reason }],
+            classHistory: [target._id],
+            history: [{ from: null, to: EnrollmentStatus.ENROLLED, at: now, by: actor.id, reason, classId: target._id }],
           },
         ],
         { session: s },

@@ -15,6 +15,8 @@ export interface EnrollmentHistoryEntry {
   at: Date;
   by?: Types.ObjectId;
   reason?: string;
+  /** R22: on entries that open an ENROLLED stint, the class seated in (absent on legacy rows). */
+  classId?: Types.ObjectId;
 }
 
 export interface Enrollment {
@@ -31,6 +33,8 @@ export interface Enrollment {
   transferredToId: Types.ObjectId | null;
   transferredFromId: Types.ObjectId | null;
   invoiceId: Types.ObjectId | null;
+  /** R22: every class this enrollment was ever seated in (assign/transfer $addToSet); history scope = classId ∪ classHistory. */
+  classHistory: Types.ObjectId[];
   history: EnrollmentHistoryEntry[];
 }
 
@@ -49,6 +53,7 @@ const HistorySchema = new Schema<EnrollmentHistoryEntry>(
     at: { type: Date, required: true },
     by: { type: Schema.Types.ObjectId, ref: Models.User },
     reason: { type: String },
+    classId: { type: Schema.Types.ObjectId, ref: Models.Class },
   },
   { _id: false },
 );
@@ -68,6 +73,7 @@ export const EnrollmentSchema = new Schema<Enrollment>(
     transferredToId: nullableRef(Models.Enrollment),
     transferredFromId: nullableRef(Models.Enrollment),
     invoiceId: nullableRef(Models.Invoice),
+    classHistory: { type: [{ type: Schema.Types.ObjectId, ref: Models.Class }], default: [] },
     history: { type: [HistorySchema], default: [] },
   },
   { timestamps: clockTimestamps, collection: 'enrollments' },

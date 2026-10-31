@@ -84,7 +84,7 @@ export class ResultsService {
   /** FR-GRD-05/06: one row per (student, class), scoped by role. */
   async list(q: ListResultsQuery, user: AuthUser): Promise<Paginated<ResultDto>> {
     await this.assertFeesGate(user);
-    const match: Record<string, unknown> = { classId: { $ne: null } };
+    const match: Record<string, unknown> = {};
     if (q.courseId) match.courseId = new Types.ObjectId(q.courseId);
     if (q.studentId) match.studentId = new Types.ObjectId(q.studentId);
     const empty = { data: [], meta: { page: q.page, limit: q.limit, total: 0 } };
@@ -93,20 +93,32 @@ export class ResultsService {
       if (!user.studentId) return empty;
       match.studentId = user.studentId; // overrides any query studentId
     }
+    // R22: an enrollment counts for every class it was seated in (classId ∪ classHistory).
+    const classMatch: Record<string, unknown> = { cid: { $ne: null } };
     let classFilter: Types.ObjectId[] | null = null;
     if (user.role === Role.TEACHER) classFilter = await this.scope.teacherClassIds(user.id);
     else if (user.role === Role.STUDENT) classFilter = await this.scope.studentClassIds(user.studentId!, 'history');
     if (q.classId) {
       const wanted = new Types.ObjectId(q.classId);
       if (classFilter && !classFilter.some((c) => c.equals(wanted))) return empty;
-      match.classId = wanted;
+      classMatch.cid = wanted;
     } else if (classFilter) {
-      match.classId = { $in: classFilter };
+      classMatch.cid = { $in: classFilter };
     }
 
     const [agg] = await this.enrollments.aggregate<{ rows: Pair[]; total: { n: number }[] }>([
       { $match: match },
-      { $group: { _id: { studentId: '$studentId', classId: '$classId' }, courseId: { $first: '$courseId' }, first: { $min: '$_id' } } },
+      {
+        $project: {
+          studentId: 1,
+          courseId: 1,
+          cids: { $setUnion: [{ $cond: [{ $eq: [{ $ifNull: ['$classId', null] }, null] }, [], ['$classId']] }, { $ifNull: ['$classHistory', []] }] },
+        },
+      },
+      { $unwind: '$cids' },
+      { $project: { studentId: 1, courseId: 1, cid: '$cids' } },
+      { $match: classMatch },
+      { $group: { _id: { studentId: '$studentId', classId: '$cid' }, courseId: { $first: '$courseId' }, first: { $min: '$_id' } } },
       { $sort: { first: 1 } },
       {
         $facet: {
@@ -131,7 +143,9 @@ export class ResultsService {
       throw new AppError(ErrorCode.NOT_FOUND);
     }
     await this.assertFeesGate(user);
-    const enrollment = await this.enrollments.findOne({ studentId: q.studentId, classId: q.classId }, { courseId: 1 }).lean();
+    const enrollment = await this.enrollments
+      .findOne({ studentId: q.studentId, $or: [{ classId: q.classId }, { classHistory: q.classId }] }, { courseId: 1 })
+      .lean();
     const [student, cls] = await Promise.all([
       this.students.findById(q.studentId, { code: 1, fullName: 1 }).lean(),
       this.classes.findById(q.classId, { code: 1, name: 1 }).lean(),
