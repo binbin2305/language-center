@@ -18,7 +18,6 @@ import {
   type AttendanceSummaryRowDto,
   type ListAttendanceQuery,
   type Paginated,
-  type AttendanceCounts,
   type SessionAttendanceDto,
   type TakeAttendanceInput,
   type UpdateAttendanceInput,
@@ -39,6 +38,7 @@ import type { Student } from '../../database/schemas/student.schema';
 import type { User } from '../../database/schemas/user.schema';
 import type { Class } from '../../database/schemas/class.schema';
 import { RosterRow, toAttendanceDto, toSessionAttendanceDto } from './attendance.mapper';
+import { AttendanceStatsService } from './attendance-stats.service';
 import { enrolledAt } from './roster';
 
 const EARLY_MS = 15 * 60_000;
@@ -67,6 +67,7 @@ export class AttendanceService {
     private readonly scope: ScopeService,
     private readonly settings: SettingsService,
     private readonly events: EventEmitter2,
+    private readonly stats: AttendanceStatsService,
   ) {}
 
   /** D13: enrollments of the session's class that were ENROLLED at session.startAt. */
@@ -269,7 +270,7 @@ export class AttendanceService {
     const ids = [...entries.values()].map((e) => e.studentId);
     const studs = await this.students.find({ _id: { $in: ids } }, { code: 1, fullName: 1 }).lean();
     const byId = new Map(studs.map((x) => [x._id.toString(), x]));
-    const rates = await this.rates(session.classId, ids);
+    const flags = await this.stats.warningFlags(session.classId, ids);
 
     const rows: RosterRow[] = [...entries.values()]
       .map((e) => {
@@ -280,7 +281,7 @@ export class AttendanceService {
           studentCode: st?.code ?? '',
           fullName: st?.fullName ?? '',
           record: recByStudent.get(e.studentId.toString()),
-          absenceRate: rates.get(e.studentId.toString()) ?? 0,
+          absenceRate: flags.get(e.studentId.toString())?.absenceRate ?? 0,
         };
       })
       .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi') || a.studentCode.localeCompare(b.studentCode));
@@ -301,20 +302,6 @@ export class AttendanceService {
       ...(session.attendanceNote !== undefined ? { sessionNote: session.attendanceNote } : {}),
       rows,
     });
-  }
-
-  /** absenceRate over each student's records in the class (R2; AT-04 replaces with warningFlags). */
-  private async rates(classId: Types.ObjectId, studentIds: Types.ObjectId[]): Promise<Map<string, number>> {
-    const rows = await this.attendances.aggregate<{ _id: { s: Types.ObjectId; st: AttendanceStatus }; n: number }>([
-      { $match: { classId, studentId: { $in: studentIds } } },
-      { $group: { _id: { s: '$studentId', st: '$status' }, n: { $sum: 1 } } },
-    ]);
-    const counts = new Map<string, AttendanceCounts>();
-    for (const r of rows) {
-      const k = r._id.s.toString();
-      counts.set(k, { ...(counts.get(k) ?? {}), [r._id.st]: r.n });
-    }
-    return new Map([...counts].map(([k, c]) => [k, absenceRate(c)]));
   }
 
   /**
