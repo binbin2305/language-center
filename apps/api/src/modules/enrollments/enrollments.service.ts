@@ -11,6 +11,7 @@ import {
   ErrorCode,
   ListEnrollmentsQuery,
   Role,
+  SkipPlacementInput,
 } from '@lc/shared';
 import { withTransaction } from '../../common/db/transaction';
 import { paginate } from '../../common/pagination';
@@ -167,6 +168,79 @@ export class EnrollmentsService {
       if (isDuplicateKey(e)) throw new AppError(ErrorCode.ENROLLMENT_EXISTS);
       throw e;
     }
+  }
+
+  /**
+   * D15: PENDING_PLACEMENT -> WAITING_CLASS from a placement result; an enrollment already placed by a test
+   * (not skipped) only gets its level updated. Runs inside the caller's transaction.
+   */
+  async markPlaced(enrollmentId: Types.ObjectId, level: string, actor: AuthUser, s: ClientSession): Promise<void> {
+    const before = await this.enrollments.findById(enrollmentId).session(s).lean();
+    const now = this.clock.now();
+    const moved = await this.enrollments
+      .findOneAndUpdate(
+        { _id: enrollmentId, status: EnrollmentStatus.PENDING_PLACEMENT },
+        {
+          $set: { status: EnrollmentStatus.WAITING_CLASS, placementLevel: level, waitingSince: now },
+          $push: { history: { from: EnrollmentStatus.PENDING_PLACEMENT, to: EnrollmentStatus.WAITING_CLASS, at: now, by: actor.id } },
+        },
+        { new: true, session: s },
+      )
+      .lean();
+    const after =
+      moved ??
+      (await this.enrollments
+        .findOneAndUpdate(
+          { _id: enrollmentId, status: EnrollmentStatus.WAITING_CLASS, placementSkipped: null },
+          { $set: { placementLevel: level } },
+          { new: true, session: s },
+        )
+        .lean());
+    if (!after) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+    await this.audit.log(
+      { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: enrollmentId, before, after },
+      s,
+    );
+  }
+
+  /** POST /enrollments/:id/skip-placement */
+  async skipPlacement(id: string, input: SkipPlacementInput, actor: AuthUser): Promise<EnrollmentDoc> {
+    if (!isValidObjectId(id)) throw new AppError(ErrorCode.NOT_FOUND);
+    const reason = input.reason.trim();
+    if (!reason) throw new AppError(ErrorCode.REASON_REQUIRED);
+    return withTransaction(this.conn, async (s) => {
+      const before = await this.enrollments.findById(id).session(s).lean();
+      if (!before) throw new AppError(ErrorCode.NOT_FOUND);
+      const course = await this.courses.findById(before.courseId).session(s).select('levels').lean();
+      if (!course?.levels.includes(input.level)) throw this.fieldError('level', 'Trình độ không thuộc khóa học');
+      const now = this.clock.now();
+      const updated = await this.enrollments.findOneAndUpdate(
+        { _id: before._id, status: EnrollmentStatus.PENDING_PLACEMENT },
+        {
+          $set: {
+            status: EnrollmentStatus.WAITING_CLASS,
+            placementLevel: input.level,
+            placementSkipped: { reason, by: actor.id, at: now },
+            waitingSince: now,
+          },
+          $push: {
+            history: { from: EnrollmentStatus.PENDING_PLACEMENT, to: EnrollmentStatus.WAITING_CLASS, at: now, by: actor.id, reason },
+          },
+        },
+        { new: true, session: s },
+      );
+      if (!updated) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+      await this.audit.log(
+        { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: updated._id, before, after: updated.toObject() },
+        s,
+      );
+      return updated;
+    });
+  }
+
+  async toDto(doc: EnrollmentDoc): Promise<EnrollmentDto> {
+    const [dto] = await this.toDtos([doc.toObject() as unknown as EnrollmentLean]);
+    return dto;
   }
 
   /** Batch-resolves student/course/class labels for a page of enrollments. */

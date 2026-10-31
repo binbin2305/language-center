@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ChangeEnrollmentCourseInput, CreateEnrollmentInput, ListEnrollmentsQuery, Role } from '@lc/shared';
+import { ChangeEnrollmentCourseInput, CreateEnrollmentInput, ListEnrollmentsQuery, Role, SkipPlacementInput } from '@lc/shared';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -41,5 +41,15 @@ export class EnrollmentsController {
     @Body(new ZodValidationPipe(ChangeEnrollmentCourseInput)) body: ChangeEnrollmentCourseInput,
   ) {
     return { data: await this.svc.changeCourse(user, id, body) };
+  }
+
+  @Post(':id/skip-placement')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async skipPlacement(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(SkipPlacementInput)) body: SkipPlacementInput,
+  ) {
+    return { data: await this.svc.toDto(await this.svc.skipPlacement(id, body, user)) };
   }
 }
