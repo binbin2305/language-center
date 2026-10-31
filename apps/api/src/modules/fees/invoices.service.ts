@@ -53,6 +53,7 @@ export class InvoicesService {
     const doc = await withTransaction(this.conn, async (s) => {
       // Lock-key protocol: serialise discount writes on this invoice before reading its invariants.
       await this.counters.next(`lock:invoice-discount:${oid.toString()}`, s);
+      await this.counters.next(`lock:invoice:${oid.toString()}`, s);
       const inv = await this.loadForDiscount(oid, s);
       if (inv.discount && inv.discount.status !== DiscountStatus.REJECTED) {
         throw new AppError(ErrorCode.DISCOUNT_NOT_PENDING);
@@ -91,6 +92,7 @@ export class InvoicesService {
     const oid = this.toId(id);
     const doc = await withTransaction(this.conn, async (s) => {
       await this.counters.next(`lock:invoice-discount:${oid.toString()}`, s);
+      await this.counters.next(`lock:invoice:${oid.toString()}`, s);
       const inv = await this.loadForDiscount(oid, s);
       if (inv.discount?.status !== DiscountStatus.PENDING_APPROVAL) throw new AppError(ErrorCode.DISCOUNT_NOT_PENDING);
       const now = this.clock.now();

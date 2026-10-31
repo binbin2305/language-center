@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
-import { InvoiceDto, InvoiceStatus, toDateOnly, vnDay } from '@lc/shared';
+import { InvoiceDto, PaymentDto, InvoiceStatus, toDateOnly, vnDay } from '@lc/shared';
+import type { Payment } from '../../database/schemas/payment.schema';
 import type { Invoice } from '../../database/schemas/invoice.schema';
 
 export type InvoiceLean = Invoice & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
@@ -35,7 +36,7 @@ export function toInvoiceDto(inv: InvoiceLean, now: Date, names: { studentName?:
     balance: inv.balance,
     dueDate: toDateOnly(inv.dueDate),
     status: inv.status,
-    overdue: toDateOnly(inv.dueDate) < vnDay(now) && inv.balance > 0 && inv.status !== InvoiceStatus.VOID,
+    overdue: isOverdue(inv, now),
     ...names,
   };
 }
@@ -45,4 +46,31 @@ export function invoiceStatus(inv: { finalAmount: number; amountPaid: number }):
   const balance = inv.finalAmount - inv.amountPaid;
   if (inv.finalAmount === 0 || balance === 0) return InvoiceStatus.PAID;
   return inv.amountPaid > 0 ? InvoiceStatus.PARTIAL : InvoiceStatus.UNPAID;
+}
+
+/** Due date (VN day) already passed, money still owed, not void. A due date of today is not overdue. */
+export function isOverdue(inv: Pick<Invoice, 'dueDate' | 'balance' | 'status'>, now: Date): boolean {
+  return toDateOnly(inv.dueDate) < vnDay(now) && inv.balance > 0 && inv.status !== InvoiceStatus.VOID;
+}
+
+export type PaymentLean = Payment & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
+
+export function toPaymentDto(p: PaymentLean): PaymentDto {
+  return {
+    id: p._id.toString(),
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+    code: p.code,
+    invoiceId: p.invoiceId.toString(),
+    studentId: p.studentId.toString(),
+    amount: p.amount,
+    method: p.method,
+    paidAt: p.paidAt.toISOString(),
+    note: p.note ?? null,
+    status: p.status,
+    voidReason: p.voidReason ?? null,
+    voidedBy: p.voidedBy?.toString() ?? null,
+    voidedAt: p.voidedAt?.toISOString() ?? null,
+    recordedBy: p.recordedBy?.toString() ?? '',
+  };
 }
