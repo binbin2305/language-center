@@ -8,6 +8,7 @@ import { makeClass, makeCourse, makeEnrollment, makeStudent, models } from '../f
 describe('FR-CLS-06 Xếp lớp', () => {
   let t: TestApp;
   let manager: string;
+  let managerId: string;
   let staff: string;
   let admin: string;
   let teacher: string;
@@ -26,7 +27,9 @@ describe('FR-CLS-06 Xếp lớp', () => {
 
   beforeAll(async () => {
     t = await createTestApp({ overrides: [{ provide: INVOICE_CREATOR, useValue: fake }] });
-    manager = (await loginAs(t, Role.MANAGER)).token;
+    const mgr = await loginAs(t, Role.MANAGER);
+    manager = mgr.token;
+    managerId = mgr.user._id.toString();
     staff = (await loginAs(t, Role.ACADEMIC_STAFF)).token;
     admin = (await loginAs(t, Role.ADMIN)).token;
     teacher = (await loginAs(t, Role.TEACHER)).token;
@@ -63,7 +66,8 @@ describe('FR-CLS-06 Xếp lớp', () => {
     await assign(manager, e._id, { classId: cls._id.toString(), overrideReason: 'abc' }).expect(400);
     const r2 = await assign(manager, e._id, { classId: cls._id.toString(), overrideReason: 'HV xin học vượt' }).expect(201);
     expect(r2.body.data.levelOverride).toMatchObject({ reason: 'HV xin học vượt' });
-    expect(r2.body.data.levelOverride.by).toBeDefined();
+    expect(r2.body.data.levelOverride.by).toBe(managerId);
+    expect(r2.body.data.levelOverride.at).toBeTruthy();
   });
 
   it('lớp FINISHED / INACTIVE → 422 CLASS_NOT_OPEN', async () => {
@@ -101,6 +105,7 @@ describe('FR-CLS-06 Xếp lớp', () => {
     expect((await m.Class.findById(cls._id).lean())?.currentSize).toBe(1);
     expect(fake.createForEnrollment).toHaveBeenCalledTimes(1);
     expect(fake.createForEnrollment.mock.calls[0][0].toString()).toBe(e._id.toString());
+    expect(typeof fake.createForEnrollment.mock.calls[0][1].commitTransaction).toBe('function'); // a ClientSession
     const st = await m.Student.findById(e.studentId).lean();
     const n = await t.conn.collection('notifications').find({ type: 'CLASS_ASSIGNED', userId: st?.userId }).toArray();
     expect(n).toHaveLength(1);
@@ -128,6 +133,7 @@ describe('FR-CLS-06 Xếp lớp', () => {
     const e = await waiting(c._id);
     const rs = await Promise.all([0, 1].map(() => assign(staff, e._id, { classId: cls._id.toString() })));
     expect(rs.map((r) => r.status).sort()).toEqual([201, 422]);
+    expect(rs.find((r) => r.status === 422)?.body.error.code).toBe(ErrorCode.ENROLLMENT_INVALID_STATE);
     expect((await models(t.conn).Class.findById(cls._id).lean())?.currentSize).toBe(1);
   });
 

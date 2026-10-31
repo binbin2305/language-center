@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Connection, isValidObjectId, Model, Types } from 'mongoose';
 import {
@@ -19,7 +19,6 @@ import { CounterService } from '../../common/db/counter.service';
 import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { NotificationsService } from '../../common/notifications/notifications.service';
-import { Inject } from '@nestjs/common';
 import { Models } from '../../database/models';
 import { Class, ClassDoc } from '../../database/schemas/class.schema';
 import { Enrollment } from '../../database/schemas/enrollment.schema';
@@ -28,13 +27,10 @@ import { EnrollmentsService } from './enrollments.service';
 
 const OPEN_STATUSES: ClassStatus[] = [ClassStatus.PLANNED, ClassStatus.ONGOING];
 
-export interface SeatOptions {
-  /** Allows a class whose level differs from the enrollment's placement level. */
-  overrideReason?: string;
-}
-
 @Injectable()
 export class AssignmentService {
+  private readonly logger = new Logger(AssignmentService.name);
+
   constructor(
     @InjectModel(Models.Enrollment) private readonly enrollments: Model<Enrollment>,
     @InjectModel(Models.Class) private readonly classes: Model<Class>,
@@ -49,22 +45,15 @@ export class AssignmentService {
   ) {}
 
   /**
-   * Takes one seat in a class inside the caller's transaction: bumps `lock:class:<id>` BEFORE reading the class,
-   * validates course/level, then increments currentSize atomically (ARCHITECTURE 4.5).
-   * Returns the class after the increment and whether a level override was needed.
+   * Takes one seat in a class inside the caller's transaction: validates course, then increments currentSize
+   * atomically (ARCHITECTURE 4.5). Level rules are the caller's concern.
+   * Callers MUST bump `lock:class:<id>` via CounterService.next for every class they touch (ascending id order)
+   * BEFORE calling this, so the class is read after the lock.
    */
-  async seat(
-    enrollment: Pick<Enrollment, 'courseId' | 'placementLevel'>,
-    classId: Types.ObjectId,
-    s: ClientSession,
-    opts: SeatOptions = {},
-  ): Promise<{ cls: ClassDoc; levelOverridden: boolean }> {
-    await this.counters.next(`lock:class:${classId}`, s);
-    const before = await this.classes.findById(classId).session(s).lean();
+  async seat(enrollment: Pick<Enrollment, 'courseId'>, classId: Types.ObjectId, s: ClientSession): Promise<ClassDoc> {
+    const before = await this.classes.findById(classId).session(s).select('courseId').lean();
     if (!before) throw new AppError(ErrorCode.NOT_FOUND);
     if (!before.courseId.equals(enrollment.courseId)) throw new AppError(ErrorCode.COURSE_MISMATCH);
-    const levelOverridden = !!enrollment.placementLevel && enrollment.placementLevel !== before.level;
-    if (levelOverridden && !opts.overrideReason) throw new AppError(ErrorCode.LEVEL_MISMATCH);
 
     const cls = await this.classes.findOneAndUpdate(
       { _id: classId, status: { $in: OPEN_STATUSES }, $expr: { $lt: ['$currentSize', '$maxCapacity'] } },
@@ -77,7 +66,7 @@ export class AssignmentService {
       if (!now) throw new AppError(ErrorCode.NOT_FOUND);
       throw new AppError(OPEN_STATUSES.includes(now.status) ? ErrorCode.CLASS_FULL : ErrorCode.CLASS_NOT_OPEN);
     }
-    return { cls, levelOverridden };
+    return cls;
   }
 
   /** POST /enrollments/:id/assign */
@@ -87,11 +76,18 @@ export class AssignmentService {
     const classId = new Types.ObjectId(input.classId);
 
     const { after, studentId } = await withTransaction(this.conn, async (s) => {
+      await this.counters.next(`lock:class:${classId}`, s);
       const before = await this.enrollments.findById(enrollmentId).session(s).lean();
       if (!before) throw new AppError(ErrorCode.NOT_FOUND);
       if (before.status !== EnrollmentStatus.WAITING_CLASS) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
 
-      const { cls, levelOverridden } = await this.seat(before, classId, s, { overrideReason: input.overrideReason });
+      const target = await this.classes.findById(classId).session(s).select('courseId level').lean();
+      if (!target) throw new AppError(ErrorCode.NOT_FOUND);
+      const levelOverridden =
+        target.courseId.equals(before.courseId) && !!before.placementLevel && before.placementLevel !== target.level;
+      if (levelOverridden && !input.overrideReason) throw new AppError(ErrorCode.LEVEL_MISMATCH);
+
+      const cls = await this.seat(before, classId, s);
 
       const now = this.clock.now();
       const set: Record<string, unknown> = { status: EnrollmentStatus.ENROLLED, classId: cls._id, enrolledAt: now };
@@ -110,11 +106,12 @@ export class AssignmentService {
       const final = invoiceId
         ? await this.enrollments.findByIdAndUpdate(enrollmentId, { $set: { invoiceId } }, { new: true, session: s })
         : claimed;
+      if (!final) throw new AppError(ErrorCode.NOT_FOUND);
       await this.audit.log(
-        { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: enrollmentId, before, after: final!.toObject() },
+        { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: enrollmentId, before, after: final.toObject() },
         s,
       );
-      return { after: final!, studentId: before.studentId };
+      return { after: final, studentId: before.studentId };
     });
 
     await this.notifyAssigned(studentId, after.classId!);
@@ -137,7 +134,7 @@ export class AssignmentService {
         refId: classId,
       });
     } catch (e) {
-      console.error('assign notify failed', e);
+      this.logger.error('assign notify failed', e instanceof Error ? e.stack : String(e));
     }
   }
 }
