@@ -63,6 +63,6 @@ describe('FR-ADM-05 EnrollmentsService.createPending', () => {
 
   it('cung cấp INVOICE_CREATOR no-op', async () => {
     const ic = t.app.get(INVOICE_CREATOR, { strict: false });
-    await expect(ic.createForEnrollment(new Types.ObjectId(), undefined as never)).resolves.toBeUndefined();
+    await expect(ic.createForEnrollment(new Types.ObjectId(), undefined as never)).resolves.toBeNull();
   });
 });

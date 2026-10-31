@@ -42,7 +42,7 @@ describe('ContractsModule', () => {
     class ConsumerModule {}
     const ref = await Test.createTestingModule({ imports: [ContractsModule, ConsumerModule] }).compile();
     const c = ref.get(Consumer);
-    await expect(c.invoices.createForEnrollment(id, undefined as never)).resolves.toBeUndefined();
+    await expect(c.invoices.createForEnrollment(id, undefined as never)).resolves.toBeNull();
     await expect(c.invoices.voidForEnrollment(id, 'x', undefined as never)).resolves.toBeUndefined();
     await expect(c.outstanding.hasOverdueBalance(id)).resolves.toBe(false);
     await expect(
@@ -59,7 +59,7 @@ describe('ContractsModule', () => {
     ]) {
       const ref = await Test.createTestingModule({ imports }).compile();
       await expect(ref.get(Consumer).outstanding.hasOverdueBalance(id)).resolves.toBe(true);
-      await expect(ref.get(Consumer).invoices.createForEnrollment(id, undefined as never)).resolves.toBeUndefined();
+      await expect(ref.get(Consumer).invoices.createForEnrollment(id, undefined as never)).resolves.toBeNull();
     }
   });
 });

@@ -8,12 +8,15 @@ import type { ClientSession, Types } from 'mongoose';
 export const INVOICE_CREATOR = Symbol('INVOICE_CREATOR');
 
 export interface InvoiceCreator {
-  createForEnrollment(enrollmentId: Types.ObjectId, s: ClientSession): Promise<void>;
+  /** Returns the id of the existing/new TUITION invoice (D11); a no-op implementation returns null. */
+  createForEnrollment(enrollmentId: Types.ObjectId, s: ClientSession): Promise<Types.ObjectId | null>;
   voidForEnrollment(enrollmentId: Types.ObjectId, reason: string, s: ClientSession): Promise<void>;
 }
 
 @Injectable()
 export class NoopInvoiceCreator implements InvoiceCreator {
-  async createForEnrollment(): Promise<void> {}
+  async createForEnrollment(): Promise<null> {
+    return null;
+  }
   async voidForEnrollment(): Promise<void> {}
 }
