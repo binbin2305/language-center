@@ -57,11 +57,13 @@ const fullColumns: ColumnDef<InvoiceRow>[] = [
 ];
 const teacherColumns: ColumnDef<InvoiceRow>[] = [...student, balance, status];
 
-/** Invoice table with sum footer of the current page (D20). Teachers get the reduced columns. */
-export function InvoiceTable({ filters, teacher }: { filters: InvoiceListParams; teacher: boolean }) {
+/** Invoice table with sum footer of the current page (D20). Reduced columns when the API answers with the teacher view. */
+export function InvoiceTable({ filters }: { filters: InvoiceListParams }) {
   const [page, setPage] = useState(1);
   const list = useInvoices({ ...filters, page, limit: LIMIT });
   const rows = list.data?.data ?? [];
+  // Teacher rows (InvoiceTeacherViewDto) carry no amounts: the reduced view follows the response shape.
+  const teacher = rows.some((r) => !isFull(r));
   const sum = (f: (r: InvoiceDto) => number) => rows.filter(isFull).reduce((a, r) => a + f(r), 0);
   return (
     <div className="space-y-3">

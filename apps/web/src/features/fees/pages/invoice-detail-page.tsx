@@ -12,7 +12,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/auth/use-auth';
 import { errorMessage } from '@/lib/error-messages';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { statusLabel } from '@/lib/status';
 import { DiscountDecisionButtons } from '../components/discount-decision-buttons';
 import { DiscountDialog } from '../components/discount-dialog';
 import { PaymentDialog } from '../components/payment-dialog';
@@ -39,7 +38,8 @@ export default function InvoiceDetailPage() {
   const [voidingPayment, setVoidingPayment] = useState<string | null>(null);
   const [voidingInvoice, setVoidingInvoice] = useState(false);
   const canUpdate = can(user, 'fees.update');
-  const canDecide = can(user, 'discounts.decide');
+  // TODO W2-MERGE: payments.void permission (docs/contract-requests/L-FEES-2.md); voiding is Manager-only meanwhile.
+  const canVoid = can(user, 'discounts.decide');
 
   const inv = q.data;
   if (!inv) {
@@ -68,7 +68,7 @@ export default function InvoiceDetailPage() {
             {canUpdate && active && !d ? (
               <Button variant="outline" onClick={() => setDiscounting(true)}>Đề xuất giảm giá</Button>
             ) : null}
-            {canDecide && active ? (
+            {canVoid && active ? (
               <Button variant="outline" onClick={() => setVoidingInvoice(true)}>Hủy hóa đơn</Button>
             ) : null}
           </>
@@ -115,7 +115,7 @@ export default function InvoiceDetailPage() {
                 {p.status === 'VALID' ? (
                   <Button size="sm" variant="outline" onClick={() => void openReceipt(p.id)}>In phiếu</Button>
                 ) : null}
-                {canDecide && p.status === 'VALID' ? (
+                {canVoid && p.status === 'VALID' ? (
                   <Button size="sm" variant="outline" onClick={() => setVoidingPayment(p.id)}>Hủy phiếu thu</Button>
                 ) : null}
               </span>
@@ -145,11 +145,13 @@ export default function InvoiceDetailPage() {
       <ReasonDialog
         open={voidingInvoice}
         onOpenChange={setVoidingInvoice}
-        title={`Hủy hóa đơn (${statusLabel('invoice', inv.status)})`}
+        title="Hủy hóa đơn"
+        description="Lý do hủy (không bắt buộc)."
+        minLength={0}
         submitLabel="Hủy hóa đơn"
         isPending={voidInvoice.isPending}
         onSubmit={(reason) =>
-          voidInvoice.mutate(reason, {
+          voidInvoice.mutate(reason || undefined, {
             onSuccess: () => { toast.success('Đã hủy hóa đơn'); setVoidingInvoice(false); },
             onError: (e) => toast.error(errorMessage(e)),
           })

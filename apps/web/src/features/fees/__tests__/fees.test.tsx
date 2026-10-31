@@ -184,3 +184,26 @@ describe('duyệt giảm giá', () => {
     expect(screen.getByRole('button', { name: 'Duyệt' })).toBeInTheDocument();
   });
 });
+
+describe('đề xuất giảm giá', () => {
+  it('S gửi đề xuất → POST /invoices/:id/discount với dữ liệu form', async () => {
+    detail();
+    let body: unknown;
+    server.use(
+      http.post('*/api/v1/invoices/:id/discount', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ data: invoice() });
+      }),
+    );
+    renderApp({ route: `/fees/invoices/${INV_ID}`, user: makeUser('ACADEMIC_STAFF') });
+    await userEvent.click(await screen.findByRole('button', { name: 'Đề xuất giảm giá' }, T));
+    await userEvent.type(await screen.findByLabelText('Giá trị'), '150');
+    await userEvent.type(screen.getByLabelText('Lý do'), 'Anh em ruột');
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi đề xuất' }));
+    expect(await screen.findByText('Phần trăm giảm tối đa 100')).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText('Giá trị'));
+    await userEvent.type(screen.getByLabelText('Giá trị'), '10');
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi đề xuất' }));
+    await waitFor(() => expect(body).toEqual({ kind: 'PERCENT', value: 10, reason: 'Anh em ruột' }));
+  });
+});

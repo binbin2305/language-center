@@ -16,7 +16,8 @@ import { InvoiceTable } from '../components/invoice-table';
 
 export default function FeesPage() {
   const { user } = useAuth();
-  const teacher = user?.role === 'TEACHER';
+  // Student/class/date filters are staff tools; teachers only get status + overdue.
+  const staff = can(user, 'fees.update');
   const [studentId, setStudentId] = useState<string | null>(null);
   const [classId, setClassId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
@@ -43,13 +44,13 @@ export default function FeesPage() {
         }
       />
       <FilterBar>
-        {teacher ? null : (
+        {staff ? (
           <>
             <div className="w-56"><EntitySelect entity="student" value={studentId} onChange={setStudentId} placeholder="Học viên" aria-label="Lọc theo học viên" /></div>
             <div className="w-56"><EntitySelect entity="class" value={classId} onChange={setClassId} placeholder="Lớp" aria-label="Lọc theo lớp" /></div>
             <DateRangePicker value={range} onChange={setRange} aria-label="Khoảng thời gian" />
           </>
-        )}
+        ) : null}
         <OptionSelect
           value={status}
           onValueChange={setStatus}
@@ -63,7 +64,7 @@ export default function FeesPage() {
           <Label htmlFor="f-overdue">Quá hạn</Label>
         </div>
       </FilterBar>
-      <InvoiceTable key={key} filters={filters} teacher={teacher} />
+      <InvoiceTable key={key} filters={filters} />
     </div>
   );
 }

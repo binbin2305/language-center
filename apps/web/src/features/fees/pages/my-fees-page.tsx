@@ -10,7 +10,7 @@ import type { InvoiceDto } from '@lc/shared';
 
 export default function MyFeesPage() {
   const list = useInvoices({ page: 1, limit: 50 });
-  const rows = (list.data?.data ?? []) as InvoiceDto[];
+  const rows = (list.data?.data ?? []).filter((r): r is InvoiceDto => 'finalAmount' in r);
   return (
     <div>
       <PageHeader title="Học phí của tôi" />
