@@ -263,9 +263,9 @@ export class InvoicesService {
   /** Discount in VND; DISCOUNT_INVALID (400) when malformed or it would drop finalAmount below amountPaid. */
   private discountAmount(inv: InvoiceLean, d: Discount): number {
     const dd: Discount = { kind: d.kind, value: d.value };
-    if (!isValidDiscount(inv.amountDue, dd)) throw new AppError(ErrorCode.DISCOUNT_INVALID, 400);
+    if (!isValidDiscount(inv.amountDue, dd)) throw new AppError(ErrorCode.DISCOUNT_INVALID);
     const amount = inv.amountDue - applyDiscount(inv.amountDue, dd);
-    if (inv.amountDue - amount < inv.amountPaid) throw new AppError(ErrorCode.DISCOUNT_INVALID, 400);
+    if (inv.amountDue - amount < inv.amountPaid) throw new AppError(ErrorCode.DISCOUNT_INVALID);
     return amount;
   }
 

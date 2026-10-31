@@ -9,6 +9,11 @@ describe('hợp đồng Wave 2', () => {
     expect(S.ERROR_HTTP_STATUS.FEES_OUTSTANDING).toBe(403);
   });
 
+  it('R6/R12: ATTENDANCE_INCOMPLETE và DISCOUNT_INVALID trả 400 (FR-ATT-02, FR-FEE-03)', () => {
+    expect(S.ERROR_HTTP_STATUS.ATTENDANCE_INCOMPLETE).toBe(400);
+    expect(S.ERROR_HTTP_STATUS.DISCOUNT_INVALID).toBe(400);
+  });
+
   it('FR-FEE-06: InvoiceTeacherViewDto loại bỏ payments/amountPaid/discount', () => {
     const full = {
       id: id(1), createdAt: ts, updatedAt: ts, code: 'HD20260001', kind: 'TUITION', studentId: id(2),

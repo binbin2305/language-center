@@ -117,7 +117,7 @@ export class AttendanceService {
       const unknown = [...byStudent.keys()].filter((sid) => !rosterIds.has(sid));
       if (unknown.length > 0) throw new AppError(ErrorCode.STUDENT_NOT_IN_ROSTER, undefined, { studentIds: unknown });
       const missing = [...rosterIds].filter((sid) => !byStudent.has(sid));
-      if (missing.length > 0) throw new AppError(ErrorCode.ATTENDANCE_INCOMPLETE, 400, { studentIds: missing });
+      if (missing.length > 0) throw new AppError(ErrorCode.ATTENDANCE_INCOMPLETE, undefined, { studentIds: missing });
 
       const claimed = await this.sessions.findOneAndUpdate(
         { _id: session._id, attendanceTakenAt: null, status: SessionStatus.SCHEDULED },
