@@ -1,18 +1,25 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Connection, FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
 import {
   AuditAction,
+  canTransition,
   ChangeEnrollmentCourseInput,
+  ENROLLMENT_TRANSITIONS,
   CourseStatus,
   CreateEnrollmentInput,
   EnrollmentDto,
   EnrollmentStatus,
   ErrorCode,
   ListEnrollmentsQuery,
+  ListWaitingEnrollmentsQuery,
   Role,
   SkipPlacementInput,
+  vnDay,
+  WaitingEnrollmentDto,
+  WithdrawEnrollmentInput,
 } from '@lc/shared';
+import { INVOICE_CREATOR, InvoiceCreator } from '../../common/contracts/invoice-creator';
 import { withTransaction } from '../../common/db/transaction';
 import { paginate } from '../../common/pagination';
 import { Class } from '../../database/schemas/class.schema';
@@ -42,6 +49,7 @@ export class EnrollmentsService {
     private readonly clock: ClockService,
     private readonly audit: AuditService,
     private readonly counters: CounterService,
+    @Inject(INVOICE_CREATOR) private readonly invoices: InvoiceCreator,
   ) {}
 
   async createPending(
@@ -240,6 +248,122 @@ export class EnrollmentsService {
       );
       return updated;
     });
+  }
+
+  /** POST /enrollments/:id/withdraw — ENROLLED -> CANCELLED|RESERVED frees a seat; CANCELLED also voids the invoice. */
+  async withdraw(id: string, input: WithdrawEnrollmentInput, actor: AuthUser): Promise<EnrollmentDto> {
+    if (!isValidObjectId(id)) throw new AppError(ErrorCode.NOT_FOUND);
+    const reason = input.reason.trim();
+    if (!reason) throw new AppError(ErrorCode.REASON_REQUIRED);
+    const enrollmentId = new Types.ObjectId(id);
+    // An ENROLLED enrollment's classId never changes, so the peek tells which class lock to take.
+    const peek = await this.enrollments.findById(enrollmentId).select('classId status').lean();
+    if (!peek) throw new AppError(ErrorCode.NOT_FOUND);
+
+    const after = await withTransaction(this.conn, async (s) => {
+      if (peek.status === EnrollmentStatus.ENROLLED && peek.classId) await this.counters.next(`lock:class:${peek.classId}`, s);
+      const before = await this.enrollments.findById(enrollmentId).session(s).lean();
+      if (!before) throw new AppError(ErrorCode.NOT_FOUND);
+      if (!canTransition(ENROLLMENT_TRANSITIONS, before.status, input.status)) {
+        throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION);
+      }
+      const now = this.clock.now();
+      const claimed = await this.enrollments.findOneAndUpdate(
+        { _id: enrollmentId, status: before.status },
+        {
+          $set: { status: input.status },
+          $push: { history: { from: before.status, to: input.status, at: now, by: actor.id, reason } },
+        },
+        { new: true, session: s },
+      );
+      if (!claimed) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+      if (before.status === EnrollmentStatus.ENROLLED) {
+        if (before.classId) await this.releaseSeat(before.classId, s);
+        if (input.status === EnrollmentStatus.CANCELLED) await this.invoices.voidForEnrollment(enrollmentId, reason, s);
+      }
+      await this.audit.log(
+        { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: enrollmentId, before, after: claimed.toObject() },
+        s,
+      );
+      return claimed;
+    });
+    return this.toDto(after);
+  }
+
+  /** Atomic seat release; never drops below zero. Caller holds lock:class:<id>. */
+  async releaseSeat(classId: Types.ObjectId, s: ClientSession): Promise<void> {
+    await this.classes.findOneAndUpdate({ _id: classId, currentSize: { $gt: 0 } }, { $inc: { currentSize: -1 } }, { session: s });
+  }
+
+  /** POST /enrollments/:id/resume — RESERVED -> WAITING_CLASS. */
+  async resume(id: string, actor: AuthUser): Promise<EnrollmentDto> {
+    if (!isValidObjectId(id)) throw new AppError(ErrorCode.NOT_FOUND);
+    const enrollmentId = new Types.ObjectId(id);
+    try {
+      const after = await withTransaction(this.conn, async (s) => {
+        const before = await this.enrollments.findById(enrollmentId).session(s).lean();
+        if (!before) throw new AppError(ErrorCode.NOT_FOUND);
+        if (before.status !== EnrollmentStatus.RESERVED) throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION);
+        const now = this.clock.now();
+        const claimed = await this.enrollments.findOneAndUpdate(
+          { _id: enrollmentId, status: EnrollmentStatus.RESERVED },
+          {
+            $set: { status: EnrollmentStatus.WAITING_CLASS, classId: null, waitingSince: now },
+            $push: { history: { from: EnrollmentStatus.RESERVED, to: EnrollmentStatus.WAITING_CLASS, at: now, by: actor.id } },
+          },
+          { new: true, session: s },
+        );
+        if (!claimed) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+        await this.audit.log(
+          { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: enrollmentId, before, after: claimed.toObject() },
+          s,
+        );
+        return claimed;
+      });
+      return await this.toDto(after);
+    } catch (e) {
+      // The student registered again for the same course while reserved.
+      if (isDuplicateKey(e)) throw new AppError(ErrorCode.ENROLLMENT_EXISTS);
+      throw e;
+    }
+  }
+
+  /** POST /enrollments/:id/confirm — a student confirms their own ENROLLED class. */
+  async confirm(user: AuthUser, id: string): Promise<EnrollmentDto> {
+    if (!isValidObjectId(id) || !user.studentId) throw new AppError(ErrorCode.NOT_FOUND);
+    const scope = { _id: new Types.ObjectId(id), studentId: user.studentId };
+    const before = await this.enrollments.findOne(scope).lean();
+    if (!before) throw new AppError(ErrorCode.NOT_FOUND);
+    const after = await withTransaction(this.conn, async (s) => {
+      const updated = await this.enrollments.findOneAndUpdate(
+        { ...scope, status: EnrollmentStatus.ENROLLED },
+        { $set: { confirmedAt: this.clock.now() } },
+        { new: true, session: s },
+      );
+      if (!updated) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+      await this.audit.log(
+        { actor: user, action: AuditAction.UPDATE, entity: 'enrollment', entityId: updated._id, before, after: updated.toObject() },
+        s,
+      );
+      return updated;
+    });
+    return this.toDto(after);
+  }
+
+  /** GET /enrollments/waiting */
+  async waiting(q: ListWaitingEnrollmentsQuery) {
+    const filter: FilterQuery<Enrollment> = { status: EnrollmentStatus.WAITING_CLASS };
+    if (q.courseId) filter.courseId = new Types.ObjectId(q.courseId);
+    const page = await paginate(this.enrollments, filter, { page: q.page, limit: q.limit, sort: 'waitingSince' });
+    const rows = page.data as unknown as EnrollmentLean[];
+    const dtos = await this.toDtos(rows);
+    const today = vnDay(this.clock.now());
+    const data: WaitingEnrollmentDto[] = dtos.map((d, i) => {
+      const since = rows[i].waitingSince;
+      const days = since ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${vnDay(since)}T00:00:00Z`)) / 86_400_000) : 0;
+      return { ...d, waitingDays: Math.max(0, days) };
+    });
+    return { data, meta: page.meta };
   }
 
   async toDto(doc: EnrollmentDoc): Promise<EnrollmentDto> {

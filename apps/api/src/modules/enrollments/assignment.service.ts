@@ -10,6 +10,7 @@ import {
   ErrorCode,
   NotificationRefType,
   NotificationType,
+  TransferEnrollmentInput,
 } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
@@ -116,6 +117,80 @@ export class AssignmentService {
 
     await this.notifyAssigned(studentId, after.classId!);
     return this.enrollmentsSvc.toDto(after);
+  }
+
+  /** POST /enrollments/:id/transfer — D11: no InvoiceCreator call; the new enrollment inherits invoiceId. R15: no level check. */
+  async transfer(id: string, input: TransferEnrollmentInput, actor: AuthUser): Promise<EnrollmentDto> {
+    if (!isValidObjectId(id)) throw new AppError(ErrorCode.NOT_FOUND);
+    const reason = input.reason.trim();
+    if (!reason) throw new AppError(ErrorCode.REASON_REQUIRED);
+    const enrollmentId = new Types.ObjectId(id);
+    const toClassId = new Types.ObjectId(input.toClassId);
+
+    const peek = await this.enrollments.findById(enrollmentId).select('classId status').lean();
+    if (!peek) throw new AppError(ErrorCode.NOT_FOUND);
+    if (peek.status !== EnrollmentStatus.ENROLLED || !peek.classId) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+    const fromClassId = peek.classId;
+    if (fromClassId.equals(toClassId)) {
+      throw new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields: { toClassId: 'Lớp đích trùng lớp hiện tại' } });
+    }
+    const newId = new Types.ObjectId();
+
+    const { created, studentId } = await withTransaction(this.conn, async (s) => {
+      // Lock-key protocol: ascending id order, before reading any invariant.
+      for (const cid of [fromClassId, toClassId].sort((a, b) => a.toHexString().localeCompare(b.toHexString()))) {
+        await this.counters.next(`lock:class:${cid}`, s);
+      }
+      const before = await this.enrollments.findById(enrollmentId).session(s).lean();
+      if (!before) throw new AppError(ErrorCode.NOT_FOUND);
+      if (before.status !== EnrollmentStatus.ENROLLED || !before.classId?.equals(fromClassId)) {
+        throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+      }
+      const now = this.clock.now();
+      // The old row leaves the active set first so the partial unique index admits the new one.
+      const old = await this.enrollments.findOneAndUpdate(
+        { _id: enrollmentId, status: EnrollmentStatus.ENROLLED },
+        {
+          $set: { status: EnrollmentStatus.TRANSFERRED, transferredToId: newId },
+          $push: { history: { from: EnrollmentStatus.ENROLLED, to: EnrollmentStatus.TRANSFERRED, at: now, by: actor.id, reason } },
+        },
+        { new: true, session: s },
+      );
+      if (!old) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
+
+      const target = await this.seat(before, toClassId, s);
+      await this.enrollmentsSvc.releaseSeat(fromClassId, s);
+
+      const [fresh] = await this.enrollments.create(
+        [
+          {
+            _id: newId,
+            studentId: before.studentId,
+            courseId: before.courseId,
+            classId: target._id,
+            status: EnrollmentStatus.ENROLLED,
+            placementLevel: before.placementLevel ?? null,
+            enrolledAt: now,
+            transferredFromId: enrollmentId,
+            invoiceId: before.invoiceId ?? null,
+            history: [{ from: null, to: EnrollmentStatus.ENROLLED, at: now, by: actor.id, reason }],
+          },
+        ],
+        { session: s },
+      );
+      await this.audit.log(
+        { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: enrollmentId, before, after: old.toObject() },
+        s,
+      );
+      await this.audit.log(
+        { actor, action: AuditAction.CREATE, entity: 'enrollment', entityId: newId, after: fresh.toObject() },
+        s,
+      );
+      return { created: fresh, studentId: before.studentId };
+    });
+
+    await this.notifyAssigned(studentId, toClassId);
+    return this.enrollmentsSvc.toDto(created);
   }
 
   /** After commit only; failures are logged, never thrown. */

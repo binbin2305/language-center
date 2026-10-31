@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { AssignClassInput, ChangeEnrollmentCourseInput, CreateEnrollmentInput, ListEnrollmentsQuery, Role, SkipPlacementInput } from '@lc/shared';
+import { AssignClassInput, ChangeEnrollmentCourseInput, CreateEnrollmentInput, ListEnrollmentsQuery, ListWaitingEnrollmentsQuery, Role, SkipPlacementInput, TransferEnrollmentInput, WithdrawEnrollmentInput } from '@lc/shared';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -31,6 +31,12 @@ export class EnrollmentsController {
   }
 
   // Must be declared before ':id' routes.
+  @Get('waiting')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  waiting(@Query(new ZodValidationPipe(ListWaitingEnrollmentsQuery)) q: ListWaitingEnrollmentsQuery) {
+    return this.svc.waiting(q);
+  }
+
   @Get('me')
   @Roles(Role.STUDENT)
   async me(@CurrentUser() user: AuthUser) {
@@ -65,5 +71,37 @@ export class EnrollmentsController {
     @Body(new ZodValidationPipe(AssignClassInput)) body: AssignClassInput,
   ) {
     return { data: await this.assignment.assign(id, body, user) };
+  }
+
+  @Post(':id/transfer')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async transfer(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(TransferEnrollmentInput)) body: TransferEnrollmentInput,
+  ) {
+    return { data: await this.assignment.transfer(id, body, user) };
+  }
+
+  @Post(':id/withdraw')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async withdraw(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(WithdrawEnrollmentInput)) body: WithdrawEnrollmentInput,
+  ) {
+    return { data: await this.svc.withdraw(id, body, user) };
+  }
+
+  @Post(':id/resume')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async resume(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return { data: await this.svc.resume(id, user) };
+  }
+
+  @Post(':id/confirm')
+  @Roles(Role.STUDENT)
+  async confirm(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return { data: await this.svc.confirm(user, id) };
   }
 }
