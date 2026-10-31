@@ -7,3 +7,4 @@ uploads/
 .mongo-data/
 *.log
 *.tsbuildinfo
+.DS_Store
