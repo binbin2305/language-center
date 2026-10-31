@@ -68,7 +68,7 @@ describe('FR-GRD-04 Sửa điểm & khóa bảng điểm', () => {
   });
 
   it('FR-GRD-04 HV chưa có điểm -> 404; điểm ngoài khoảng -> 400 SCORE_OUT_OF_RANGE', async () => {
-    const { teacher, a, st, cls } = await setup();
+    const { teacher, a, st } = await setup();
     const other = await makeStudent(t.conn);
     expect((await patch(a._id, other._id, teacher.token, { score: 7, reason: 'x' })).status).toBe(404);
     const r = await patch(a._id, st._id, teacher.token, { score: 10.25, reason: 'x' });
@@ -77,7 +77,7 @@ describe('FR-GRD-04 Sửa điểm & khóa bảng điểm', () => {
   });
 
   it('FR-GRD-04 biên khóa: 23:59 VN 18/01 -> 200; 00:00 VN 19/01 -> 422 GRADEBOOK_LOCKED', async () => {
-    const { teacher, a, st } = await setup();
+    const { a, st } = await setup();
     t.clock.set(new Date('2026-01-18T16:59:00Z'));
     const fresh = async () => {
       const u = await loginAs(t, Role.TEACHER);
