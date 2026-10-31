@@ -20,7 +20,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     'Sĩ số tối đa nhỏ hơn số học viên hiện có. Nhập số lớn hơn hoặc chuyển bớt học viên.',
   CLASS_HAS_DEPENDENCIES:
     'Lớp đã có học viên hoặc buổi học nên không thể xóa. Hãy chuyển lớp sang ngừng hoạt động.',
-  CLASS_FULL: 'Lớp đã đủ học viên. Chọn lớp khác hoặc tăng sĩ số tối đa.',
+  CLASS_FULL: 'Lớp đã đủ sĩ số. Chọn lớp khác còn chỗ trống.',
   CLASS_NOT_OPEN: 'Lớp chưa mở hoặc đã đóng đăng ký. Chọn lớp đang nhận học viên.',
   COURSE_MISMATCH: 'Lớp không thuộc khóa học mà học viên đã đăng ký. Chọn lớp cùng khóa học.',
   LEVEL_MISMATCH: 'Trình độ của học viên chưa phù hợp với lớp này. Chọn lớp đúng trình độ.',

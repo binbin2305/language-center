@@ -38,8 +38,7 @@ export default function InvoiceDetailPage() {
   const [voidingPayment, setVoidingPayment] = useState<string | null>(null);
   const [voidingInvoice, setVoidingInvoice] = useState(false);
   const canUpdate = can(user, 'fees.update');
-  // TODO W2-MERGE: payments.void permission (docs/contract-requests/L-FEES-2.md); voiding is Manager-only meanwhile.
-  const canVoid = can(user, 'discounts.decide');
+  const canVoid = can(user, 'payments.void');
 
   const inv = q.data;
   if (!inv) {
