@@ -4,7 +4,8 @@ import { Models } from '../models';
 import { clockTimestamps } from './helpers';
 
 export interface AttendanceHistoryEntry {
-  from: AttendanceStatus;
+  /** null on the first take (no previous status). */
+  from: AttendanceStatus | null;
   to: AttendanceStatus;
   reason?: string;
   by: Types.ObjectId;
@@ -24,7 +25,7 @@ export interface Attendance {
 
 const HistorySchema = new Schema<AttendanceHistoryEntry>(
   {
-    from: { type: String, enum: ALL_ATTENDANCE_STATUSES, required: true },
+    from: { type: String, enum: [...ALL_ATTENDANCE_STATUSES, null], default: null },
     to: { type: String, enum: ALL_ATTENDANCE_STATUSES, required: true },
     reason: { type: String },
     by: { type: Schema.Types.ObjectId, ref: Models.User, required: true },
