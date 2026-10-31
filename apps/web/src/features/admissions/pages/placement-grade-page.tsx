@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import { isValidScore } from '@lc/shared';
+import { isValidScore, PutPlacementResultsInput } from '@lc/shared';
 import { EmptyState } from '@/components/common/empty-state';
 import { ErrorState } from '@/components/common/error-state';
 import { PageHeader } from '@/components/common/page-header';
@@ -23,8 +23,8 @@ const GradeForm = z.object({
       enrollmentId: z.string(),
       studentName: z.string(),
       score: z.string().refine((s) => s.trim() === '' || isValidScore(toNumber(s)), 'Điểm từ 0 đến 10, bước 0.25'),
-      level: z.string().trim().max(50),
-      comment: z.string().trim().max(1000),
+      level: z.string().trim(),
+      comment: z.string().trim(),
     }),
   ),
 });
@@ -39,10 +39,11 @@ export default function PlacementGradePage() {
     mode: 'onChange',
     defaultValues: { rows: [] },
   });
+  const { isDirty } = form.formState;
   const { fields } = useFieldArray({ control: form.control, name: 'rows' });
 
   useEffect(() => {
-    if (!q.data) return;
+    if (!q.data || isDirty) return;
     form.reset({
       rows: q.data.candidates.map((c) => ({
         enrollmentId: c.enrollmentId,
@@ -52,8 +53,9 @@ export default function PlacementGradePage() {
         comment: c.comment ?? '',
       })),
     });
-  }, [q.data, form]);
+  }, [q.data, form, isDirty]);
 
+  const editable = q.data?.status === 'SCHEDULED';
   const rows = form.watch('rows');
   const touched = rows.some((r) => r.score.trim() !== '' || r.level !== '');
 
@@ -66,8 +68,13 @@ export default function PlacementGradePage() {
         level: r.level === '' ? null : r.level,
         ...(r.comment ? { comment: r.comment } : {}),
       }));
+    const parsed = PutPlacementResultsInput.safeParse(body);
+    if (!parsed.success) {
+      toast.error('Kết quả chưa hợp lệ. Kiểm tra điểm, trình độ và nhận xét.');
+      return;
+    }
     try {
-      await put.mutateAsync(body);
+      await put.mutateAsync(parsed.data);
       toast.success('Đã lưu kết quả');
     } catch (e) {
       toast.error(errorMessage(e));
@@ -110,17 +117,18 @@ export default function PlacementGradePage() {
                       aria-label={`Điểm ${f.studentName}`}
                       aria-invalid={err ? true : undefined}
                       className={err ? 'border-destructive' : undefined}
+                      disabled={!editable}
                       {...form.register(`rows.${i}.score`)}
                     />
                     {err ? <p className="mt-1 text-xs text-destructive">{err.message}</p> : null}
                   </div>
-                  <Input placeholder="Trình độ" aria-label={`Trình độ ${f.studentName}`} {...form.register(`rows.${i}.level`)} />
-                  <Input placeholder="Nhận xét" aria-label={`Nhận xét ${f.studentName}`} {...form.register(`rows.${i}.comment`)} />
+                  <Input placeholder="Trình độ" aria-label={`Trình độ ${f.studentName}`} disabled={!editable} {...form.register(`rows.${i}.level`)} />
+                  <Input placeholder="Nhận xét" aria-label={`Nhận xét ${f.studentName}`} disabled={!editable} {...form.register(`rows.${i}.comment`)} />
                 </li>
               );
             })}
           </ul>
-          <Button type="submit" disabled={!form.formState.isValid || !touched || put.isPending}>
+          <Button type="submit" disabled={!editable || !form.formState.isValid || !touched || put.isPending}>
             Lưu
           </Button>
         </form>

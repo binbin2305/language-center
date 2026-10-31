@@ -36,6 +36,7 @@ export function usePutResults(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: PutPlacementResultsInput) => placementApi.putResults(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
+    onSuccess: () =>
+      Promise.all([qc.invalidateQueries({ queryKey: [KEY] }), qc.invalidateQueries({ queryKey: ['enrollments'] })]),
   });
 }

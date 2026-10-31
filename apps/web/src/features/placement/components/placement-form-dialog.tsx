@@ -79,6 +79,7 @@ export function PlacementFormDialog({ open, onOpenChange }: { open: boolean; onO
   const errs = form.formState.errors;
 
   const submit = form.handleSubmit(async (v) => {
+    setConflicts([]);
     try {
       await create.mutateAsync({
         courseId: v.courseId,

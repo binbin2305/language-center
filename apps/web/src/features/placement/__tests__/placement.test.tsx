@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { EnrollmentDto, PlacementTestDto } from '@lc/shared';
+import { vnDateTime, vnDay, type EnrollmentDto, PlacementTestDto } from '@lc/shared';
 import { server } from '../../../../test/msw/server';
 import { renderApp } from '../../../../test/render';
 import { makeUser } from '../../../../test/users';
@@ -45,12 +45,12 @@ describe('FR-PLT kiểm tra đầu vào (web)', () => {
     Element.prototype.releasePointerCapture ??= () => undefined;
   });
 
-  it('danh sách rỗng → EmptyState', async () => {
+  it('FR-PLT-01 danh sách rỗng → EmptyState', async () => {
     renderApp({ user: makeUser('MANAGER'), route: '/admissions/placement' });
     expect(await screen.findByText('Chưa có đợt kiểm tra', {}, T)).toBeInTheDocument();
   });
 
-  it('TEACHER không thấy nút "Tạo đợt", MANAGER thấy', async () => {
+  it('FR-PLT-01 TEACHER không thấy nút "Tạo đợt", MANAGER thấy', async () => {
     server.use(http.get('*/api/v1/placement-tests', () => HttpResponse.json(page([test_()]))));
     const teacher = renderApp({ user: makeUser('TEACHER'), route: '/admissions/placement' });
     expect(await screen.findByText('IELTS Foundation', {}, T)).toBeInTheDocument();
@@ -60,15 +60,64 @@ describe('FR-PLT kiểm tra đầu vào (web)', () => {
     expect(await screen.findByRole('button', { name: /Tạo đợt/ }, T)).toBeInTheDocument();
   });
 
-  it('tạo đợt → 409 SCHEDULE_CONFLICT → danh sách xung đột hiển thị, dialog không đóng', async () => {
+  const catalog = () =>
     server.use(
-      http.get('*/api/v1/courses', () =>
-        HttpResponse.json(page([{ id: COURSE, name: 'IELTS Foundation' }])),
-      ),
-      http.get('*/api/v1/rooms', () =>
-        HttpResponse.json(page([{ id: ROOM, code: 'P201', name: 'Phòng 201' }])),
-      ),
+      http.get('*/api/v1/courses', () => HttpResponse.json(page([{ id: COURSE, name: 'IELTS Foundation' }]))),
+      http.get('*/api/v1/rooms', () => HttpResponse.json(page([{ id: ROOM, code: 'P201', name: 'Phòng 201' }]))),
       http.get('*/api/v1/teachers', () => HttpResponse.json({ data: [{ id: TEACHER, fullName: 'Cô Lan' }] })),
+    );
+
+  async function fillCreateForm() {
+    const user = userEvent.setup();
+    renderApp({ user: makeUser('MANAGER'), route: '/admissions/placement' });
+    await user.click(await screen.findByRole('button', { name: /Tạo đợt/ }, T));
+    const dialog = await screen.findByRole('dialog', {}, T);
+    const pick = async (label: string, option: string) => {
+      await user.click(within(dialog).getByRole('combobox', { name: label }));
+      await user.click(await screen.findByRole('option', { name: option }));
+    };
+    await pick('Khóa học', 'IELTS Foundation');
+    await pick('Phòng thi', 'P201 - Phòng 201');
+    await pick('Giáo viên chấm', 'Cô Lan');
+    await user.click(within(dialog).getByLabelText(/^Ngày thi/));
+    await user.click(await screen.findByText('15'));
+    fireEvent.change(within(dialog).getByLabelText(/^Giờ bắt đầu/), { target: { value: '09:00' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Giờ kết thúc/), { target: { value: '10:30' } });
+    return { user, dialog };
+  }
+
+  /** The picked day is the 15th of the current month (Vietnam day). */
+  const pickedDay = () => {
+    const today = vnDay(new Date());
+    return `${today.slice(0, 8)}15`;
+  };
+
+  it('FR-PLT-01 tạo đợt thành công → POST đúng body startAt/endAt (giờ VN) và đóng dialog', async () => {
+    catalog();
+    let body: unknown;
+    server.use(
+      http.post('*/api/v1/placement-tests', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ data: test_() }, { status: 201 });
+      }),
+    );
+    const { user, dialog } = await fillCreateForm();
+    await user.click(within(dialog).getByRole('button', { name: 'Tạo đợt' }));
+    await waitFor(() =>
+      expect(body).toEqual({
+        courseId: COURSE,
+        roomId: ROOM,
+        teacherId: TEACHER,
+        startAt: vnDateTime(pickedDay(), '09:00').toISOString(),
+        endAt: vnDateTime(pickedDay(), '10:30').toISOString(),
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('FR-PLT-02 tạo đợt → 409 SCHEDULE_CONFLICT → danh sách xung đột (ngày giờ, loại, lớp), dialog không đóng', async () => {
+    catalog();
+    server.use(
       http.post('*/api/v1/placement-tests', () =>
         HttpResponse.json(
           {
@@ -86,29 +135,17 @@ describe('FR-PLT kiểm tra đầu vào (web)', () => {
         ),
       ),
     );
-    const user = userEvent.setup();
-    renderApp({ user: makeUser('MANAGER'), route: '/admissions/placement' });
-    await user.click(await screen.findByRole('button', { name: /Tạo đợt/ }, T));
-    const dialog = await screen.findByRole('dialog', {}, T);
-    const pick = async (label: string, option: string) => {
-      await user.click(within(dialog).getByRole('combobox', { name: label }));
-      await user.click(await screen.findByRole('option', { name: option }));
-    };
-    await pick('Khóa học', 'IELTS Foundation');
-    await pick('Phòng thi', 'P201 - Phòng 201');
-    await pick('Giáo viên chấm', 'Cô Lan');
-    await user.click(within(dialog).getByLabelText(/^Ngày thi/));
-    await user.click(await screen.findByText('15'));
-    fireEvent.change(within(dialog).getByLabelText(/^Giờ bắt đầu/), { target: { value: '09:00' } });
-    fireEvent.change(within(dialog).getByLabelText(/^Giờ kết thúc/), { target: { value: '10:30' } });
+    const { user, dialog } = await fillCreateForm();
     await user.click(within(dialog).getByRole('button', { name: 'Tạo đợt' }));
     const list = await within(dialog).findByRole('list', { name: 'Danh sách xung đột lịch' });
     expect(within(list).getByText('Trùng phòng')).toBeInTheDocument();
     expect(within(list).getByText(/TOEIC-02/)).toBeInTheDocument();
+    expect(within(list).getByText('10/01/2026')).toBeInTheDocument();
+    expect(within(list).getByText('09:00 - 10:30')).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('chi tiết đợt: "Thêm thí sinh" liệt kê chờ kiểm tra, chọn 2 → POST candidates với 2 id', async () => {
+  it('FR-PLT-01 chi tiết đợt: "Thêm thí sinh" liệt kê chờ kiểm tra, chọn 2 → POST candidates với 2 id', async () => {
     let body: unknown;
     let query = '';
     server.use(
@@ -142,7 +179,7 @@ describe('FR-PLT kiểm tra đầu vào (web)', () => {
       renderApp({ user: makeUser('TEACHER'), route: `/admissions/placement/${TEST_ID}/grade` });
     };
 
-    it('nhập 11 → ô viền đỏ (aria-invalid) và nút Lưu disabled', async () => {
+    it('FR-PLT-03 nhập 11 → ô viền đỏ (aria-invalid) và nút Lưu disabled', async () => {
       gradePage();
       const input = await screen.findByLabelText('Điểm Nguyễn An', {}, T);
       await userEvent.setup().type(input, '11');
@@ -150,7 +187,7 @@ describe('FR-PLT kiểm tra đầu vào (web)', () => {
       expect(screen.getByRole('button', { name: 'Lưu' })).toBeDisabled();
     });
 
-    it('nhập 7.3 → đỏ', async () => {
+    it('FR-PLT-03 nhập 7.3 → đỏ', async () => {
       gradePage();
       const input = await screen.findByLabelText('Điểm Nguyễn An', {}, T);
       await userEvent.setup().type(input, '7.3');
@@ -158,7 +195,7 @@ describe('FR-PLT kiểm tra đầu vào (web)', () => {
       expect(screen.getByRole('button', { name: 'Lưu' })).toBeDisabled();
     });
 
-    it('nhập 7.25 + level → PUT results đúng body (mảng trần)', async () => {
+    it('FR-PLT-03 nhập 7.25 + level → PUT results đúng body (mảng trần)', async () => {
       let body: unknown;
       server.use(
         http.put('*/api/v1/placement-tests/:id/results', async ({ request }) => {
@@ -175,5 +212,23 @@ describe('FR-PLT kiểm tra đầu vào (web)', () => {
       await user.click(save);
       await waitFor(() => expect(body).toEqual([{ enrollmentId: E1, score: 7.25, level: 'B1' }]));
     });
+  });
+
+  it('FR-PLT-03 "Chấm điểm" chỉ hiện cho GV; NVHV không thấy', async () => {
+    server.use(http.get('*/api/v1/placement-tests/:id', () => HttpResponse.json({ data: test_() })));
+    const staff = renderApp({ user: makeUser('ACADEMIC_STAFF'), route: `/admissions/placement/${TEST_ID}` });
+    expect(await screen.findByRole('button', { name: 'Thêm thí sinh' }, T)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Chấm điểm' })).not.toBeInTheDocument();
+    staff.unmount();
+    renderApp({ user: makeUser('TEACHER'), route: `/admissions/placement/${TEST_ID}` });
+    expect(await screen.findByRole('link', { name: 'Chấm điểm' }, T)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm thí sinh' })).not.toBeInTheDocument();
+  });
+
+  it('FR-PLT-03 đợt đã COMPLETED → ô nhập bị khóa, không lưu được', async () => {
+    server.use(http.get('*/api/v1/placement-tests/:id', () => HttpResponse.json({ data: test_({ status: 'COMPLETED' }) })));
+    renderApp({ user: makeUser('TEACHER'), route: `/admissions/placement/${TEST_ID}/grade` });
+    expect(await screen.findByLabelText('Điểm Nguyễn An', {}, T)).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Lưu' })).toBeDisabled();
   });
 });
