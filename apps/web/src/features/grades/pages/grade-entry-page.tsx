@@ -31,9 +31,11 @@ export default function GradeEntryPage() {
   const [amending, setAmending] = useState<GradeRow | null>(null);
 
   const data = q.data;
+  const [dirty, setDirty] = useState(false);
   useEffect(() => {
-    if (data) setValues(Object.fromEntries(data.rows.map((r) => [r.studentId, initial(r)])));
-  }, [data]);
+    // Never overwrite what the user is typing when a background refetch lands.
+    if (data && !dirty) setValues(Object.fromEntries(data.rows.map((r) => [r.studentId, initial(r)])));
+  }, [data, dirty]);
 
   if (q.isLoading || q.isError || !data)
     return (
@@ -72,6 +74,7 @@ export default function GradeEntryPage() {
     }
     try {
       await save.mutateAsync(payload(confirm));
+      setDirty(false);
       toast.success(confirm ? 'Đã xác nhận kết quả' : 'Đã lưu nháp');
       setConfirmMissing(false);
     } catch (e) {
@@ -90,6 +93,7 @@ export default function GradeEntryPage() {
     const v = values[amending.studentId];
     const comment = v?.comment.trim();
     try {
+      setDirty(false);
       await amend.mutateAsync({
         studentId: amending.studentId,
         score: parseScore(v?.score ?? ''),
@@ -125,7 +129,7 @@ export default function GradeEntryPage() {
         <GradeGrid
           rows={rows}
           values={values}
-          onChange={(sid, patch) => setValues((p) => ({ ...p, [sid]: { ...(p[sid] ?? { score: '', comment: '' }), ...patch } }))}
+          onChange={(sid, patch) => { setDirty(true); setValues((p) => ({ ...p, [sid]: { ...(p[sid] ?? { score: '', comment: '' }), ...patch } })); }}
           readOnly={!canEnter}
           locked={locked}
           amend={confirmed}

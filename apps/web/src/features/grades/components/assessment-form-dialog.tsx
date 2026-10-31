@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { ALL_ASSESSMENT_TYPES, type AssessmentType } from '@lc/shared';
+import { z } from 'zod';
+import { ALL_ASSESSMENT_TYPES, CreateAssessmentInput } from '@lc/shared';
 import { FormField } from '@/components/common/form-field';
 import { OptionSelect } from '@/components/common/option-select';
 import { Button } from '@/components/ui/button';
@@ -11,78 +14,84 @@ import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
 import { errorMessage } from '@/lib/error-messages';
 import { useCreateAssessment } from '../hooks';
+import { ASSESSMENT_TYPE_LABELS } from '../labels';
 
-const TYPE_LABELS: Record<AssessmentType, string> = {
-  QUIZ: 'Kiểm tra nhanh',
-  MIDTERM: 'Giữa kỳ',
-  FINAL: 'Cuối kỳ',
-  SKILL: 'Kỹ năng',
+// Shared schema + the service rule 0 < weight <= 100 (client-side mirror).
+const FormSchema = CreateAssessmentInput.superRefine((v, ctx) => {
+  if (!(v.weight > 0 && v.weight <= 100))
+    ctx.addIssue({ code: 'custom', path: ['weight'], message: 'Trọng số lớn hơn 0 và tối đa 100.' });
+});
+type FormValues = z.input<typeof FormSchema>;
+
+const MESSAGES: Record<string, string> = {
+  name: 'Nhập tên bài đánh giá.',
+  weight: 'Nhập trọng số hợp lệ.',
+  heldOn: 'Chọn ngày kiểm tra.',
 };
+const errorMap: z.ZodErrorMap = (issue, ctx) => ({
+  message: issue.code === 'custom' ? (issue.message ?? ctx.defaultError) : (MESSAGES[String(issue.path[0])] ?? ctx.defaultError),
+});
 
-type Errors = Partial<Record<'name' | 'weight' | 'heldOn', string>>;
+const emptyValues = (): FormValues => ({ name: '', type: 'QUIZ', weight: NaN, heldOn: '' });
 
 export function AssessmentFormDialog({
   classId, open, onOpenChange,
 }: { classId: string; open: boolean; onOpenChange: (o: boolean) => void }) {
   const create = useCreateAssessment(classId);
-  const [name, setName] = useState('');
-  const [type, setType] = useState<AssessmentType>('QUIZ');
-  const [weight, setWeight] = useState('');
-  const [heldOn, setHeldOn] = useState('');
-  const [errors, setErrors] = useState<Errors>({});
-
+  const form = useForm<FormValues, unknown, CreateAssessmentInput>({
+    resolver: zodResolver(FormSchema, { errorMap, path: [], async: false }),
+    defaultValues: emptyValues(),
+  });
+  const { errors } = form.formState;
   useEffect(() => {
-    if (open) {
-      setName(''); setType('QUIZ'); setWeight(''); setHeldOn(''); setErrors({});
-    }
-  }, [open]);
+    if (open) form.reset(emptyValues());
+  }, [open, form]);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const w = Number(weight);
-    const next: Errors = {};
-    if (!name.trim()) next.name = 'Nhập tên bài đánh giá.';
-    if (!(w > 0 && w <= 100)) next.weight = 'Trọng số lớn hơn 0 và tối đa 100.';
-    if (!heldOn) next.heldOn = 'Chọn ngày kiểm tra.';
-    setErrors(next);
-    if (Object.keys(next).length) return;
+  const onSubmit = form.handleSubmit(async (v) => {
     try {
-      await create.mutateAsync({ name: name.trim(), type, weight: w, heldOn });
+      await create.mutateAsync(v);
       toast.success('Đã tạo bài đánh giá');
       onOpenChange(false);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'WEIGHT_EXCEEDS_100') setErrors({ weight: errorMessage(err) });
-      else if (err instanceof ApiError && err.details?.fields) setErrors(err.details.fields as Errors);
-      else toast.error(errorMessage(err));
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'WEIGHT_EXCEEDS_100') form.setError('weight', { message: errorMessage(e) });
+      else if (e instanceof ApiError && e.details?.fields) {
+        for (const [name, message] of Object.entries(e.details.fields)) form.setError(name as keyof FormValues, { message });
+      } else toast.error(errorMessage(e));
     }
-  };
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <form className="space-y-4" onSubmit={(e) => void submit(e)} noValidate>
+        <form className="space-y-4" onSubmit={(e) => void onSubmit(e)} noValidate>
           <DialogHeader>
             <DialogTitle>Thêm bài đánh giá</DialogTitle>
             <DialogDescription>Tổng trọng số các bài của lớp tối đa 100%.</DialogDescription>
           </DialogHeader>
-          <FormField label="Tên bài" required error={errors.name}>
-            {(p) => <Input {...p} value={name} onChange={(e) => setName(e.target.value)} />}
+          <FormField label="Tên bài" required error={errors.name?.message}>
+            {(p) => <Input {...p} {...form.register('name')} />}
           </FormField>
           <FormField label="Loại" required>
             {(p) => (
-              <OptionSelect
-                {...p}
-                value={type}
-                onValueChange={(v) => setType(v as AssessmentType)}
-                options={ALL_ASSESSMENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
+              <Controller
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <OptionSelect
+                    {...p}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    options={ALL_ASSESSMENT_TYPES.map((t) => ({ value: t, label: ASSESSMENT_TYPE_LABELS[t] }))}
+                  />
+                )}
               />
             )}
           </FormField>
-          <FormField label="Trọng số (%)" required error={errors.weight}>
-            {(p) => <Input {...p} type="number" min={0} max={100} value={weight} onChange={(e) => setWeight(e.target.value)} />}
+          <FormField label="Trọng số (%)" required error={errors.weight?.message}>
+            {(p) => <Input {...p} type="number" min={0} max={100} {...form.register('weight', { valueAsNumber: true })} />}
           </FormField>
-          <FormField label="Ngày kiểm tra" required error={errors.heldOn}>
-            {(p) => <Input {...p} type="date" value={heldOn} onChange={(e) => setHeldOn(e.target.value)} />}
+          <FormField label="Ngày kiểm tra" required error={errors.heldOn?.message}>
+            {(p) => <Input {...p} type="date" {...form.register('heldOn')} />}
           </FormField>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>

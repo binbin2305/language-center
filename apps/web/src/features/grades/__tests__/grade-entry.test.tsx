@@ -198,4 +198,14 @@ describe('tab Bài đánh giá', () => {
     expect(screen.getByLabelText(/Trọng số/)).toHaveAttribute('aria-invalid', 'true');
     expect(err).toBeInTheDocument();
   });
+
+  it('S thấy "Thêm bài đánh giá", M không thấy', async () => {
+    server.use(http.get('*/api/v1/classes/:id/assessments', () => HttpResponse.json({ data: [] })));
+    const first = renderApp({ route: `/classes/${CLASS_ID}?tab=assessments`, user: makeUser('ACADEMIC_STAFF') });
+    expect(await screen.findByRole('button', { name: 'Thêm bài đánh giá' }, WAIT)).toBeInTheDocument();
+    first.unmount();
+    renderApp({ route: `/classes/${CLASS_ID}?tab=assessments`, user: makeUser('MANAGER') });
+    expect(await screen.findByText('Chưa có bài đánh giá', {}, WAIT)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm bài đánh giá' })).not.toBeInTheDocument();
+  });
 });

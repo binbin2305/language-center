@@ -1,21 +1,19 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
-import { can, type AssessmentDto } from '@lc/shared';
+import type { AssessmentDto } from '@lc/shared';
 import { useAuth } from '@/auth/use-auth';
 import { DataTable } from '@/components/common/data-table';
 import { StatusBadge } from '@/components/common/status-badge';
 import { Button } from '@/components/ui/button';
 import { formatDate } from '@/lib/format';
+import { ASSESSMENT_TYPE_LABELS } from '../labels';
+import { canManageAssessments } from '../permissions';
 import { useAssessments } from '../hooks';
 import { AssessmentFormDialog } from './assessment-form-dialog';
 
 export const assessmentStatus = (a: Pick<AssessmentDto, 'confirmedAt' | 'isLocked'>) =>
   a.isLocked ? 'LOCKED' : a.confirmedAt ? 'CONFIRMED' : 'DRAFT';
-
-const TYPE_LABELS: Record<string, string> = {
-  QUIZ: 'Kiểm tra nhanh', MIDTERM: 'Giữa kỳ', FINAL: 'Cuối kỳ', SKILL: 'Kỹ năng',
-};
 
 const columns: ColumnDef<AssessmentDto>[] = [
   {
@@ -27,7 +25,7 @@ const columns: ColumnDef<AssessmentDto>[] = [
       </Link>
     ),
   },
-  { id: 'type', header: 'Loại', cell: ({ row }) => TYPE_LABELS[row.original.type] ?? row.original.type },
+  { id: 'type', header: 'Loại', cell: ({ row }) => ASSESSMENT_TYPE_LABELS[row.original.type] ?? row.original.type },
   { id: 'weight', header: 'Trọng số', cell: ({ row }) => `${row.original.weight}%` },
   { id: 'heldOn', header: 'Ngày', cell: ({ row }) => formatDate(row.original.heldOn) },
   {
@@ -44,7 +42,7 @@ export default function ClassAssessmentsTab() {
   const [open, setOpen] = useState(false);
   const rows = q.data ?? [];
   const total = rows.reduce((s, a) => s + a.weight, 0);
-  const canEnter = can(user, 'grades.enter');
+  const canEnter = canManageAssessments(user);
 
   return (
     <div className="space-y-3">
