@@ -51,6 +51,14 @@ describe('FR-GRD-01 Bài đánh giá của lớp', () => {
       expect(r.body.error.code).toBe(ErrorCode.WEIGHT_EXCEEDS_100);
     });
 
+    it('FR-GRD-01 tổng thập phân 0.2 + 83.9 + 15.9 = 100 (sai số dấu phẩy động) -> 201', async () => {
+      const cls = await makeClass(t.conn);
+      await post(cls._id, staff, body({ weight: 0.2 })).expect(201);
+      await post(cls._id, staff, body({ weight: 83.9 })).expect(201);
+      await post(cls._id, staff, body({ weight: 15.9 })).expect(201);
+      expect((await post(cls._id, staff, body({ weight: 0.1 }))).status).toBe(422);
+    });
+
     it('FR-GRD-01 PATCH 40 -> 50 khi tổng còn lại 60 -> 422; PATCH chính nó giữ nguyên weight -> 200', async () => {
       const cls = await makeClass(t.conn);
       await post(cls._id, staff, body({ weight: 60 })).expect(201);

@@ -90,7 +90,8 @@ export class GradesService {
     await this.counters.next(`lock:class:${classId}`, s);
     const others = await this.assessments.find(excludeId ? { classId, _id: { $ne: excludeId } } : { classId }, { weight: 1 }, { session: s }).lean();
     const total = others.reduce((sum, o) => sum + o.weight, 0);
-    if (total + weight > 100) throw new AppError(ErrorCode.WEIGHT_EXCEEDS_100, undefined, { currentTotal: total });
+    // Tolerance: decimal weights (0.2 + 83.9 + 15.9) must not trip on float error.
+    if (total + weight > 100 + 1e-9) throw new AppError(ErrorCode.WEIGHT_EXCEEDS_100, undefined, { currentTotal: total });
   }
 
   async list(classId: string, user: AuthUser): Promise<AssessmentDto[]> {
