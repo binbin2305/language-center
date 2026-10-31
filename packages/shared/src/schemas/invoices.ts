@@ -112,3 +112,19 @@ export type InvoiceDto = z.infer<typeof InvoiceDto>;
 /** GET /invoices/:id — with payments. */
 export const InvoiceDetailDto = InvoiceDto.extend({ payments: z.array(PaymentDto) });
 export type InvoiceDetailDto = z.infer<typeof InvoiceDetailDto>;
+
+/** FR-FEE-06 — teacher's view of an invoice: no payments, discount or amountDue. */
+export const InvoiceTeacherViewDto = InvoiceDto.pick({
+  id: true,
+  code: true,
+  kind: true,
+  studentId: true,
+  studentName: true,
+  studentCode: true,
+  classId: true,
+  balance: true,
+  dueDate: true,
+  status: true,
+  overdue: true,
+});
+export type InvoiceTeacherViewDto = z.infer<typeof InvoiceTeacherViewDto>;

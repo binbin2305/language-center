@@ -190,7 +190,7 @@ describe('smoke: mỗi file schema', () => {
     expect(S.ListAttendanceQuery.safeParse({ from: '2026-01-01' }).success).toBe(true);
     expect(S.AttendanceSummaryQuery.parse({ groupBy: 'class' })).toMatchObject({ groupBy: 'class' });
     expect(S.AttendanceSummaryQuery.safeParse({}).success).toBe(false);
-    expect(S.SessionAttendanceDto.safeParse({ sessionId: id(1), taken: false, sessionNote: '', roster: [{ studentId: id(2), enrollmentId: id(3), studentCode: 'HV1', fullName: 'A', status: null, note: '' }] }).success).toBe(true);
+    expect(S.SessionAttendanceDto.safeParse({ sessionId: id(1), taken: false, takenAt: null, takenByName: null, editable: true, sessionNote: '', roster: [{ studentId: id(2), enrollmentId: id(3), studentCode: 'HV1', fullName: 'A', status: null, note: '', history: [], absenceRate: 0 }] }).success).toBe(true);
     expect(S.AttendanceDto.safeParse({ id: id(1), sessionId: id(2), classId: id(3), studentId: id(4), enrollmentId: id(5), status: 'PRESENT', note: '', recordedBy: id(6), history: [], createdAt: ts, updatedAt: ts }).success).toBe(true);
     expect(S.AttendanceSummaryRowDto.safeParse({ key: id(1), label: 'A', PRESENT: 1, LATE: 0, EXCUSED: 0, UNEXCUSED: 0, total: 1, attendanceRate: 1, absenceRate: 0 }).success).toBe(true);
   });

@@ -67,6 +67,10 @@ export type AttendanceDto = z.infer<typeof AttendanceDto>;
 export const SessionAttendanceDto = z.object({
   sessionId: zObjectId,
   taken: z.boolean(),
+  takenAt: zDateTime.nullable(),
+  takenByName: z.string().nullable(),
+  /** Whether the current user may still edit (teacher edit window / staff). */
+  editable: z.boolean(),
   sessionNote: z.string().nullish(),
   roster: z.array(
     z.object({
@@ -76,6 +80,8 @@ export const SessionAttendanceDto = z.object({
       fullName: z.string(),
       status: z.nativeEnum(AttendanceStatus).nullable(),
       note: z.string().nullish(),
+      history: z.array(AttendanceHistoryEntry),
+      absenceRate: z.number().min(0).max(1),
     }),
   ),
 });

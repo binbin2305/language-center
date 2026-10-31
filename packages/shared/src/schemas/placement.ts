@@ -64,5 +64,8 @@ export const PlacementTestDto = z.object({
   teacherId: zObjectId,
   status: z.nativeEnum(PlacementStatus),
   candidates: z.array(PlacementCandidateDto),
+  courseName: z.string().optional(),
+  roomCode: z.string().optional(),
+  teacherName: z.string().optional(),
 });
 export type PlacementTestDto = z.infer<typeof PlacementTestDto>;

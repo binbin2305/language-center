@@ -9,3 +9,9 @@ export const DomainEvent = {
   ClassFinished: 'class.finished',
 } as const;
 export type DomainEvent = (typeof DomainEvent)[keyof typeof DomainEvent];
+
+export interface ClassFinishedPayload {
+  classId: string;
+  at: Date;
+  actorId: string;
+}

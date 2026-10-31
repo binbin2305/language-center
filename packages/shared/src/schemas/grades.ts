@@ -113,3 +113,22 @@ export const ResultDto = z.object({
 });
 export type ResultDto = z.infer<typeof ResultDto>;
 
+
+/** GET /assessments/:id/grades — roster rows incl. students who left the class (left: true, D14). */
+export const AssessmentGradesDto = z.object({
+  assessment: AssessmentDto,
+  rows: z.array(
+    z.object({
+      studentId: zObjectId,
+      enrollmentId: zObjectId,
+      studentCode: z.string(),
+      studentName: z.string(),
+      score: zScoreShape,
+      comment: z.string().nullish(),
+      isDraft: z.boolean(),
+      left: z.boolean(),
+      history: z.array(GradeHistoryEntry),
+    }),
+  ),
+});
+export type AssessmentGradesDto = z.infer<typeof AssessmentGradesDto>;
