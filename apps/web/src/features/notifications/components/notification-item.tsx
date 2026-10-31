@@ -21,7 +21,7 @@ export function NotificationItem({
 
   const open = () => {
     if (unread) markRead.mutate(n.id);
-    const target = user ? notificationTarget(n.refType, n.refId, user.role) : null;
+    const target = user ? notificationTarget(n.refType, n.refId, user.role, n.type) : null;
     if (target) {
       onNavigate?.();
       navigate(target);

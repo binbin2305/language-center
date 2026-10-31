@@ -1,4 +1,4 @@
-import { NotificationRefType, Role } from '@lc/shared';
+import { NotificationRefType, NotificationType, Role } from '@lc/shared';
 
 /**
  * Where a notification leads, by `refType`. Unknown refTypes return null: the notification
@@ -9,6 +9,7 @@ export function notificationTarget(
   refType: NotificationRefType | null | undefined,
   refId: string | null | undefined,
   role: Role,
+  type?: NotificationType | null,
 ): string | null {
   if (!refType || !refId) return null;
   const isStudent = role === Role.STUDENT;
@@ -18,7 +19,8 @@ export function notificationTarget(
     case NotificationRefType.SESSION:
       return isStudent ? '/schedule' : `/sessions/${refId}/attendance`;
     case NotificationRefType.STUDENT:
-      return isStudent ? '/me/profile' : `/students/${refId}`;
+      if (isStudent) return type === NotificationType.ATTENDANCE_WARNING ? '/me/attendance' : '/me/profile';
+      return `/students/${refId}`;
     case NotificationRefType.INVOICE:
       return isStudent ? '/me/fees' : `/fees/invoices/${refId}`;
     case NotificationRefType.ASSESSMENT:

@@ -1,4 +1,4 @@
-import { NotificationRefType, Role } from '@lc/shared';
+import { NotificationRefType, NotificationType, Role } from '@lc/shared';
 import { notificationTarget } from '../notification-target';
 
 const id = '65000000000000000000000a';
@@ -12,5 +12,10 @@ describe('notificationTarget Wave 2', () => {
     expect(notificationTarget(NotificationRefType.PLACEMENT_TEST, id, Role.TEACHER)).toBe(`/admissions/placement/${id}/grade`);
     expect(notificationTarget(NotificationRefType.PLACEMENT_TEST, id, Role.MANAGER)).toBe(`/admissions/placement/${id}`);
     expect(notificationTarget(NotificationRefType.PLACEMENT_TEST, id, Role.ACADEMIC_STAFF)).toBe(`/admissions/placement/${id}`);
+  });
+  it('ATTENDANCE_WARNING (refType STUDENT): HV về /me/attendance; STUDENT khác vẫn /me/profile; S vào hồ sơ HV', () => {
+    expect(notificationTarget(NotificationRefType.STUDENT, id, Role.STUDENT, NotificationType.ATTENDANCE_WARNING)).toBe('/me/attendance');
+    expect(notificationTarget(NotificationRefType.STUDENT, id, Role.STUDENT)).toBe('/me/profile');
+    expect(notificationTarget(NotificationRefType.STUDENT, id, Role.ACADEMIC_STAFF, NotificationType.ATTENDANCE_WARNING)).toBe(`/students/${id}`);
   });
 });
