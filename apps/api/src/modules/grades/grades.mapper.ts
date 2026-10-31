@@ -1,6 +1,7 @@
 import type { Types } from 'mongoose';
-import { addVnDays, startOfVnDay, toDateOnly, type AssessmentDto } from '@lc/shared';
+import { addVnDays, startOfVnDay, toDateOnly, type AssessmentDto, type GradeDto, type GradeHistoryEntry } from '@lc/shared';
 import type { Assessment } from '../../database/schemas/assessment.schema';
+import type { Grade } from '../../database/schemas/grade.schema';
 
 type AssessmentRecord = Assessment & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 
@@ -32,5 +33,42 @@ export function toAssessmentDto(
     ...(a.createdBy ? { createdBy: a.createdBy.toString() } : {}),
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
+  };
+}
+
+type GradeRecord = Grade & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
+
+export function toGradeHistory(history: Grade['history'] | undefined): GradeHistoryEntry[] {
+  return (history ?? []).map((h) => ({
+    fromScore: h.fromScore,
+    toScore: h.toScore,
+    fromComment: h.fromComment ?? null,
+    toComment: h.toComment ?? null,
+    reason: h.reason,
+    by: h.by.toString(),
+    at: h.at.toISOString(),
+  }));
+}
+
+/** Maps a grade (document or lean object) to its DTO; student info is optional decoration. */
+export function toGradeDto(
+  doc: { toObject(): unknown } | GradeRecord,
+  student?: { code?: string; fullName?: string } | null,
+): GradeDto {
+  const g = ('toObject' in doc ? doc.toObject() : doc) as GradeRecord;
+  return {
+    id: g._id.toString(),
+    assessmentId: g.assessmentId.toString(),
+    classId: g.classId.toString(),
+    studentId: g.studentId.toString(),
+    enrollmentId: g.enrollmentId.toString(),
+    score: g.score,
+    comment: g.comment ?? null,
+    isDraft: g.isDraft,
+    history: toGradeHistory(g.history),
+    studentName: student?.fullName,
+    studentCode: student?.code,
+    createdAt: g.createdAt.toISOString(),
+    updatedAt: g.updatedAt.toISOString(),
   };
 }

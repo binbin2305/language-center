@@ -34,7 +34,7 @@ import type { Class } from '../../database/schemas/class.schema';
 import type { Enrollment } from '../../database/schemas/enrollment.schema';
 import type { Grade } from '../../database/schemas/grade.schema';
 import type { Student } from '../../database/schemas/student.schema';
-import { toAssessmentDto } from './grades.mapper';
+import { toAssessmentDto, toGradeDto, toGradeHistory } from './grades.mapper';
 
 const fieldError = (field: string, message: string) =>
   new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields: { [field]: message } });
@@ -178,15 +178,7 @@ export class GradesService {
         comment: g?.comment ?? null,
         isDraft: g?.isDraft ?? true,
         left: r.left,
-        history: (g?.history ?? []).map((h) => ({
-          fromScore: h.fromScore,
-          toScore: h.toScore,
-          fromComment: h.fromComment ?? null,
-          toComment: h.toComment ?? null,
-          reason: h.reason,
-          by: h.by.toString(),
-          at: h.at.toISOString(),
-        })),
+        history: toGradeHistory(g?.history),
       };
     });
     rows.sort((x, y) => x.studentCode.localeCompare(y.studentCode));
@@ -310,30 +302,7 @@ export class GradesService {
       await g.save({ session: s });
       await this.audit.log({ actor, action: AuditAction.UPDATE, entity: 'grade', entityId: g._id, before, after: g.toObject() }, s);
       const st = await this.students.findById(g.studentId, { code: 1, fullName: 1 }, { session: s }).lean();
-      const o = g.toObject();
-      return {
-        id: o._id.toString(),
-        assessmentId: o.assessmentId.toString(),
-        classId: o.classId.toString(),
-        studentId: o.studentId.toString(),
-        enrollmentId: o.enrollmentId.toString(),
-        score: o.score,
-        comment: o.comment ?? null,
-        isDraft: o.isDraft,
-        history: o.history.map((h) => ({
-          fromScore: h.fromScore,
-          toScore: h.toScore,
-          fromComment: h.fromComment ?? null,
-          toComment: h.toComment ?? null,
-          reason: h.reason,
-          by: h.by.toString(),
-          at: h.at.toISOString(),
-        })),
-        studentName: st?.fullName,
-        studentCode: st?.code,
-        createdAt: (o as unknown as { createdAt: Date }).createdAt.toISOString(),
-        updatedAt: (o as unknown as { updatedAt: Date }).updatedAt.toISOString(),
-      };
+      return toGradeDto(g, st);
     });
   }
 
