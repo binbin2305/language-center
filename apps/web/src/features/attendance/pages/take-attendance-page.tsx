@@ -27,13 +27,21 @@ export default function TakeAttendancePage() {
   const settings = useAttendanceSettings();
 
   if (roster.isError)
-    return <ErrorState description={errorMessage(roster.error)} onRetry={() => void roster.refetch()} />;
+    return (
+      <>
+        <PageHeader title="Điểm danh buổi học" />
+        <ErrorState description={errorMessage(roster.error)} onRetry={() => void roster.refetch()} />
+      </>
+    );
   if (!roster.data)
     return (
-      <div className="space-y-3">
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </div>
+      <>
+        <PageHeader title="Điểm danh buổi học" />
+        <div className="space-y-3">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      </>
     );
   // Remount the form whenever the server state changes (after a save the baseline is new).
   const key = `${roster.data.taken}|${roster.data.roster.map((r) => r.status ?? '-').join('')}`;
