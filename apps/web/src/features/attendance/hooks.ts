@@ -38,6 +38,6 @@ export const useAttendanceRecords = (params: AttendanceListParams, enabled = tru
 export const useClassSessions = (classId: string, from: string | undefined, to: string | undefined) =>
   useQuery({
     queryKey: [KEY, 'class-sessions', classId, from, to],
-    queryFn: () => attendanceApi.sessions({ classId, from: from as string, to: to as string }),
+    queryFn: () => attendanceApi.classSessionsAll(classId, from as string, to as string),
     enabled: Boolean(from && to),
   });

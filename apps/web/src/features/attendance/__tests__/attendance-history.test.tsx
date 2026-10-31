@@ -200,6 +200,47 @@ describe('FR-ATT-05 tab Điểm danh của lớp (ma trận)', () => {
   });
 });
 
+describe('FR-ATT-05 ma trận lớp dài hơn 92 ngày', () => {
+  it('lớp 150 ngày → /sessions gọi theo các khoảng liên tiếp ≤ 92 ngày, đủ buổi, không còn ghi chú cắt bớt', async () => {
+    const ranges: Array<[string, string]> = [];
+    const at = (iso: string, id: string): SessionDto => ({
+      ...base,
+      id,
+      classId: CLASS_ID,
+      roomId: '65000000000000000000a001',
+      teacherId: '65000000000000000000b001',
+      startAt: iso,
+      endAt: iso,
+      status: 'SCHEDULED',
+      cancelReason: null,
+      seriesId: null,
+      attendanceTakenAt: null,
+    });
+    const early = at('2026-01-13T11:00:00.000Z', '6500000000000000000d0011');
+    const late = at('2026-05-20T11:00:00.000Z', '6500000000000000000d0012');
+    server.use(
+      http.get('*/api/v1/classes/:id', () => HttpResponse.json({ data: { ...cls, startDate: '2026-01-05', endDate: '2026-06-03' } })),
+      http.get('*/api/v1/sessions', ({ request }) => {
+        const q = new URL(request.url).searchParams;
+        const from = q.get('from')!;
+        const to = q.get('to')!;
+        ranges.push([from, to]);
+        const day = (x: SessionDto) => x.startAt.slice(0, 10);
+        return HttpResponse.json({ data: [early, late].filter((x) => day(x) >= from && day(x) <= to) });
+      }),
+      http.get('*/api/v1/attendance', () => page([rec(early.id, S1, 'PRESENT', early.startAt), rec(late.id, S1, 'LATE', late.startAt)])),
+    );
+    renderApp({ user: makeUser('ACADEMIC_STAFF'), route: `/classes/${CLASS_ID}?tab=attendance` });
+    const matrix = await screen.findByRole('table', { name: 'Ma trận điểm danh' }, FIRST);
+    expect(within(matrix).getAllByRole('columnheader')).toHaveLength(3); // HV + 2 buổi (một ở mỗi khoảng)
+    expect(ranges.sort()).toEqual([
+      ['2026-01-05', '2026-04-06'],
+      ['2026-04-07', '2026-06-03'],
+    ]);
+    expect(screen.queryByText(/92 ngày đầu/)).not.toBeInTheDocument();
+  });
+});
+
 describe('FR-ATT-05 tab Chuyên cần của HV', () => {
   it('tổng hợp theo lớp (groupBy=class&studentId) + danh sách buổi', async () => {
     let q: URLSearchParams | undefined;
