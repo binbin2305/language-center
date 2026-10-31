@@ -4,10 +4,12 @@ import type {
   AssessmentGradesDto,
   CreateAssessmentInput,
   GradeDto,
+  ListResultsQuery,
+  ResultDto,
   UpdateAssessmentInput,
   UpsertGradesInput,
 } from '@lc/shared';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { apiDelete, apiGet, apiGetBlob, apiGetPage, apiPatch, apiPost, apiPut } from '@/lib/api';
 
 export const gradesApi = {
   listAssessments: (classId: string) => apiGet<AssessmentDto[]>(`classes/${classId}/assessments`),
@@ -21,4 +23,7 @@ export const gradesApi = {
     apiPut<AssessmentGradesDto>(`assessments/${id}/grades`, input),
   amendGrade: (id: string, studentId: string, input: AmendGradeInput) =>
     apiPatch<GradeDto>(`assessments/${id}/grades/${studentId}`, input),
+  results: (params: Partial<ListResultsQuery>) => apiGetPage<ResultDto>('results', params),
+  transcriptPdf: (studentId: string, classId: string) =>
+    apiGetBlob(`results/transcript.pdf?studentId=${studentId}&classId=${classId}`),
 };
