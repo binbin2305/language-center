@@ -107,4 +107,52 @@ describe('FR-STU-02 Tóm tắt hồ sơ học viên (D22, D24)', () => {
     const list = await t.http().get(`/api/v1/students?q=${hv.code}`).set(auth(teacher.token)).expect(200);
     expect(list.body.data[0].currentClasses).toEqual([{ classId: mine._id.toString(), code: 'MINE-01' }]);
   });
+
+  it('lớp chưa có điểm confirm (TB null) bị bỏ qua khỏi trung bình', async () => {
+    const c1 = (await makeCourse(t.conn))._id;
+    const c2 = (await makeCourse(t.conn))._id;
+    const hv = await makeStudent(t.conn);
+    const ca = (await makeClass(t.conn, { courseId: c1 }))._id;
+    const cb = (await makeClass(t.conn, { courseId: c2 }))._id;
+    const ea = await makeEnrollment(t.conn, { studentId: hv._id, courseId: c1, classId: ca, status: EnrollmentStatus.ENROLLED });
+    const eb = await makeEnrollment(t.conn, { studentId: hv._id, courseId: c2, classId: cb, status: EnrollmentStatus.ENROLLED });
+    await score(ca, hv._id, ea._id, 8);
+    await score(cb, hv._id, eb._id, 5, false);
+    const res = await detail(manager, hv._id).expect(200);
+    expect(res.body.data.summary.averageScore).toBe(8);
+  });
+
+  describe('currentClasses trong kết quả PATCH', () => {
+    let n = 0;
+    async function setup() {
+      n += 1;
+      const cs = [(await makeCourse(t.conn))._id, (await makeCourse(t.conn))._id];
+      const hv = await makeStudent(t.conn);
+      const k2 = await makeClass(t.conn, { courseId: cs[0], code: `PB-0${n}2` });
+      const k1 = await makeClass(t.conn, { courseId: cs[1], code: `PA-0${n}1` });
+      await makeEnrollment(t.conn, { studentId: hv._id, courseId: cs[0], classId: k2._id, status: EnrollmentStatus.ENROLLED });
+      await makeEnrollment(t.conn, { studentId: hv._id, courseId: cs[1], classId: k1._id, status: EnrollmentStatus.ENROLLED });
+      const expected = [
+        { classId: k1._id.toString(), code: `PA-0${n}1` },
+        { classId: k2._id.toString(), code: `PB-0${n}2` },
+      ];
+      return { hv, expected };
+    }
+    it('MANAGER PATCH /students/:id (có đổi) trả currentClasses thật', async () => {
+      const { hv, expected } = await setup();
+      const res = await t.http().patch(`/api/v1/students/${hv._id}`).set(auth(manager)).send({ note: 'ghi chú mới' }).expect(200);
+      expect(res.body.data.student.currentClasses).toEqual(expected);
+    });
+    it('MANAGER PATCH không đổi gì (no-op) vẫn trả currentClasses thật', async () => {
+      const { hv, expected } = await setup();
+      const res = await t.http().patch(`/api/v1/students/${hv._id}`).set(auth(manager)).send({}).expect(200);
+      expect(res.body.data.student.currentClasses).toEqual(expected);
+    });
+    it('HV PATCH /students/me/contact trả currentClasses thật', async () => {
+      const { hv, expected } = await setup();
+      const tok = (await loginAs(t, Role.STUDENT, { studentId: hv._id })).token;
+      const res = await t.http().patch('/api/v1/students/me/contact').set(auth(tok)).send({ address: 'Số 1 Hà Nội' }).expect(200);
+      expect(res.body.data.student.currentClasses).toEqual(expected);
+    });
+  });
 });

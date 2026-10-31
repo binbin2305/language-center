@@ -191,6 +191,10 @@ export class StudentsService {
     return out;
   }
 
+  private async currentClassesFor(studentId: Types.ObjectId): Promise<StudentDto['currentClasses']> {
+    return (await this.currentClassesOf([studentId], null)).get(String(studentId)) ?? [];
+  }
+
   /** D22: mean (rounded to 2) of per-class weighted averages over confirmed, non-draft grades; classes from history scope. */
   private async averageScoreOf(studentId: Types.ObjectId): Promise<number | null> {
     const classIds = await this.scope.studentClassIds(studentId, 'history');
@@ -259,7 +263,9 @@ export class StudentsService {
       after[k] = next;
       set[k] = k === 'dob' ? fromDateOnly(input.dob as string) : next;
     }
-    if (Object.keys(set).length === 0) return { student: toStudentDto(current) };
+    if (Object.keys(set).length === 0) {
+      return { student: toStudentDto(current, await this.currentClassesFor(studentId)) };
+    }
     // The schema's validate hook does not run on findOneAndUpdate: keep fullNameSearch in sync here.
     if (typeof set.fullName === 'string') set.fullNameSearch = removeVietnameseTones(set.fullName).toLowerCase().trim();
 
@@ -276,7 +282,7 @@ export class StudentsService {
       return doc;
     });
 
-    const result: UpdateStudentResultDto = { student: toStudentDto(updated) };
+    const result: UpdateStudentResultDto = { student: toStudentDto(updated, await this.currentClassesFor(studentId)) };
     if ('phone' in set || 'email' in set) {
       const dups = await this.duplicates.find({ phone: updated.phone, email: updated.email }, { studentId });
       if (dups.length > 0) result.warnings = { duplicates: dups };
