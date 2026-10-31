@@ -79,18 +79,39 @@ export class AttendanceStatsService {
     const ids = studentIds.map((id) => new Types.ObjectId(id));
     const flags = await this.warningFlags(classId, ids);
     for (const studentId of ids) {
-      const flag = flags.get(studentId.toString()) ?? { absenceRate: 0, warning: false };
-      if (!flag.warning) {
-        await this.warnings.deleteOne({ studentId, classId });
-        continue;
-      }
       try {
-        await this.warnings.create({ studentId, classId, triggeredAt: this.clock.now(), absenceRate: flag.absenceRate });
+        await this.evaluateOne(classId, studentId, flags.get(studentId.toString()));
       } catch (e) {
-        if (isDuplicateKey(e)) continue; // already warned
-        throw e;
+        this.logger.error(
+          `absence warning evaluation failed for student ${studentId.toString()}: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`,
+        );
       }
+    }
+  }
+
+  private async evaluateOne(
+    classId: Types.ObjectId,
+    studentId: Types.ObjectId,
+    found: { absenceRate: number; warning: boolean } | undefined,
+  ): Promise<void> {
+    const flag = found ?? { absenceRate: 0, warning: false };
+    if (!flag.warning) {
+      await this.warnings.deleteOne({ studentId, classId });
+      return;
+    }
+    let created: { _id: Types.ObjectId };
+    try {
+      created = await this.warnings.create({ studentId, classId, triggeredAt: this.clock.now(), absenceRate: flag.absenceRate });
+    } catch (e) {
+      if (isDuplicateKey(e)) return; // already warned
+      throw e;
+    }
+    try {
       await this.notifyWarning(studentId, flag.absenceRate);
+    } catch (e) {
+      // Undo the marker so the next save retries the notification.
+      await this.warnings.deleteOne({ _id: created._id });
+      throw e;
     }
   }
 

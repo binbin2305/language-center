@@ -6,6 +6,7 @@ import { makeStudent } from '../factories/student.factory';
 import { loginAs, signTestToken } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
 import { AttendanceStatsService } from '../../src/modules/attendance/attendance-stats.service';
+import { NotificationsService } from '../../src/common/notifications/notifications.service';
 import { Models } from '../../src/database/models';
 
 const DAY = 24 * 3_600_000;
@@ -131,5 +132,20 @@ describe('FR-ATT-05 Cảnh báo vắng', () => {
     const res = await auth(t.http().get(`/api/v1/sessions/${s.sessions[3]!._id}/attendance`), signTestToken(t, { sub: String(s.staff.user._id), role: Role.ACADEMIC_STAFF }));
     expect(res.status).toBe(200);
     expect(res.body.data.roster[0].absenceRate).toBeCloseTo(0.25);
+  });
+
+  it('FR-ATT-05 notify lỗi sau khi insert warning → xóa warning, lần lưu sau thử lại và thông báo được gửi', async () => {
+    const s = await seed(5);
+    for (let i = 0; i < 3; i++) await s.take(i, AttendanceStatus.PRESENT);
+    const notifier = t.app.get(NotificationsService);
+    const spy = jest.spyOn(notifier, 'notify').mockRejectedValueOnce(new Error('boom'));
+    await s.take(3, AttendanceStatus.UNEXCUSED);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(await warnings(s.cls._id)).toHaveLength(0);
+    spy.mockRestore();
+    await s.patch(3, AttendanceStatus.UNEXCUSED);
+    await s.take(4, AttendanceStatus.UNEXCUSED);
+    expect(await warnings(s.cls._id)).toHaveLength(1);
+    expect((await notifs(s.st._id)).length).toBeGreaterThan(0);
   });
 });
