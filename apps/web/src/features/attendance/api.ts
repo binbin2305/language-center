@@ -1,11 +1,21 @@
 import type {
+  AttendanceDto,
+  AttendanceSummaryQuery,
+  AttendanceSummaryRowDto,
+  ListAttendanceQuery,
+  ListSessionsQuery,
   SessionAttendanceDto,
   SessionDto,
   SettingsDto,
   TakeAttendanceInput,
   UpdateAttendanceInput,
 } from '@lc/shared';
-import { apiGet, apiPatch, apiPut } from '@/lib/api';
+import { apiGet, apiGetPage, apiPatch, apiPut } from '@/lib/api';
+
+export type AttendanceListParams = Partial<Omit<ListAttendanceQuery, 'page' | 'limit' | 'sort'>>;
+export type AttendanceSummaryParams = Omit<AttendanceSummaryQuery, 'groupBy'> & { groupBy: 'student' | 'class' };
+
+const MAX_LIMIT = 100;
 
 export const attendanceApi = {
   session: (sessionId: string) => apiGet<SessionDto>(`sessions/${sessionId}`),
@@ -15,4 +25,16 @@ export const attendanceApi = {
     apiPut<SessionAttendanceDto>(`sessions/${sessionId}/attendance`, body),
   update: (sessionId: string, body: UpdateAttendanceInput) =>
     apiPatch<SessionAttendanceDto>(`sessions/${sessionId}/attendance`, body),
+  summary: (params: AttendanceSummaryParams) =>
+    apiGet<AttendanceSummaryRowDto[]>('attendance/summary', params),
+  /** Every attendance record matching the filters (pages through the 100-row cap). */
+  listAll: async (params: AttendanceListParams): Promise<AttendanceDto[]> => {
+    const all: AttendanceDto[] = [];
+    for (let page = 1; ; page += 1) {
+      const res = await apiGetPage<AttendanceDto>('attendance', { ...params, page, limit: MAX_LIMIT });
+      all.push(...res.data);
+      if (all.length >= res.meta.total || res.data.length === 0) return all;
+    }
+  },
+  sessions: (params: ListSessionsQuery) => apiGet<SessionDto[]>('sessions', params),
 };

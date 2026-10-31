@@ -1,13 +1,16 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { AttendanceStatus, type SessionAttendanceDto, type SessionDto } from '@lc/shared';
+import { AttendanceStatus, can, SessionStatus, type SessionAttendanceDto, type SessionDto } from '@lc/shared';
+import { useAuth } from '@/auth/use-auth';
 import { ErrorState } from '@/components/common/error-state';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { ApiError } from '@/lib/api';
 import { errorMessage } from '@/lib/error-messages';
 import { AttendanceHistoryPopover } from '../components/attendance-history-popover';
 import { StatusSegmented } from '../components/status-segmented';
@@ -64,6 +67,8 @@ interface FormProps {
 }
 
 function AttendanceForm({ sessionId, data, session, threshold }: FormProps) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const initial = useMemo(() => new Map(data.roster.map((r) => [r.studentId, r.status])), [data]);
   const [statuses, setStatuses] = useState(initial);
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -74,6 +79,11 @@ function AttendanceForm({ sessionId, data, session, threshold }: FormProps) {
   const update = useUpdateAttendance(sessionId);
 
   const readOnly = !data.editable;
+  // The edit-window message only fits a taken, live session the user could otherwise take.
+  const windowClosed =
+    data.taken &&
+    session !== undefined &&
+    session.status !== SessionStatus.CANCELLED && can(user, 'attendance.take');
   const chosen = data.roster.filter((r) => statuses.get(r.studentId)).length;
   const changed = data.roster.filter((r) => statuses.get(r.studentId) !== initial.get(r.studentId));
 
@@ -85,7 +95,15 @@ function AttendanceForm({ sessionId, data, session, threshold }: FormProps) {
     setMissing(0);
     setStatuses(new Map(data.roster.map((r) => [r.studentId, AttendanceStatus.PRESENT])));
   };
-  const onError = (e: unknown) => toast.error(errorMessage(e));
+  const onError = (e: unknown) => {
+    toast.error(errorMessage(e));
+    // Someone else saved first, or the edit window closed meanwhile: reload the real state.
+    if (
+      e instanceof ApiError &&
+      (e.code === 'ATTENDANCE_ALREADY_TAKEN' || e.code === 'ATTENDANCE_EDIT_WINDOW_CLOSED')
+    )
+      void queryClient.invalidateQueries({ queryKey: ['attendance', 'roster', sessionId] });
+  };
 
   const save = () => {
     if (data.taken) {
@@ -134,9 +152,15 @@ function AttendanceForm({ sessionId, data, session, threshold }: FormProps) {
         }
       />
       {readOnly ? (
-        <p role="status" className="mb-3 rounded-md border border-warning bg-warning/10 p-3 text-sm">
-          Đã quá thời hạn chỉnh sửa
-        </p>
+        windowClosed ? (
+          <p role="status" className="mb-3 rounded-md border border-warning bg-warning/10 p-3 text-sm">
+            Đã quá thời hạn chỉnh sửa
+          </p>
+        ) : (
+          <p role="status" className="mb-3 rounded-md border bg-muted p-3 text-sm text-muted-foreground">
+            Chỉ xem, không thể chỉnh sửa điểm danh
+          </p>
+        )
       ) : null}
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{`Đã chọn ${chosen}/${data.roster.length}`}</p>

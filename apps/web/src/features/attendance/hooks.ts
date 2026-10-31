@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TakeAttendanceInput, UpdateAttendanceInput } from '@lc/shared';
-import { attendanceApi } from './api';
+import { attendanceApi, type AttendanceListParams, type AttendanceSummaryParams } from './api';
 
 const KEY = 'attendance';
 
@@ -28,3 +28,16 @@ export function useUpdateAttendance(sessionId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }),
   });
 }
+
+export const useAttendanceSummary = (params: AttendanceSummaryParams) =>
+  useQuery({ queryKey: [KEY, 'summary', params], queryFn: () => attendanceApi.summary(params) });
+
+export const useAttendanceRecords = (params: AttendanceListParams, enabled = true) =>
+  useQuery({ queryKey: [KEY, 'records', params], queryFn: () => attendanceApi.listAll(params), enabled });
+
+export const useClassSessions = (classId: string, from: string | undefined, to: string | undefined) =>
+  useQuery({
+    queryKey: [KEY, 'class-sessions', classId, from, to],
+    queryFn: () => attendanceApi.sessions({ classId, from: from as string, to: to as string }),
+    enabled: Boolean(from && to),
+  });

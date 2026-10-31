@@ -66,7 +66,7 @@ const group = (name: string) => screen.getByRole('group', { name: `Trạng thái
 const pick = (user: ReturnType<typeof userEvent.setup>, name: string, label: string) =>
   user.click(within(group(name)).getByRole('button', { name: label }));
 
-async function open(a: SessionAttendanceDto, role: 'ACADEMIC_STAFF' | 'TEACHER' = 'TEACHER') {
+async function open(a: SessionAttendanceDto, role: 'ACADEMIC_STAFF' | 'TEACHER' | 'MANAGER' = 'TEACHER') {
   mockApi(a);
   const user = userEvent.setup();
   renderApp({ user: makeUser(role), route: ROUTE });
@@ -212,5 +212,50 @@ describe('FR-ATT-01 màn điểm danh', () => {
     await user.click(screen.getByRole('button', { name: 'Tất cả có mặt' }));
     await user.click(screen.getByRole('button', { name: 'Lưu điểm danh' }));
     expect(await screen.findByText(/Chưa đến giờ điểm danh/)).toBeInTheDocument();
+  });
+
+  it('taken, không hủy, có quyền điểm danh, editable=false → "Đã quá thời hạn chỉnh sửa"; Manager (không có quyền) → trạng thái chỉ xem trung tính', async () => {
+    const taken = dto({ taken: true, editable: false, takenAt: '2026-01-14T11:05:00.000Z', takenByName: 'Cô Lan' }, 1);
+    taken.roster = taken.roster.map((r) => ({ ...r, status: 'PRESENT' as const }));
+    await open(taken, 'MANAGER');
+    expect(screen.queryByText('Đã quá thời hạn chỉnh sửa')).not.toBeInTheDocument();
+    expect(screen.getByText('Chỉ xem, không thể chỉnh sửa điểm danh')).toBeInTheDocument();
+  });
+
+  it('buổi đã hủy (editable=false) → trạng thái chỉ xem trung tính, không báo quá hạn', async () => {
+    mockApi(dto({ taken: false, editable: false }, 1));
+    server.use(
+      http.get('*/api/v1/sessions/:id', () =>
+        HttpResponse.json({ data: { ...session, status: 'CANCELLED', cancelReason: 'Nghỉ lễ' } }),
+      ),
+    );
+    renderApp({ user: makeUser('TEACHER'), route: ROUTE });
+    await screen.findByText('Học viên 1', {}, FIRST);
+    await screen.findByText('Chỉ xem, không thể chỉnh sửa điểm danh');
+    expect(screen.queryByText('Đã quá thời hạn chỉnh sửa')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['409 ATTENDANCE_ALREADY_TAKEN', 409, 'ATTENDANCE_ALREADY_TAKEN'],
+    ['422 ATTENDANCE_EDIT_WINDOW_CLOSED', 422, 'ATTENDANCE_EDIT_WINDOW_CLOSED'],
+  ])('%s → refetch truy vấn điểm danh buổi học', async (_n, status, code) => {
+    let gets = 0;
+    mockApi(dto({}, 1));
+    server.use(
+      http.get('*/api/v1/sessions/:id/attendance', () => {
+        gets += 1;
+        return HttpResponse.json({ data: dto({}, 1) });
+      }),
+      http.put('*/api/v1/sessions/:id/attendance', () =>
+        HttpResponse.json({ error: { code, message: 'x' } }, { status }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderApp({ user: makeUser('TEACHER'), route: ROUTE });
+    await screen.findByText('Học viên 1', {}, FIRST);
+    expect(gets).toBe(1);
+    await user.click(screen.getByRole('button', { name: 'Tất cả có mặt' }));
+    await user.click(screen.getByRole('button', { name: 'Lưu điểm danh' }));
+    await waitFor(() => expect(gets).toBe(2));
   });
 });
