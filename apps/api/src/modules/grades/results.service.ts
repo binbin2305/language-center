@@ -93,8 +93,9 @@ export class ResultsService {
       if (!user.studentId) return empty;
       match.studentId = user.studentId; // overrides any query studentId
     }
-    const classFilter: Types.ObjectId[] | null =
-      user.role === Role.TEACHER ? await this.scope.teacherClassIds(user.id) : null;
+    let classFilter: Types.ObjectId[] | null = null;
+    if (user.role === Role.TEACHER) classFilter = await this.scope.teacherClassIds(user.id);
+    else if (user.role === Role.STUDENT) classFilter = await this.scope.studentClassIds(user.studentId!, 'history');
     if (q.classId) {
       const wanted = new Types.ObjectId(q.classId);
       if (classFilter && !classFilter.some((c) => c.equals(wanted))) return empty;
