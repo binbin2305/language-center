@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
+import { EnrollmentsController } from './enrollments.controller';
+import { AssignmentService } from './assignment.service';
+import { ClassFinishedListener } from './class-finished.listener';
 import { EnrollmentsService } from './enrollments.service';
 
 // INVOICE_CREATOR comes from common/contracts (global no-op until FeesModule is imported here at merge).
-@Module({ providers: [EnrollmentsService], exports: [EnrollmentsService] })
+@Module({ controllers: [EnrollmentsController], providers: [EnrollmentsService, AssignmentService, ClassFinishedListener], exports: [EnrollmentsService, AssignmentService] })
 export class EnrollmentsModule {}
