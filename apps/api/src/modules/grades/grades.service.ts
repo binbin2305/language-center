@@ -13,6 +13,9 @@ import {
   type AssessmentDto,
   type AssessmentGradesDto,
   type UpsertGradesInput,
+  type AmendGradeInput,
+  type UnlockAssessmentInput,
+  type GradeDto,
   type CreateAssessmentInput,
   type UpdateAssessmentInput,
 } from '@lc/shared';
@@ -273,5 +276,82 @@ export class GradesService {
       }
     }
     return result;
+  }
+  /** FR-GRD-04: amend one confirmed grade; history + audit in the same transaction. */
+  async amendGrade(id: string, studentId: string, input: AmendGradeInput, actor: AuthUser): Promise<GradeDto> {
+    const current = await this.loadAssessment(id);
+    await this.assertClassScope(current.classId, actor, true);
+    if (!input.reason.trim()) throw new AppError(ErrorCode.REASON_REQUIRED);
+    if (input.score !== null && !isValidScore(input.score)) {
+      throw new AppError(ErrorCode.SCORE_OUT_OF_RANGE, undefined, { studentIds: [studentId] });
+    }
+    const settings = await this.settings.get();
+    const now = this.clock.now();
+    return withTransaction(this.conn, async (s) => {
+      await this.counters.next(`lock:class:${current.classId}`, s);
+      const a = await this.loadAssessment(id, s);
+      if (toAssessmentDto(a, settings, now).isLocked) throw new AppError(ErrorCode.GRADEBOOK_LOCKED);
+      if (!a.confirmedAt) throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION);
+      const g = await this.grades.findOne({ assessmentId: a._id, studentId }, null, { session: s });
+      if (!g) throw new AppError(ErrorCode.NOT_FOUND);
+      const before = g.toObject();
+      const comment = input.comment === undefined ? g.comment : input.comment ?? undefined;
+      g.history.push({
+        fromScore: g.score,
+        toScore: input.score,
+        fromComment: g.comment,
+        toComment: comment,
+        reason: input.reason.trim(),
+        by: new Types.ObjectId(actor.id),
+        at: now,
+      });
+      g.score = input.score;
+      g.comment = comment;
+      await g.save({ session: s });
+      await this.audit.log({ actor, action: AuditAction.UPDATE, entity: 'grade', entityId: g._id, before, after: g.toObject() }, s);
+      const st = await this.students.findById(g.studentId, { code: 1, fullName: 1 }, { session: s }).lean();
+      const o = g.toObject();
+      return {
+        id: o._id.toString(),
+        assessmentId: o.assessmentId.toString(),
+        classId: o.classId.toString(),
+        studentId: o.studentId.toString(),
+        enrollmentId: o.enrollmentId.toString(),
+        score: o.score,
+        comment: o.comment ?? null,
+        isDraft: o.isDraft,
+        history: o.history.map((h) => ({
+          fromScore: h.fromScore,
+          toScore: h.toScore,
+          fromComment: h.fromComment ?? null,
+          toComment: h.toComment ?? null,
+          reason: h.reason,
+          by: h.by.toString(),
+          at: h.at.toISOString(),
+        })),
+        studentName: st?.fullName,
+        studentCode: st?.code,
+        createdAt: (o as unknown as { createdAt: Date }).createdAt.toISOString(),
+        updatedAt: (o as unknown as { updatedAt: Date }).updatedAt.toISOString(),
+      };
+    });
+  }
+
+  /** FR-GRD-04: manager temporarily re-opens a locked gradebook. */
+  async unlock(id: string, input: UnlockAssessmentInput, actor: AuthUser): Promise<AssessmentDto> {
+    const current = await this.loadAssessment(id);
+    const until = new Date(input.until);
+    const now = this.clock.now();
+    if (!(until > now)) throw fieldError('until', 'MUST_BE_IN_THE_FUTURE');
+    const settings = await this.settings.get();
+    return withTransaction(this.conn, async (s) => {
+      await this.counters.next(`lock:class:${current.classId}`, s);
+      const a = await this.loadAssessment(id, s);
+      const before = a.toObject();
+      a.unlockedUntil = until;
+      await a.save({ session: s });
+      await this.audit.log({ actor, action: AuditAction.UPDATE, entity: Models.Assessment, entityId: a._id, before, after: a.toObject() }, s);
+      return toAssessmentDto(a, settings, now);
+    });
   }
 }
