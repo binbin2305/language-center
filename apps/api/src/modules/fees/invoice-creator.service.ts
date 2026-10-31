@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model, Types } from 'mongoose';
-import { addVnDays, fromDateOnly, InvoiceKind, InvoiceStatus, toDateOnly, vnDay } from '@lc/shared';
+import { addVnDays, AuditAction, fromDateOnly, InvoiceKind, InvoiceStatus, Role, toDateOnly, vnDay } from '@lc/shared';
+import { AuditService } from '../../common/audit/audit.service';
+import type { AuthUser } from '../../common/auth/auth-user';
 import { ClockService } from '../../common/clock/clock.service';
 import type { InvoiceCreator } from '../../common/contracts/invoice-creator';
 import { CounterService } from '../../common/db/counter.service';
@@ -12,6 +14,9 @@ import type { Class } from '../../database/schemas/class.schema';
 import type { Course } from '../../database/schemas/course.schema';
 import type { Enrollment } from '../../database/schemas/enrollment.schema';
 import type { Invoice } from '../../database/schemas/invoice.schema';
+
+/** The contract carries no actor: automatic voids are audited as this system actor. */
+const SYSTEM_ACTOR: AuthUser = { id: new Types.ObjectId('000000000000000000000001'), role: Role.ADMIN };
 
 /** Real INVOICE_CREATOR (D11): one TUITION invoice per enrollment chain (`transferredFromId`). */
 @Injectable()
@@ -24,6 +29,7 @@ export class InvoiceCreatorService implements InvoiceCreator {
     private readonly counters: CounterService,
     private readonly settings: SettingsService,
     private readonly clock: ClockService,
+    private readonly audit: AuditService,
   ) {}
 
   async createForEnrollment(enrollmentId: Types.ObjectId, s: ClientSession): Promise<Types.ObjectId | null> {
@@ -71,6 +77,8 @@ export class InvoiceCreatorService implements InvoiceCreator {
     } catch (e) {
       if (!isDuplicateKey(e)) throw e;
       // Inside a transaction the loser is retried by withTransaction and then finds the winner's invoice.
+      // Requirement on the caller: everything in its transaction callback must be idempotent on retry
+      // (the whole callback re-runs), which the chain lookup above guarantees for this method.
       (e as { addErrorLabel?: (l: string) => void }).addErrorLabel?.('TransientTransactionError');
       throw e;
     }
@@ -79,8 +87,16 @@ export class InvoiceCreatorService implements InvoiceCreator {
   async voidForEnrollment(enrollmentId: Types.ObjectId, reason: string, s: ClientSession): Promise<void> {
     const inv = await this.findChainInvoice(enrollmentId, s);
     if (!inv || inv.status === InvoiceStatus.VOID || inv.amountPaid > 0) return;
-    // voidReason is not in the Invoice schema yet (docs/contract-requests/L-FEES-1.md).
-    await this.invoices.updateOne({ _id: inv._id }, { $set: { status: InvoiceStatus.VOID, voidReason: reason } }, { session: s, strict: false });
+    const res = await this.invoices.updateOne(
+      { _id: inv._id, amountPaid: 0, status: { $ne: InvoiceStatus.VOID } },
+      { $set: { status: InvoiceStatus.VOID } },
+      { session: s },
+    );
+    if (res.modifiedCount === 0) return;
+    await this.audit.log(
+      { actor: SYSTEM_ACTOR, action: AuditAction.STATUS, entity: 'invoice', entityId: inv._id, before: { status: inv.status }, after: { status: InvoiceStatus.VOID, reason } },
+      s,
+    );
   }
 
   /** enrollment.invoiceId -> invoices{enrollmentId, TUITION} -> follow transferredFromId. */
