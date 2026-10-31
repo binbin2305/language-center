@@ -4,12 +4,20 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientSession, Connection, Model, Types } from 'mongoose';
 import {
   absenceRate,
+  addVnDays,
+  attendanceRate,
   AttendanceStatus,
   AuditAction,
   DomainEvent,
   ErrorCode,
   Role,
   SessionStatus,
+  startOfVnDay,
+  type AttendanceDto,
+  type AttendanceSummaryQuery,
+  type AttendanceSummaryRowDto,
+  type ListAttendanceQuery,
+  type Paginated,
   type AttendanceCounts,
   type SessionAttendanceDto,
   type TakeAttendanceInput,
@@ -29,7 +37,8 @@ import type { Enrollment, EnrollmentDoc } from '../../database/schemas/enrollmen
 import type { Session } from '../../database/schemas/session.schema';
 import type { Student } from '../../database/schemas/student.schema';
 import type { User } from '../../database/schemas/user.schema';
-import { RosterRow, toSessionAttendanceDto } from './attendance.mapper';
+import type { Class } from '../../database/schemas/class.schema';
+import { RosterRow, toAttendanceDto, toSessionAttendanceDto } from './attendance.mapper';
 import { enrolledAt } from './roster';
 
 const EARLY_MS = 15 * 60_000;
@@ -51,6 +60,7 @@ export class AttendanceService {
     @InjectModel(Models.Attendance) private readonly attendances: Model<Attendance>,
     @InjectModel(Models.Student) private readonly students: Model<Student>,
     @InjectModel(Models.User) private readonly users: Model<User>,
+    @InjectModel(Models.Class) private readonly classes: Model<Class>,
     private readonly audit: AuditService,
     private readonly counters: CounterService,
     private readonly clock: ClockService,
@@ -305,6 +315,122 @@ export class AttendanceService {
       counts.set(k, { ...(counts.get(k) ?? {}), [r._id.st]: r.n });
     }
     return new Map([...counts].map(([k, c]) => [k, absenceRate(c)]));
+  }
+
+  /**
+   * FR-ATT-04 data scope (ARCHITECTURE 4.6): student = own records in history classes, teacher = own classes
+   * (substitute excluded), M/S unrestricted. Returns null when the scope is provably empty.
+   */
+  private async historyMatch(
+    q: { from?: string; to?: string; classId?: string; studentId?: string },
+    user: AuthUser,
+  ): Promise<Record<string, unknown> | null> {
+    const match: Record<string, unknown> = {};
+    let classIds: Types.ObjectId[] | null = null;
+    let studentId = q.studentId;
+    if (user.role === Role.STUDENT) {
+      if (!user.studentId) return null;
+      studentId = user.studentId.toString();
+      classIds = await this.scope.studentClassIds(user.studentId, 'history');
+    } else if (user.role === Role.TEACHER) {
+      classIds = await this.scope.teacherClassIds(user.id);
+    }
+    if (q.classId) {
+      if (!Types.ObjectId.isValid(q.classId)) return null;
+      const want = new Types.ObjectId(q.classId);
+      if (classIds && !classIds.some((id) => id.equals(want))) return null;
+      classIds = [want];
+    }
+    if (classIds) {
+      if (classIds.length === 0) return null;
+      match.classId = { $in: classIds };
+    }
+    if (studentId) match.studentId = new Types.ObjectId(studentId);
+    return match;
+  }
+
+  /** Attendance joined with its session; cancelled sessions and out-of-range VN days are dropped. */
+  private joinSession(match: Record<string, unknown>, q: { from?: string; to?: string }) {
+    const startAt: Record<string, Date> = {};
+    if (q.from) startAt.$gte = startOfVnDay(q.from);
+    if (q.to) startAt.$lt = startOfVnDay(addVnDays(q.to, 1));
+    return [
+      { $match: match },
+      { $lookup: { from: this.sessions.collection.name, localField: 'sessionId', foreignField: '_id', as: 'session' } },
+      { $unwind: '$session' },
+      {
+        $match: {
+          'session.status': { $ne: SessionStatus.CANCELLED },
+          ...(Object.keys(startAt).length ? { 'session.startAt': startAt } : {}),
+        },
+      },
+    ];
+  }
+
+  async list(q: ListAttendanceQuery, user: AuthUser): Promise<Paginated<AttendanceDto>> {
+    const empty = { data: [], meta: { page: q.page, limit: q.limit, total: 0 } };
+    const match = await this.historyMatch(q, user);
+    if (!match) return empty;
+    const [res] = await this.attendances.aggregate<{
+      rows: (Attendance & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date; session: Session })[];
+      count: { n: number }[];
+    }>([
+      ...this.joinSession(match, q),
+      {
+        $facet: {
+          rows: [
+            { $sort: { 'session.startAt': -1, _id: -1 } },
+            { $skip: (q.page - 1) * q.limit },
+            { $limit: q.limit },
+          ],
+          count: [{ $count: 'n' }],
+        },
+      },
+    ]);
+    const rows = res?.rows ?? [];
+    const [studentDocs, classDocs] = await Promise.all([
+      this.students.find({ _id: { $in: rows.map((r) => r.studentId) } }, { fullName: 1 }).lean(),
+      this.classes.find({ _id: { $in: rows.map((r) => r.classId) } }, { code: 1 }).lean(),
+    ]);
+    const names = new Map(studentDocs.map((x) => [String(x._id), x.fullName]));
+    const codes = new Map(classDocs.map((x) => [String(x._id), x.code]));
+    return {
+      data: rows.map((r) => toAttendanceDto(r, r.session.startAt, names.get(String(r.studentId)), codes.get(String(r.classId)))),
+      meta: { page: q.page, limit: q.limit, total: res?.count[0]?.n ?? 0 },
+    };
+  }
+
+  async summary(q: AttendanceSummaryQuery, user: AuthUser): Promise<{ data: AttendanceSummaryRowDto[] }> {
+    const match = await this.historyMatch(q, user);
+    if (!match) return { data: [] };
+    const field = q.groupBy === 'student' ? 'studentId' : 'classId';
+    const groups = await this.attendances.aggregate<{ _id: Types.ObjectId; counts: { s: AttendanceStatus; n: number }[] }>([
+      ...this.joinSession(match, q),
+      { $group: { _id: { k: `$${field}`, s: '$status' }, n: { $sum: 1 } } },
+      { $group: { _id: '$_id.k', counts: { $push: { s: '$_id.s', n: '$n' } } } },
+    ]);
+    const ids = groups.map((g) => g._id);
+    const labels = new Map<string, string>();
+    if (q.groupBy === 'student') {
+      for (const x of await this.students.find({ _id: { $in: ids } }, { fullName: 1 }).lean()) labels.set(String(x._id), x.fullName);
+    } else {
+      for (const x of await this.classes.find({ _id: { $in: ids } }, { code: 1 }).lean()) labels.set(String(x._id), x.code);
+    }
+    const round = (x: number) => Math.round(x * 1e4) / 1e4;
+    const data = groups.map((g): AttendanceSummaryRowDto => {
+      const c: Record<AttendanceStatus, number> = { PRESENT: 0, LATE: 0, EXCUSED: 0, UNEXCUSED: 0 };
+      for (const e of g.counts) c[e.s] = e.n;
+      return {
+        key: g._id.toString(),
+        label: labels.get(String(g._id)) ?? '',
+        ...c,
+        total: c.PRESENT + c.LATE + c.EXCUSED + c.UNEXCUSED,
+        // The shared helper returns null for zero records (never happens for a grouped row); 0 satisfies the DTO.
+        attendanceRate: round(attendanceRate(c) ?? 0),
+        absenceRate: round(absenceRate(c)),
+      };
+    });
+    return { data: data.sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key)) };
   }
 }
 
