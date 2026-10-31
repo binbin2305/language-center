@@ -175,3 +175,5 @@ Final fix wave: re-review — all 9 + extra addressed, 0 new Critical/Important 
 Final fix wave: minor (deferred → W4 hardening): no backfill of classHistory / stint classId (dev data only — needed before production data); classHistory not indexed; teacherStudentIds still classId-only.
 Final fix wave: complete (commits d9a7a60..77fc1cc); full chain green at 77fc1cc (shared 98, api unit 44, web 443, api e2e 761/49 suites, merge-gate, fr-coverage 54/68).
 Ruling R24: no second UI smoke after the fix wave — Task M smoke (13/13) ran on d9a7a60 and every fix-wave change is covered by RED→GREEN tests + the full chain — cost if wrong: a UI regression in the 9 touched spots surfaces in W3.
+
+Re-verification 2026-11-01 (controller): full chain re-run on main green (shared 98, api unit 44, web 443, api e2e 761/49, merge-gate, fr-coverage 54/68); UI smoke re-run 20/20 PASS, no 5xx (smoke2-report.md). Finding: seed:demo enrollments have no classHistory / stamped stints → reserve→resume→reassign of a SEEDED enrollment loses old-class history. Fix in W3-L3 (seed through services) or a seed patch.

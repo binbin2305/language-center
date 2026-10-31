@@ -20,7 +20,7 @@ Same as `handoff-wave2.md`: the user writes Vietnamese, reply in Vietnamese, act
 ## Next: Wave 3 (TASK.md)
 - Lead W3-L1 wiring is mostly done in W2 Task M (tokens, warningFlags). Remaining Lead items: W3-L2 flow tests (several already exist in `apps/api/test/e2e/flows/w2-*.e2e-spec.ts` — extend, don't duplicate), W3-L3 full seed through services + `seed:large`, D7 student summary (`averageScore`, `outstandingBalance`) with real data, D8 email login decision, R26 current-class column.
 - Lanes: L-REPORTS (R-01..R-07), L-STUDENT-PORTAL (P-01, P-02). Teacher home needs "today's sessions → Điểm danh" link (Task M note).
-- Carry into W3/W4 from the W2 ledger: classHistory backfill + index before production data; teacherStudentIds classId-only; /results course/student filters; attendance matrix rows from roster; deferred test-coverage minors.
+- Carry into W3/W4 from the W2 ledger: seed:demo must set enrollments.classHistory and class-stamped ENROLLED history (smoke 2026-11-01 found seeded enrollments lose old-class history after reserve→resume→reassign); classHistory backfill + index before production data; teacherStudentIds classId-only; /results course/student filters; attendance matrix rows from roster; deferred test-coverage minors.
 
 ## Environment gotchas (unchanged from W2, plus)
 - `export PATH=/opt/homebrew/bin:$PATH`; Node 26, pnpm 9, no Docker. After shared changes `pnpm --filter @lc/shared build`.
