@@ -93,11 +93,11 @@ export class AuthService {
   private async resolveStudentByEmail(email: string): Promise<UserDoc | null> {
     const matches = await this.students
       .find({ email, deletedAt: null, userId: { $exists: true, $ne: null } })
-      .select('userId')
+      .select('_id userId')
       .limit(2)
       .lean();
     if (matches.length !== 1) return null;
-    return this.users.findOne({ _id: matches[0].userId, role: Role.STUDENT, deletedAt: null }).select('+passwordHash');
+    return this.users.findOne({ _id: matches[0].userId, studentId: matches[0]._id, role: Role.STUDENT, deletedAt: null }).select('+passwordHash');
   }
 
   /** Atomically records a failed attempt; returns lockedUntil when this attempt (or a concurrent one) locked the account. */

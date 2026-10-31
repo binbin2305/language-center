@@ -84,4 +84,39 @@ describe('FR-ADM-04 đăng nhập HV bằng email (D23)', () => {
     expect(bodies[0]).toEqual(bodies[1]);
     expect(bodies[1]).toEqual(bodies[2]);
   });
+
+  describe('guard', () => {
+    it('HV có userId trỏ tới user MANAGER → 401', async () => {
+      const m = await makeUser(t.conn, { role: Role.MANAGER });
+      await makeStudent(t.conn, { email: 'g1@x.vn', userId: m._id });
+      const res = await login('g1@x.vn');
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
+    });
+    it('staff username x@center.local và HV cùng email → đăng nhập ra staff', async () => {
+      const m = await makeUser(t.conn, { role: Role.MANAGER, email: 'x@center.local' });
+      await makeStudent(t.conn, { email: 'x@center.local', withUser: true });
+      const res = await login('x@center.local');
+      expect(res.status).toBe(200);
+      expect(res.body.data.user.id).toBe(m._id.toHexString());
+    });
+    it('HV còn sống nhưng user bị xóa mềm → 401', async () => {
+      const s = await makeStudent(t.conn, { email: 'g3@x.vn', withUser: true });
+      await models(t.conn).User.updateOne({ _id: s.userId }, { deletedAt: new Date() });
+      expect((await login('g3@x.vn')).status).toBe(401);
+    });
+    it('input có khoảng trắng "  A@X.VN " vẫn đăng nhập được', async () => {
+      const s = await makeStudent(t.conn, { email: 'g4@x.vn', withUser: true });
+      const res = await login('  G4@X.VN ');
+      expect(res.status).toBe(200);
+      expect(res.body.data.user.id).toBe(s.userId!.toHexString());
+    });
+    it('student.userId trỏ tới user của HV khác → 401', async () => {
+      const other = await makeStudent(t.conn, { withUser: true });
+      await makeStudent(t.conn, { email: 'g5@x.vn', userId: other.userId });
+      const res = await login('g5@x.vn');
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
+    });
+  });
 });
