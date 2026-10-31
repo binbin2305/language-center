@@ -50,7 +50,10 @@ export class InvoiceCreatorService implements InvoiceCreator {
     const period = vnDay(now).slice(0, 7).replace('-', '');
     const seq = await this.counters.next(`invoice:${period}`, s);
     const code = this.counters.formatCode('HD', period, seq, 4);
-    const start = cls ? toDateOnly(cls.startDate) : vnDay(now);
+    // R23: a late assignment (class already started) is due N days from today, never in the past.
+    const today = vnDay(now);
+    const classStart = cls ? toDateOnly(cls.startDate) : today;
+    const start = classStart > today ? classStart : today;
     const dueDate = fromDateOnly(addVnDays(start, settings.invoiceDueDaysAfterStart));
     const fee = course.baseFee;
     try {

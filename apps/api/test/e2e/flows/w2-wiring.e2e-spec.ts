@@ -162,10 +162,11 @@ describe('W2 nối dây: enrollments ↔ fees ↔ grades ↔ attendance (FR-CLS-
     await t.http().patch(api('/settings')).set(auth(manager)).send({ resultViewRequiresPaidFees: true }).expect(200);
     try {
       const course = await makeCourse(t.conn, { baseFee: 1_000_000 });
-      // Started two months ago → dueDate (start + invoiceDueDaysAfterStart) is in the past.
       const cls = await makeClass(t.conn, { courseId: course._id, startDate: new Date('2025-11-03T00:00:00+07:00') });
       const { st, e } = await waiting(course._id);
       await act(e._id, 'assign', { classId: cls._id.toString() }).expect(201);
+      // R23 makes a late assignment due today + N; age the invoice so it is overdue.
+      await m().Invoice.updateMany({ studentId: st._id, kind: InvoiceKind.TUITION }, { $set: { dueDate: new Date('2025-12-01T00:00:00+07:00') } });
       const login = await t.http().post(api('/auth/login')).send({ username: st.code, password: DEFAULT_PASSWORD }).expect(200);
       const me = login.body.data.accessToken as string;
 
@@ -188,6 +189,8 @@ describe('W2 nối dây: enrollments ↔ fees ↔ grades ↔ attendance (FR-CLS-
   });
 
   it('(6) FR-ATT-05: điểm danh vượt ngưỡng → /classes/:id/students có warning: true (warningFlags)', async () => {
+    // Pin the threshold so the case does not depend on the settings default.
+    await t.http().patch(api('/settings')).set(auth(manager)).send({ attendanceWarningThreshold: 0.2 }).expect(200);
     const course = await makeCourse(t.conn);
     const cls = await makeClass(t.conn, { courseId: course._id, teacherId: teacher.id });
     const absent = await waiting(course._id);

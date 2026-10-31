@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { EnrollmentStatus, InvoiceKind, InvoiceStatus } from '@lc/shared';
+import { addVnDays, EnrollmentStatus, fromDateOnly, InvoiceKind, InvoiceStatus, vnDay } from '@lc/shared';
 import { INVOICE_CREATOR, InvoiceCreator } from '../../src/common/contracts';
 import { withTransaction } from '../../src/common/db/transaction';
 import { FeesModule } from '../../src/modules/fees/fees.module';
@@ -50,6 +50,16 @@ describe('FR-FEE-02 Hóa đơn học phí', () => {
     expect(inv?.enrollmentId?.toString()).toBe(enr._id.toString());
     await models(t.conn).Course.updateOne({ _id: course._id }, { baseFee: 5_000_000 });
     expect((await models(t.conn).Invoice.findById(id).lean())?.amountDue).toBe(3_000_000);
+  });
+
+  it('R23: lớp đã khai giảng 10 ngày trước -> dueDate = hôm nay + 7 (không lùi về quá khứ)', async () => {
+    const now = t.clock.now();
+    const course = await makeCourse(t.conn);
+    const cls = await makeClass(t.conn, { courseId: course._id, startDate: fromDateOnly(addVnDays(vnDay(now), -10)) });
+    const student = await makeStudent(t.conn);
+    const enr = await makeEnrollment(t.conn, { studentId: student._id, courseId: course._id, classId: cls._id });
+    const inv = await models(t.conn).Invoice.findById(await create(enr._id)).lean();
+    expect(inv?.dueDate).toEqual(fromDateOnly(addVnDays(vnDay(now), 7)));
   });
 
   it('gọi hai lần -> cùng id, một hóa đơn', async () => {
