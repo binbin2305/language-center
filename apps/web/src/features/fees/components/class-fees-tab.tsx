@@ -1,6 +1,10 @@
-import { PlaceholderPage } from '@/components/common/placeholder-page';
+import { useParams } from 'react-router-dom';
+import { useAuth } from '@/auth/use-auth';
+import { InvoiceTable } from './invoice-table';
 
-/** Tab "Học phí lớp" — owning lane replaces the body; read the route id with useParams(). */
+/** Tab "Học phí lớp". */
 export default function ClassFeesTab() {
-  return <PlaceholderPage title="Học phí lớp" level={2} />;
+  const { id = '' } = useParams();
+  const { user } = useAuth();
+  return <InvoiceTable filters={{ classId: id }} teacher={user?.role === 'TEACHER'} />;
 }
