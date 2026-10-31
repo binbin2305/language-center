@@ -15,6 +15,7 @@ import {
   ListWaitingEnrollmentsQuery,
   Role,
   SkipPlacementInput,
+  startOfVnDay,
   vnDay,
   WaitingEnrollmentDto,
   WithdrawEnrollmentInput,
@@ -261,9 +262,19 @@ export class EnrollmentsService {
     if (!peek) throw new AppError(ErrorCode.NOT_FOUND);
 
     const after = await withTransaction(this.conn, async (s) => {
-      if (peek.status === EnrollmentStatus.ENROLLED && peek.classId) await this.counters.next(`lock:class:${peek.classId}`, s);
-      const before = await this.enrollments.findById(enrollmentId).session(s).lean();
+      let lockedClass: Types.ObjectId | null = null;
+      if (peek.status === EnrollmentStatus.ENROLLED && peek.classId) {
+        lockedClass = peek.classId;
+        await this.counters.next(`lock:class:${lockedClass}`, s);
+      }
+      let before = await this.enrollments.findById(enrollmentId).session(s).lean();
       if (!before) throw new AppError(ErrorCode.NOT_FOUND);
+      if (before.status === EnrollmentStatus.ENROLLED && before.classId && !before.classId.equals(lockedClass ?? undefined)) {
+        // The peek was stale: bump the right lock, then re-read under it.
+        await this.counters.next(`lock:class:${before.classId}`, s);
+        before = await this.enrollments.findById(enrollmentId).session(s).lean();
+        if (!before) throw new AppError(ErrorCode.NOT_FOUND);
+      }
       if (!canTransition(ENROLLMENT_TRANSITIONS, before.status, input.status)) {
         throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION);
       }
@@ -277,9 +288,10 @@ export class EnrollmentsService {
         { new: true, session: s },
       );
       if (!claimed) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
-      if (before.status === EnrollmentStatus.ENROLLED) {
-        if (before.classId) await this.releaseSeat(before.classId, s);
-        if (input.status === EnrollmentStatus.CANCELLED) await this.invoices.voidForEnrollment(enrollmentId, reason, s);
+      if (before.status === EnrollmentStatus.ENROLLED && before.classId) await this.releaseSeat(before.classId, s);
+      // R18: any cancellation of an enrollment that has an invoice voids it (the fees side keeps it if paid).
+      if (input.status === EnrollmentStatus.CANCELLED && before.invoiceId) {
+        await this.invoices.voidForEnrollment(enrollmentId, reason, s);
       }
       await this.audit.log(
         { actor, action: AuditAction.UPDATE, entity: 'enrollment', entityId: enrollmentId, before, after: claimed.toObject() },
@@ -335,9 +347,10 @@ export class EnrollmentsService {
     const before = await this.enrollments.findOne(scope).lean();
     if (!before) throw new AppError(ErrorCode.NOT_FOUND);
     const after = await withTransaction(this.conn, async (s) => {
+      // Re-confirming keeps the first confirmedAt.
       const updated = await this.enrollments.findOneAndUpdate(
         { ...scope, status: EnrollmentStatus.ENROLLED },
-        { $set: { confirmedAt: this.clock.now() } },
+        [{ $set: { confirmedAt: { $ifNull: ['$confirmedAt', this.clock.now()] } } }],
         { new: true, session: s },
       );
       if (!updated) throw new AppError(ErrorCode.ENROLLMENT_INVALID_STATE);
@@ -360,7 +373,7 @@ export class EnrollmentsService {
     const today = vnDay(this.clock.now());
     const data: WaitingEnrollmentDto[] = dtos.map((d, i) => {
       const since = rows[i].waitingSince;
-      const days = since ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${vnDay(since)}T00:00:00Z`)) / 86_400_000) : 0;
+      const days = since ? Math.round((startOfVnDay(today).getTime() - startOfVnDay(vnDay(since)).getTime()) / 86_400_000) : 0;
       return { ...d, waitingDays: Math.max(0, days) };
     });
     return { data, meta: page.meta };

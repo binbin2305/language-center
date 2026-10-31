@@ -8,6 +8,7 @@ import { makeClass, makeCourse, makeEnrollment, makeStudent, models } from '../f
 describe('FR-CLS-07..11 Vòng đời enrollment', () => {
   let t: TestApp;
   let manager: string;
+  let managerId: string;
   let staff: string;
   let admin: string;
   let teacher: string;
@@ -28,7 +29,9 @@ describe('FR-CLS-07..11 Vòng đời enrollment', () => {
 
   beforeAll(async () => {
     t = await createTestApp({ overrides: [{ provide: INVOICE_CREATOR, useValue: fake }] });
-    manager = (await loginAs(t, Role.MANAGER)).token;
+    const mgr = await loginAs(t, Role.MANAGER);
+    manager = mgr.token;
+    managerId = mgr.user._id.toString();
     staff = (await loginAs(t, Role.ACADEMIC_STAFF)).token;
     admin = (await loginAs(t, Role.ADMIN)).token;
     teacher = (await loginAs(t, Role.TEACHER)).token;
@@ -69,7 +72,7 @@ describe('FR-CLS-07..11 Vòng đời enrollment', () => {
     it('CANCELLED từ ENROLLED → void gọi 1 lần (id, reason), currentSize −1', async () => {
       const c = await makeCourse(t.conn);
       const cls = await makeClass(t.conn, { courseId: c._id, currentSize: 3 });
-      const e = await enrolled(c._id, cls._id);
+      const e = await enrolled(c._id, cls._id, { invoiceId });
       const res = await post(manager, e._id, 'withdraw', { status: 'CANCELLED', reason: 'Nghỉ học' }).expect(201);
       expect(res.body.data.status).toBe(EnrollmentStatus.CANCELLED);
       expect(fake.voidForEnrollment).toHaveBeenCalledTimes(1);
@@ -95,6 +98,33 @@ describe('FR-CLS-07..11 Vòng đời enrollment', () => {
       await post(staff, e._id, 'withdraw', { status: 'CANCELLED', reason: 'Hủy' }).expect(201);
       expect(await size(cls._id)).toBe(3);
       expect(fake.voidForEnrollment).not.toHaveBeenCalled();
+    });
+    it('R18: RESERVED (có invoiceId) → CANCELLED gọi void 1 lần, sĩ số không đổi', async () => {
+      const c = await makeCourse(t.conn);
+      const cls = await makeClass(t.conn, { courseId: c._id, currentSize: 3 });
+      const e = await makeEnrollment(t.conn, { courseId: c._id, classId: cls._id, status: EnrollmentStatus.RESERVED, invoiceId });
+      await post(staff, e._id, 'withdraw', { status: 'CANCELLED', reason: 'Bỏ hẳn' }).expect(201);
+      expect(fake.voidForEnrollment).toHaveBeenCalledTimes(1);
+      expect(fake.voidForEnrollment.mock.calls[0][1]).toBe('Bỏ hẳn');
+      expect(await size(cls._id)).toBe(3);
+    });
+    it('R18: WAITING_CLASS sau resume (có invoiceId) → CANCELLED gọi void 1 lần', async () => {
+      const e = await makeEnrollment(t.conn, { status: EnrollmentStatus.WAITING_CLASS, invoiceId });
+      await post(staff, e._id, 'withdraw', { status: 'CANCELLED', reason: 'Hủy' }).expect(201);
+      expect(fake.voidForEnrollment).toHaveBeenCalledTimes(1);
+    });
+    it('R18: PENDING_PLACEMENT → CANCELLED (không invoiceId) → không void, không đổi sĩ số', async () => {
+      const c = await makeCourse(t.conn);
+      const cls = await makeClass(t.conn, { courseId: c._id, currentSize: 3 });
+      const e = await makeEnrollment(t.conn, { courseId: c._id });
+      await post(staff, e._id, 'withdraw', { status: 'CANCELLED', reason: 'Hủy' }).expect(201);
+      expect(fake.voidForEnrollment).not.toHaveBeenCalled();
+      expect(await size(cls._id)).toBe(3);
+    });
+    it('PENDING_PLACEMENT → RESERVED → 422 INVALID_STATUS_TRANSITION', async () => {
+      const e = await makeEnrollment(t.conn);
+      const res = await post(staff, e._id, 'withdraw', { status: 'RESERVED', reason: 'x' }).expect(422);
+      expect(res.body.error.code).toBe(ErrorCode.INVALID_STATUS_TRANSITION);
     });
     it('RESERVED từ WAITING_CLASS → 422 INVALID_STATUS_TRANSITION', async () => {
       const e = await makeEnrollment(t.conn, { status: EnrollmentStatus.WAITING_CLASS });
@@ -148,7 +178,7 @@ describe('FR-CLS-07..11 Vòng đời enrollment', () => {
       expect(by.get(e2._id.toString())?.status).toBe(EnrollmentStatus.COMPLETED);
       expect(by.get(e3._id.toString())?.status).toBe(EnrollmentStatus.TRANSFERRED);
       expect(by.get(e1._id.toString())?.history.at(-1)).toMatchObject({ from: 'ENROLLED', to: 'COMPLETED' });
-      expect(by.get(e1._id.toString())?.history.at(-1)?.by).toBeTruthy();
+      expect(by.get(e1._id.toString())?.history.at(-1)?.by?.toString()).toBe(managerId);
       expect(await size(cls._id)).toBe(2);
     });
   });
@@ -227,7 +257,8 @@ describe('FR-CLS-07..11 Vòng đời enrollment', () => {
       const from = await makeClass(t.conn, { courseId: c._id, currentSize: 1 });
       const to = await makeClass(t.conn, { courseId: c._id });
       const e = await enrolled(c._id, from._id);
-      await post(staff, e._id, 'transfer', { toClassId: to._id.toString(), reason: ' ' }).expect(400);
+      const res = await post(staff, e._id, 'transfer', { toClassId: to._id.toString(), reason: ' ' }).expect(400);
+      expect(res.body.error.code).toBe(ErrorCode.REASON_REQUIRED);
     });
   });
 
@@ -242,6 +273,10 @@ describe('FR-CLS-07..11 Vòng đời enrollment', () => {
       const res = await post(mine, e._id, 'confirm').expect(201);
       expect(res.body.data.confirmedAt).toBe('2026-01-05T02:00:00.000Z');
       const w = await makeEnrollment(t.conn, { studentId: st._id, status: EnrollmentStatus.WAITING_CLASS });
+      t.clock.set(new Date('2026-01-05T02:05:00Z'));
+      const again = await post(mine, e._id, 'confirm').expect(201);
+      t.clock.set(new Date('2026-01-05T02:00:00Z'));
+      expect(again.body.data.confirmedAt).toBe('2026-01-05T02:00:00.000Z');
       const r2 = await post(mine, w._id, 'confirm').expect(422);
       expect(r2.body.error.code).toBe(ErrorCode.ENROLLMENT_INVALID_STATE);
     });
