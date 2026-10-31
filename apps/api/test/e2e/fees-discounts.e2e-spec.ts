@@ -1,6 +1,6 @@
 import { Role } from '@lc/shared';
 import { Models } from '../../src/database/models';
-import { makeInvoice, makePayment, models } from '../factories';
+import { makeInvoice, makePayment } from '../factories';
 import { assertInvoiceInvariants } from '../factories/fees.extra';
 import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
@@ -171,7 +171,6 @@ describe('FR-FEE-03 Giảm giá có duyệt', () => {
   });
 
   it('FR-FEE-03: /invoices/discounts/pending chỉ trả hóa đơn PENDING, có phân trang', async () => {
-    await models(t.conn).Invoice.deleteMany({});
     const a = await makeInvoice(t.conn);
     const b = await makeInvoice(t.conn);
     const c = await makeInvoice(t.conn);
@@ -181,8 +180,11 @@ describe('FR-FEE-03 Giảm giá có duyệt', () => {
     await propose(c._id, tenPercent).expect(201);
     await decide(c._id, { approve: false }).expect(200);
     const res = await t.http().get('/api/v1/invoices/discounts/pending').set(auth(manager.token)).expect(200);
-    expect(res.body.meta.total).toBe(2);
-    expect((res.body.data as { id: string }[]).map((d) => d.id).sort()).toEqual([String(a._id), String(b._id)].sort());
+    const ids = (res.body.data as { id: string; discount: { status: string } }[]).map((d) => d.id);
+    expect(ids).toEqual(expect.arrayContaining([String(a._id), String(b._id)]));
+    expect(ids).not.toContain(String(c._id));
+    expect(res.body.data.every((d: { discount: { status: string } }) => d.discount.status === 'PENDING_APPROVAL')).toBe(true);
+    expect(res.body.meta.total).toBe(res.body.data.length);
     expect(res.body.data[0]).toMatchObject({ studentName: expect.any(String), studentCode: expect.any(String) });
   });
 

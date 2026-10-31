@@ -6,6 +6,7 @@ import {
   applyDiscount,
   AuditAction,
   DecideDiscountInput,
+  Discount,
   DiscountStatus,
   ErrorCode,
   InvoiceDto,
@@ -28,14 +29,9 @@ import { paginate } from '../../common/pagination';
 import { Models } from '../../database/models';
 import type { Invoice } from '../../database/schemas/invoice.schema';
 import type { Student } from '../../database/schemas/student.schema';
-import { InvoiceLean, toInvoiceDto } from './fees.mapper';
+import { InvoiceLean, invoiceStatus, toInvoiceDto } from './fees.mapper';
 
 const SORTABLE = new Set(['createdAt', 'dueDate', 'code', 'finalAmount']);
-
-function statusFor(finalAmount: number, balance: number, paid: number): InvoiceStatus {
-  if (finalAmount === 0 || balance === 0) return InvoiceStatus.PAID;
-  return paid > 0 ? InvoiceStatus.PARTIAL : InvoiceStatus.UNPAID;
-}
 
 @Injectable()
 export class InvoicesService {
@@ -166,8 +162,8 @@ export class InvoicesService {
   }
 
   /** Discount in VND; DISCOUNT_INVALID (400) when malformed or it would drop finalAmount below amountPaid. */
-  private discountAmount(inv: InvoiceLean, d: { kind: 'PERCENT' | 'AMOUNT'; value: number }): number {
-    const dd = { kind: d.kind, value: d.value };
+  private discountAmount(inv: InvoiceLean, d: Discount): number {
+    const dd: Discount = { kind: d.kind, value: d.value };
     if (!isValidDiscount(inv.amountDue, dd)) throw new AppError(ErrorCode.DISCOUNT_INVALID, 400);
     const amount = inv.amountDue - applyDiscount(inv.amountDue, dd);
     if (inv.amountDue - amount < inv.amountPaid) throw new AppError(ErrorCode.DISCOUNT_INVALID, 400);
@@ -176,7 +172,7 @@ export class InvoicesService {
 
   private totals(inv: InvoiceLean, finalAmount: number) {
     const balance = finalAmount - inv.amountPaid;
-    return { finalAmount, balance, status: statusFor(finalAmount, balance, inv.amountPaid) };
+    return { finalAmount, balance, status: invoiceStatus({ finalAmount, amountPaid: inv.amountPaid }) };
   }
 
   private snapshot(inv: InvoiceLean) {

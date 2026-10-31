@@ -39,3 +39,10 @@ export function toInvoiceDto(inv: InvoiceLean, now: Date, names: { studentName?:
     ...names,
   };
 }
+
+/** Invoice status derived from its totals (BACKEND_SCHEMA §2.16); VOID is never derived. */
+export function invoiceStatus(inv: { finalAmount: number; amountPaid: number }): InvoiceStatus {
+  const balance = inv.finalAmount - inv.amountPaid;
+  if (inv.finalAmount === 0 || balance === 0) return InvoiceStatus.PAID;
+  return inv.amountPaid > 0 ? InvoiceStatus.PARTIAL : InvoiceStatus.UNPAID;
+}
