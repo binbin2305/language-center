@@ -7,7 +7,6 @@ import {
   CLASS_TRANSITIONS,
   canTransition,
   ClassDependencyReason,
-  absenceRate,
   ClassDto,
   ClassRosterQuery,
   ClassStudentDto,
@@ -33,14 +32,13 @@ import { AuditService } from '../../common/audit/audit.service';
 import { AuthUser } from '../../common/auth/auth-user';
 import { paginate } from '../../common/pagination';
 import { ScopeService } from '../../common/scope/scope.service';
-import { SettingsService } from '../../common/settings/settings.service';
 import { ClockService } from '../../common/clock/clock.service';
 import { CounterService } from '../../common/db/counter.service';
 import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { Models } from '../../database/models';
 import { Class } from '../../database/schemas/class.schema';
-import { Attendance } from '../../database/schemas/attendance.schema';
+import { AttendanceStatsService } from '../attendance/attendance-stats.service';
 import { Student } from '../../database/schemas/student.schema';
 import { Assessment } from '../../database/schemas/assessment.schema';
 import { Course } from '../../database/schemas/course.schema';
@@ -77,7 +75,6 @@ export class ClassesService {
     @InjectModel(Models.Assessment) private readonly assessments: Model<Assessment>,
     @InjectModel(Models.Grade) private readonly grades: Model<Grade>,
     @InjectModel(Models.Invoice) private readonly invoices: Model<Invoice>,
-    @InjectModel(Models.Attendance) private readonly attendances: Model<Attendance>,
     @InjectModel(Models.Student) private readonly students: Model<Student>,
     @InjectConnection() private readonly conn: Connection,
     private readonly audit: AuditService,
@@ -85,7 +82,7 @@ export class ClassesService {
     private readonly clock: ClockService,
     private readonly events: EventEmitter2,
     private readonly scope: ScopeService,
-    private readonly settings: SettingsService,
+    private readonly attendanceStats: AttendanceStatsService,
   ) {}
 
   async create(input: CreateClassInput, actor: AuthUser): Promise<ClassDto> {
@@ -204,7 +201,7 @@ export class ClassesService {
     };
   }
 
-  /** ENROLLED students of the class with their absence rate in this class (one aggregate per page). */
+  /** ENROLLED students of the class with their absence rate / warning in this class (D17 warningFlags). */
   async roster(id: string, q: ClassRosterQuery, user: AuthUser): Promise<Paginated<ClassStudentDto>> {
     const c = await this.load(id);
     await this.assertInScope(c, user);
@@ -223,29 +220,20 @@ export class ClassesService {
         .exec(),
       this.enrollments.countDocuments(match),
     ]);
-    const counts = await this.attendances.aggregate<{
-      _id: { studentId: Types.ObjectId; status: string };
-      n: number;
-    }>([
-      { $match: { classId: c._id, studentId: { $in: rows.map((r) => r.studentId) } } },
-      { $group: { _id: { studentId: '$studentId', status: '$status' }, n: { $sum: 1 } } },
-    ]);
-    const byStudent = new Map<string, Record<string, number>>();
-    for (const g of counts) {
-      const key = String(g._id.studentId);
-      byStudent.set(key, { ...byStudent.get(key), [g._id.status]: g.n });
-    }
-    const { attendanceWarningThreshold } = await this.settings.get();
+    const flags = await this.attendanceStats.warningFlags(
+      c._id,
+      rows.map((r) => r.studentId),
+    );
     return {
       data: rows.map((r) => {
-        const rate = absenceRate(byStudent.get(String(r.studentId)) ?? {});
+        const flag = flags.get(String(r.studentId)) ?? { absenceRate: 0, warning: false };
         return {
           studentId: r.studentId.toString(),
           enrollmentId: r._id.toString(),
           studentCode: r.s.code,
           fullName: r.s.fullName,
-          absenceRate: rate,
-          warning: rate > attendanceWarningThreshold,
+          absenceRate: flag.absenceRate,
+          warning: flag.warning,
         };
       }),
       meta: { page: q.page, limit: q.limit, total },
