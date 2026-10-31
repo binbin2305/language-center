@@ -1,7 +1,8 @@
 export type StatusTone = 'success' | 'warning' | 'info' | 'destructive' | 'muted' | 'primary';
 export type StatusGroup =
   | 'class' | 'enrollment' | 'attendance' | 'invoice' | 'session'
-  | 'course' | 'room' | 'user' | 'lead' | 'student';
+  | 'course' | 'room' | 'user' | 'lead' | 'student'
+  | 'placement' | 'assessment' | 'payment' | 'discount';
 export interface StatusMeta {
   label: string;
   tone: StatusTone;
@@ -70,6 +71,26 @@ export const STATUS_LABELS: Record<StatusGroup, Record<string, StatusMeta>> = {
     RESERVED: { label: 'Bảo lưu', tone: 'muted' },
     DROPPED: { label: 'Đã nghỉ', tone: 'destructive' },
     COMPLETED: { label: 'Hoàn thành', tone: 'primary' },
+  },
+  // Wave 2 groups.
+  placement: {
+    SCHEDULED: { label: 'Đã lên lịch', tone: 'info' },
+    COMPLETED: { label: 'Đã chấm', tone: 'success' },
+    CANCELLED: { label: 'Đã hủy', tone: 'muted' },
+  },
+  assessment: {
+    DRAFT: { label: 'Nháp', tone: 'muted' },
+    CONFIRMED: { label: 'Đã xác nhận', tone: 'success' },
+    LOCKED: { label: 'Đã khóa', tone: 'muted' },
+  },
+  payment: {
+    VALID: { label: 'Hợp lệ', tone: 'success' },
+    VOIDED: { label: 'Đã hủy', tone: 'muted', strike: true },
+  },
+  discount: {
+    PENDING_APPROVAL: { label: 'Chờ duyệt', tone: 'warning' },
+    APPROVED: { label: 'Đã duyệt', tone: 'success' },
+    REJECTED: { label: 'Từ chối', tone: 'destructive' },
   },
 };
 

@@ -1,5 +1,10 @@
 import { http, HttpResponse } from 'msw';
 import type { RequestHandler } from 'msw';
+import { attendanceHandlers } from './attendance.handlers';
+import { enrollmentsHandlers } from './enrollments.handlers';
+import { feesHandlers } from './fees.handlers';
+import { gradesHandlers } from './grades.handlers';
+import { placementHandlers } from './placement.handlers';
 import { scheduleHandlers } from './schedule.handlers';
 import { wave1Handlers } from './wave1.handlers';
 
@@ -12,4 +17,9 @@ export const handlers: RequestHandler[] = [
   ),
   ...wave1Handlers,
   ...scheduleHandlers,
+  ...enrollmentsHandlers,
+  ...placementHandlers,
+  ...attendanceHandlers,
+  ...gradesHandlers,
+  ...feesHandlers,
 ];

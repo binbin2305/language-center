@@ -23,7 +23,14 @@ export function notificationTarget(
       return isStudent ? '/me/fees' : `/fees/invoices/${refId}`;
     case NotificationRefType.ASSESSMENT:
       return isStudent ? '/me/results' : `/assessments/${refId}/grades`;
-    // ENROLLMENT, PLACEMENT_TEST, PAYMENT: no screen yet; owning lanes add their route here.
+    case NotificationRefType.ENROLLMENT:
+      return isStudent ? '/me/classes' : null;
+    case NotificationRefType.PLACEMENT_TEST:
+      if (isStudent) return null;
+      return role === Role.TEACHER
+        ? `/admissions/placement/${refId}/grade`
+        : `/admissions/placement/${refId}`;
+    // PAYMENT: no screen yet; the owning lane adds its route here.
     default:
       return null;
   }

@@ -80,4 +80,11 @@ describe('STATUS_LABELS', () => {
     expect(statusLabel('user', 'LOCKED')).toBe('Đã khóa');
     expect(statusLabel('student', 'UNKNOWN')).toBe('UNKNOWN');
   });
+  it('nhóm Wave 2: placement, assessment, payment, discount', () => {
+    expect(statusLabel('discount', 'PENDING_APPROVAL')).toBe('Chờ duyệt');
+    expect(STATUS_LABELS.placement.COMPLETED).toEqual({ label: 'Đã chấm', tone: 'success' });
+    expect(STATUS_LABELS.assessment.LOCKED).toEqual({ label: 'Đã khóa', tone: 'muted' });
+    expect(STATUS_LABELS.payment.VOIDED).toEqual({ label: 'Đã hủy', tone: 'muted', strike: true });
+    expect(STATUS_LABELS.discount.REJECTED.tone).toBe('destructive');
+  });
 });
