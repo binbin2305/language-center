@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientSession, Connection, Model, Types } from 'mongoose';
@@ -41,6 +41,8 @@ const notFound = () => new AppError(ErrorCode.NOT_FOUND);
 
 @Injectable()
 export class AttendanceService {
+  private readonly logger = new Logger(AttendanceService.name);
+
   constructor(
     @InjectConnection() private readonly conn: Connection,
     @InjectModel(Models.Session) private readonly sessions: Model<Session>,
@@ -91,6 +93,9 @@ export class AttendanceService {
     const now = this.clock.now();
     if (now.getTime() < session.startAt.getTime() - EARLY_MS) throw new AppError(ErrorCode.ATTENDANCE_TOO_EARLY);
 
+    const seen = new Set<string>();
+    const dup = input.records.some((r) => seen.size === seen.add(r.studentId).size);
+    if (dup) throw new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields: { records: 'DUPLICATE_STUDENT' } });
     const byStudent = new Map(input.records.map((r) => [r.studentId, r]));
     const studentIds = await withTransaction(this.conn, async (s) => {
       // Lock-key protocol: bump before reading the roster invariant.
@@ -143,7 +148,7 @@ export class AttendanceService {
         },
         s,
       );
-      return roster.map((e) => e.studentId.toString());
+      return [...new Set(roster.map((e) => e.studentId.toString()))];
     });
 
     try {
@@ -152,8 +157,9 @@ export class AttendanceService {
         classId: session.classId.toString(),
         studentIds,
       });
-    } catch {
+    } catch (e) {
       // Already committed; a failing listener must not fail the request.
+      this.logger.error(`attendance.recorded listener failed: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
     }
     const fresh = (await this.sessions.findById(session._id).lean<SessionRec>())!;
     return this.build(fresh, user);
@@ -195,7 +201,7 @@ export class AttendanceService {
       if (by) takenByName = (await this.users.findById(by, { fullName: 1 }).lean())?.fullName ?? null;
     }
     const mayEdit = await this.canEdit(session, user);
-    const editable = user.role === Role.MANAGER ? false : !taken || mayEdit;
+    const editable = user.role === Role.MANAGER || session.status === SessionStatus.CANCELLED ? false : !taken || mayEdit;
     return toSessionAttendanceDto({
       sessionId: session._id,
       takenAt: taken,

@@ -216,4 +216,57 @@ describe('FR-ATT-01/02 Điểm danh', () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe(ErrorCode.VALIDATION_FAILED);
   });
+
+  it('FR-ATT-01 studentId trùng trong records -> 400 VALIDATION_FAILED DUPLICATE_STUDENT', async () => {
+    const s = await seed(2);
+    const body = s.records();
+    body.records.push({ ...body.records[0]! });
+    const res = await put(s.id, s.teacher.token, body);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe(ErrorCode.VALIDATION_FAILED);
+    expect(res.body.error.details.fields.records).toBe('DUPLICATE_STUDENT');
+  });
+
+  it('FR-ATT-01 PUT gồm HV đã chuyển đi TRƯỚC buổi -> 400 STUDENT_NOT_IN_ROSTER', async () => {
+    const s = await seed(2);
+    const st = await makeStudent(t.conn);
+    await makeEnrollment(t.conn, {
+      studentId: st._id,
+      courseId: s.cls.courseId,
+      classId: s.cls._id,
+      status: EnrollmentStatus.TRANSFERRED,
+      history: [
+        { from: null, to: EnrollmentStatus.ENROLLED, at: new Date('2026-01-01T00:00:00Z') },
+        { from: EnrollmentStatus.ENROLLED, to: EnrollmentStatus.TRANSFERRED, at: new Date('2026-01-03T00:00:00Z') },
+      ] as never,
+    });
+    const body = s.records();
+    body.records.push({ studentId: String(st._id), status: AttendanceStatus.PRESENT });
+    const res = await put(s.id, s.teacher.token, body);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe(ErrorCode.STUDENT_NOT_IN_ROSTER);
+    expect(res.body.error.details.studentIds).toEqual([String(st._id)]);
+  });
+
+  it('FR-ATT-01 GET vẫn liệt kê HV có bản ghi nhưng đã rời roster (TRANSFERRED sau buổi)', async () => {
+    const s = await seed(2);
+    await put(s.id, s.teacher.token, s.records());
+    await t.conn.model('Enrollment').updateOne(
+      { _id: s.students[0]!.en._id },
+      { $set: { status: EnrollmentStatus.TRANSFERRED, history: [
+        { from: null, to: EnrollmentStatus.ENROLLED, at: new Date('2026-01-01T00:00:00Z') },
+        { from: EnrollmentStatus.ENROLLED, to: EnrollmentStatus.TRANSFERRED, at: new Date('2026-01-03T00:00:00Z') },
+      ] } },
+    );
+    const res = await get(s.id, s.teacher.token);
+    const ids = res.body.data.roster.map((r: { studentId: string }) => r.studentId);
+    expect(ids).toContain(String(s.students[0]!.st._id));
+    expect(res.body.data.roster).toHaveLength(2);
+  });
+
+  it('FR-ATT-01 buổi CANCELLED: editable=false', async () => {
+    const s = await seed(1, { status: SessionStatus.CANCELLED, cancelReason: 'nghỉ' });
+    const res = await get(s.id, await tokenFor(Role.ACADEMIC_STAFF));
+    expect(res.body.data.editable).toBe(false);
+  });
 });
