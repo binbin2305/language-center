@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { mockViewport } from '../../../../test/media';
 import { server } from '../../../../test/msw/server';
 import { renderApp } from '../../../../test/render';
@@ -85,6 +85,7 @@ const enrollment = {
   invoiceId: null,
   history: [],
 };
+const unconfirmed = { ...enrollment, id: id(0x802), confirmedAt: null };
 const summaryRow = { key: id(0x501), label: 'HV', PRESENT: 8, LATE: 1, EXCUSED: 1, UNEXCUSED: 0, total: 10, attendanceRate: 0.9, absenceRate: 0.1 };
 const record = (n: number) => ({
   ...base,
@@ -164,8 +165,7 @@ const widthPx = (cls: string): number | null => {
 };
 
 /** R1 over the whole rendered tree. */
-function expectTablesScroll() {
-  const root = document.body;
+function expectTablesScroll(root: ParentNode = document.body) {
   const unwrapped = [...root.querySelectorAll('table')].filter(
     (t) => !t.closest('.overflow-x-auto') && !t.closest('.fc-scroller'),
   );
@@ -173,8 +173,7 @@ function expectTablesScroll() {
 }
 
 /** R2 over the whole rendered tree. */
-function expectNoFixedWide() {
-  const root = document.body;
+function expectNoFixedWide(root: ParentNode = document.body) {
   const tooWide: string[] = [];
   root.querySelectorAll('[class]').forEach((el) => {
     for (const cls of String(el.getAttribute('class')).split(/\s+/)) {
@@ -204,6 +203,22 @@ beforeEach(() => {
 const teacher = () => makeUser('TEACHER');
 const student = () => makeUser('STUDENT', { studentId: id(0x501) });
 
+describe('P-02 self-test: helpers can fail', () => {
+  it('R1 bắt bảng không bọc, R2 bắt width cố định > 375px, R3 bắt nút thấp', () => {
+    const bad = document.createElement('div');
+    bad.innerHTML = '<table></table><div class="w-[400px]"></div><div class="min-w-96"></div>';
+    expect(() => expectTablesScroll(bad)).toThrow();
+    expect(() => expectNoFixedWide(bad)).toThrow();
+    const ok = document.createElement('div');
+    ok.innerHTML = '<div class="overflow-x-auto"><table></table></div><div class="w-[375px] md:w-[600px]"></div>';
+    expect(() => expectTablesScroll(ok)).not.toThrow();
+    expect(() => expectNoFixedWide(ok)).not.toThrow();
+    const low = document.createElement('button');
+    low.className = 'h-8';
+    expect(() => expectTouchTarget(low)).toThrow();
+  });
+});
+
 describe('P-02 mobile 375px — giáo viên', () => {
   it('NFR: / (GV) không có nguy cơ tràn ngang, nút Điểm danh cao >= 44px', async () => {
     renderApp({ route: '/', user: teacher() });
@@ -219,21 +234,46 @@ describe('P-02 mobile 375px — giáo viên', () => {
     expectNoOverflowRisk();
     expectTouchTarget(screen.getByRole('button', { name: 'Lưu điểm danh' }));
     expectTouchTarget(screen.getByRole('button', { name: 'Tất cả có mặt' }));
+    for (const label of ['Có mặt', 'Muộn', 'Vắng CP', 'Vắng KP']) {
+      const buttons = screen.getAllByRole('button', { name: label });
+      expect(buttons).toHaveLength(3);
+      buttons.forEach(expectTouchTarget);
+    }
   });
 
   it('FR-SCH-05: /schedule (GV) hiện danh sách tuần trên 375px không tràn ngang', async () => {
-    renderApp({ route: '/schedule', user: teacher() });
+    const { container } = renderApp({ route: '/schedule', user: teacher() });
     expect((await screen.findAllByText(/A2-TOI/, {}, T)).length).toBeGreaterThan(0);
+    expect(container.querySelector('.fc-list, .fc-scroller')).not.toBeNull();
     expectNoOverflowRisk();
+  });
+
+  // CR L-STUDENT-PORTAL-2 (#2): session-detail-sheet.tsx "Điểm danh" link uses default Button (h-9).
+  it.fails('FR-ATT-02: /schedule (GV) nút Điểm danh trong chi tiết buổi cao >= 44px (CR L-STUDENT-PORTAL-2)', async () => {
+    renderApp({ route: '/schedule', user: teacher() });
+    const items = await screen.findAllByText(/A2-TOI/, {}, T);
+    fireEvent.click(items[0]!);
+    const dialog = await screen.findByRole('dialog', {}, T);
+    expectTouchTarget(within(dialog).getByRole('link', { name: 'Điểm danh' }));
   });
 });
 
 describe('P-02 mobile 375px — học viên', () => {
-  it('NFR: / (HV) không có nguy cơ tràn ngang', async () => {
+  it('NFR: / (HV) không có nguy cơ tràn ngang, các link "Xem …" cao >= 44px', async () => {
     renderApp({ route: '/', user: student() });
     expect(await screen.findByRole('heading', { name: 'Trang của tôi' }, T)).toBeInTheDocument();
     expect(await screen.findByText(/A2-TOI/, {}, T)).toBeInTheDocument();
+    expect(await screen.findByText('Hạn gần nhất: 01/02/2026', { exact: false }, T)).toBeInTheDocument();
     expectNoOverflowRisk();
+    for (const name of ['Xem lịch học', 'Xem chi tiết', 'Xem kết quả', 'Xem học phí'])
+      expectTouchTarget(screen.getByRole('link', { name }));
+  });
+
+  // CR L-STUDENT-PORTAL-2 (#1): confirm-class-banner.tsx "Xác nhận lớp" button is size="sm" (h-8).
+  it.fails('FR-CLS-11: / (HV) nút Xác nhận lớp cao >= 44px (CR L-STUDENT-PORTAL-2)', async () => {
+    server.use(http.get('*/api/v1/enrollments/me', () => HttpResponse.json({ data: [unconfirmed] })));
+    renderApp({ route: '/', user: student() });
+    expectTouchTarget(await screen.findByRole('button', { name: 'Xác nhận lớp' }, T));
   });
 
   it('FR-SCH-05: /schedule (HV) không tràn ngang', async () => {
@@ -264,14 +304,16 @@ describe('P-02 mobile 375px — học viên', () => {
 
   it('FR-FEE-05: /me/fees thẻ hóa đơn không tràn ngang', async () => {
     renderApp({ route: '/me/fees', user: student() });
-    expect(await screen.findByText('HD-001', {}, T)).toBeInTheDocument();
+    const card = await screen.findByRole('article', { name: /HD-001/ }, T);
+    expect(card).toBeInTheDocument();
     expectNoOverflowRisk();
   });
 
   it('FR-ATT-06: /me/attendance không tràn ngang', async () => {
     renderApp({ route: '/me/attendance', user: student() });
     expect(await screen.findByText('Tỷ lệ chuyên cần', {}, T)).toBeInTheDocument();
-    expect((await screen.findAllByText(/A2-TOI/, {}, T)).length).toBeGreaterThan(0);
+    const list = await screen.findByRole('list', { name: 'Các buổi đã học' }, T);
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
     expectNoOverflowRisk();
   });
 
