@@ -97,6 +97,8 @@ export const ResultDto = z.object({
   studentId: zObjectId,
   studentName: z.string().optional(),
   classId: zObjectId,
+  classCode: z.string().optional(),
+  className: z.string().optional(),
   courseId: zObjectId,
   items: z.array(
     z.object({

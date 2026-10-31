@@ -59,6 +59,24 @@ describe('/results', () => {
     await waitFor(() => expect(seen.some((s) => s.includes(`classId=${CLASS_ID}`))).toBe(true));
   });
 
+  it('cột "Lớp" phân biệt hai dòng cùng HV ở hai lớp (mã - tên lớp)', async () => {
+    server.use(
+      http.get('*/api/v1/classes', classesPage),
+      http.get('*/api/v1/results', () =>
+        HttpResponse.json(
+          page([
+            result(S1, 'Nguyễn An', { classCode: 'L1', className: 'IELTS A1' }),
+            result(S1, 'Nguyễn An', { classId: '65000000000000000000c002', classCode: 'L2', className: 'IELTS A2' }),
+          ]),
+        ),
+      ),
+    );
+    renderApp({ route: '/results', user: makeUser('ACADEMIC_STAFF') });
+    expect(await screen.findByRole('columnheader', { name: 'Lớp' }, WAIT)).toBeInTheDocument();
+    expect(await screen.findByRole('cell', { name: 'L1 - IELTS A1' }, WAIT)).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'L2 - IELTS A2' })).toBeInTheDocument();
+  });
+
   it('rỗng → "Chưa có kết quả học tập"', async () => {
     server.use(http.get('*/api/v1/results', () => HttpResponse.json(page([]))));
     renderApp({ route: '/results', user: makeUser('MANAGER') });

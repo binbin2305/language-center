@@ -22,6 +22,14 @@ export default function ResultsPage() {
     rows.forEach((r) => r.items.forEach((i) => assessments.set(i.assessmentId, i.name)));
     return [
       { id: 'student', header: 'Học viên', cell: ({ row }) => row.original.studentName ?? row.original.studentId },
+      {
+        id: 'class',
+        header: 'Lớp',
+        cell: ({ row }) => {
+          const r = row.original;
+          return r.classCode ? `${r.classCode}${r.className ? ` - ${r.className}` : ''}` : r.classId;
+        },
+      },
       ...[...assessments].map(([id, name]): ColumnDef<ResultDto> => ({
         id: `a-${id}`,
         header: name,

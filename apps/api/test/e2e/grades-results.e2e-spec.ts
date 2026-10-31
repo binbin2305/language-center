@@ -54,7 +54,7 @@ describe('FR-GRD-05/06/08 Kết quả & phiếu điểm', () => {
     const row = r.body.data[0];
     expect(row.studentId).toBe(String(st._id));
     expect(row.items).toHaveLength(2);
-    expect(row).toMatchObject({ average: 6.8, gradeClass: GradeClass.FAIR, passed: true });
+    expect(row).toMatchObject({ average: 6.8, gradeClass: GradeClass.FAIR, passed: true, classCode: cls.code, className: cls.name });
     expect(r.body.meta.total).toBe(1);
   });
 

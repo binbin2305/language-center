@@ -57,6 +57,8 @@ export class ResultsService {
     const gradeOf = new Map(grades.map((g) => [`${g.assessmentId}:${g.studentId}`, g]));
     const students = await this.students.find({ _id: { $in: pairs.map((p) => p.studentId) } }, { fullName: 1 }).lean();
     const name = new Map(students.map((s) => [String(s._id), s.fullName]));
+    const classDocs = await this.classes.find({ _id: { $in: classIds } }, { code: 1, name: 1 }).lean();
+    const classOf = new Map(classDocs.map((c) => [String(c._id), c]));
 
     return pairs.map((p) => {
       const items = assessments
@@ -72,6 +74,8 @@ export class ResultsService {
         studentId: p.studentId.toString(),
         studentName: name.get(String(p.studentId)),
         classId: p.classId.toString(),
+        classCode: classOf.get(String(p.classId))?.code,
+        className: classOf.get(String(p.classId))?.name,
         courseId: p.courseId.toString(),
         items,
         average,
