@@ -37,6 +37,7 @@
 2. **Lane branches** `lane/L-{CATALOG,ADMISSIONS,CLASSES,SCHEDULE}` still exist locally. They are merged and not pushed. The worktrees are removed.
 3. **Dev Mongo data** (`apps/api/.mongo-data/`) contains the smoke-test data. Run `pnpm --filter api seed:demo --reset` to clean it.
 4. All dev servers are stopped.
+5. **GitHub CI is green on `main`** (run #3, commit `92d0a14`, about 5m40s, full merge gate on Ubuntu + Node 26). The fix: `pnpm/action-setup@v4` must not set `version`, because it is read from `packageManager`. Check the Actions tab after each wave's push.
 
 ## Next work: Wave 2
 - **Lanes (TASK.md):** L-ENROLL, L-ATTENDANCE, L-GRADES, L-FEES, all in parallel.
