@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Put } from '@nestjs/common';
-import { Role, TakeAttendanceInput } from '@lc/shared';
+import { Body, Controller, Get, Param, Patch, Put } from '@nestjs/common';
+import { Role, TakeAttendanceInput, UpdateAttendanceInput } from '@lc/shared';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -25,5 +25,15 @@ export class SessionAttendanceController {
     @Body(new ZodValidationPipe(TakeAttendanceInput)) body: TakeAttendanceInput,
   ) {
     return { data: await this.svc.take(id, body, user) };
+  }
+
+  @Patch(':id/attendance')
+  @Roles(Role.ACADEMIC_STAFF, Role.TEACHER)
+  async update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(UpdateAttendanceInput)) body: UpdateAttendanceInput,
+  ) {
+    return { data: await this.svc.update(id, body, user) };
   }
 }

@@ -13,6 +13,7 @@ import {
   type AttendanceCounts,
   type SessionAttendanceDto,
   type TakeAttendanceInput,
+  type UpdateAttendanceInput,
 } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
@@ -163,6 +164,86 @@ export class AttendanceService {
     }
     const fresh = (await this.sessions.findById(session._id).lean<SessionRec>())!;
     return this.build(fresh, user);
+  }
+
+  async update(id: string, input: UpdateAttendanceInput, user: AuthUser): Promise<SessionAttendanceDto> {
+    const session = await this.loadScoped(id, user);
+    if (session.status === SessionStatus.CANCELLED) throw new AppError(ErrorCode.SESSION_CANCELLED);
+    if (!session.attendanceTakenAt) throw new AppError(ErrorCode.INVALID_STATUS_TRANSITION);
+    if (!(await this.canEdit(session, user))) throw new AppError(ErrorCode.ATTENDANCE_EDIT_WINDOW_CLOSED);
+    const seen = new Set<string>();
+    const dup = input.records.some((r) => seen.size === seen.add(r.studentId).size);
+    if (dup) throw new AppError(ErrorCode.VALIDATION_FAILED, undefined, { fields: { records: 'DUPLICATE_STUDENT' } });
+
+    const now = this.clock.now();
+    const changed = await withTransaction(this.conn, async (s) => {
+      // Lock-key protocol: bump before reading the roster invariant.
+      await this.counters.next(`lock:class:${session.classId.toString()}`, s);
+      const roster = await this.roster(session, s);
+      const enrollmentByStudent = new Map(roster.map((e) => [e.studentId.toString(), e._id]));
+      const existing = await this.attendances.find({ sessionId: session._id }).session(s).lean<AttendanceRec[]>();
+      const recByStudent = new Map(existing.map((r) => [r.studentId.toString(), r]));
+      const unknown = input.records.map((r) => r.studentId).filter((sid) => !enrollmentByStudent.has(sid) && !recByStudent.has(sid));
+      if (unknown.length > 0) throw new AppError(ErrorCode.STUDENT_NOT_IN_ROSTER, undefined, { studentIds: unknown });
+
+      const ids: string[] = [];
+      for (const r of input.records) {
+        const cur = recByStudent.get(r.studentId);
+        if (cur && cur.status === r.status) continue;
+        const entry = { from: cur?.status ?? null, to: r.status, by: user.id, at: now, ...(r.reason !== undefined ? { reason: r.reason } : {}) };
+        const studentId = new Types.ObjectId(r.studentId);
+        if (cur) {
+          // recordedBy stays the original taker; the editor is in history.by.
+          await this.attendances.updateOne({ _id: cur._id }, { $set: { status: r.status }, $push: { history: entry } }, { session: s });
+        } else {
+          await this.attendances.updateOne(
+            { sessionId: session._id, studentId },
+            {
+              $setOnInsert: {
+                sessionId: session._id,
+                classId: session.classId,
+                studentId,
+                enrollmentId: enrollmentByStudent.get(r.studentId),
+                status: r.status,
+                recordedBy: user.id,
+                history: [entry],
+              },
+            },
+            { upsert: true, session: s },
+          );
+        }
+        await this.audit.log(
+          {
+            actor: user,
+            action: AuditAction.UPDATE,
+            entity: 'attendance',
+            entityId: cur?._id ?? session._id,
+            before: { sessionId: session._id, studentId, status: cur?.status ?? null },
+            after: { sessionId: session._id, studentId, status: r.status },
+          },
+          s,
+        );
+        ids.push(r.studentId);
+      }
+      return ids;
+    });
+
+    if (changed.length > 0) await this.emitRecorded(session, changed);
+    const fresh = (await this.sessions.findById(session._id).lean<SessionRec>())!;
+    return this.build(fresh, user);
+  }
+
+  private async emitRecorded(session: SessionRec, studentIds: string[]): Promise<void> {
+    try {
+      await this.events.emitAsync(DomainEvent.AttendanceRecorded, {
+        sessionId: session._id.toString(),
+        classId: session.classId.toString(),
+        studentIds,
+      });
+    } catch (e) {
+      // Already committed; a failing listener must not fail the request.
+      this.logger.error(`attendance.recorded listener failed: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
+    }
   }
 
   private async build(session: SessionRec, user: AuthUser): Promise<SessionAttendanceDto> {
