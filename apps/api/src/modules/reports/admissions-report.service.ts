@@ -7,10 +7,10 @@ import type { Course } from '../../database/schemas/course.schema';
 import type { Enrollment } from '../../database/schemas/enrollment.schema';
 import type { Lead } from '../../database/schemas/lead.schema';
 import type { Student } from '../../database/schemas/student.schema';
+import { rate } from './report-math';
 import { vnRange } from './report-range';
 
 type Row = AdmissionsReportDto['rows'][number];
-const rate = (num: number, den: number) => (den === 0 ? 0 : Math.round((num / den) * 10_000) / 10_000);
 
 /** FR-RPT-01 (D26). Read-only aggregation over leads, students and enrollments. */
 @Injectable()
