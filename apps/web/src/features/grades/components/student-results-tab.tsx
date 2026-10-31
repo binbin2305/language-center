@@ -1,6 +1,13 @@
-import { PlaceholderPage } from '@/components/common/placeholder-page';
+import { useParams } from 'react-router-dom';
+import { StudentResultCards } from './result-cards';
 
-/** Tab "Kết quả" — owning lane replaces the body; read the route id with useParams(). */
+/** Tab "Kết quả" of the student detail page: the student id comes from the route. */
 export default function StudentResultsTab() {
-  return <PlaceholderPage title="Kết quả" level={2} />;
+  const { id } = useParams();
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold">Kết quả</h2>
+      <StudentResultCards studentId={id} />
+    </div>
+  );
 }
