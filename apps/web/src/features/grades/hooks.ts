@@ -8,6 +8,9 @@ const KEY = 'grades';
 export const useAssessments = (classId: string) =>
   useQuery({ queryKey: [KEY, 'assessments', classId], queryFn: () => gradesApi.listAssessments(classId) });
 
+export const usePendingAssessments = () =>
+  useQuery({ queryKey: [KEY, 'pending'], queryFn: () => gradesApi.pendingAssessments() });
+
 export const useAssessmentGrades = (id: string) =>
   useQuery({ queryKey: [KEY, 'grades', id], queryFn: () => gradesApi.grades(id) });
 

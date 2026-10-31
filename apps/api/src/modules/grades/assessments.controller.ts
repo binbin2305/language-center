@@ -12,6 +12,13 @@ import { GradesService } from './grades.service';
 export class AssessmentsController {
   constructor(private readonly svc: GradesService) {}
 
+  /** Static route: declared before any `assessments/:id` route. */
+  @Get('assessments/pending')
+  @Roles(Role.TEACHER)
+  async pending(@CurrentUser() user: AuthUser) {
+    return { data: await this.svc.pending(user) };
+  }
+
   @Get('classes/:id/assessments')
   @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER, Role.STUDENT)
   async list(@CurrentUser() user: AuthUser, @Param('id') id: string) {

@@ -8,7 +8,11 @@ import {
   NotificationRefType,
   NotificationType,
   Role,
+  addVnDays,
   fromDateOnly,
+  startOfVnDay,
+  vnDay,
+  type PendingAssessmentDto,
   isValidScore,
   type AssessmentDto,
   type AssessmentGradesDto,
@@ -100,6 +104,25 @@ export class GradesService {
     const [docs, settings] = await Promise.all([this.assessments.find({ classId: cid }).sort({ heldOn: 1, _id: 1 }), this.settings.get()]);
     const now = this.clock.now();
     return docs.map((d) => toAssessmentDto(d, settings, now));
+  }
+
+  /** Teacher home: unconfirmed, unlocked assessments already held (VN today or earlier) in the teacher's classes. */
+  async pending(user: AuthUser): Promise<PendingAssessmentDto[]> {
+    const classIds = await this.scope.teacherClassIds(user.id);
+    if (classIds.length === 0) return [];
+    const now = this.clock.now();
+    const [docs, classes, settings] = await Promise.all([
+      this.assessments
+        .find({ classId: { $in: classIds }, confirmedAt: null, heldOn: { $lt: startOfVnDay(addVnDays(vnDay(now), 1)) } })
+        .sort({ heldOn: 1, _id: 1 }),
+      this.classes.find({ _id: { $in: classIds } }, { code: 1, name: 1 }).lean(),
+      this.settings.get(),
+    ]);
+    const byId = new Map(classes.map((c) => [String(c._id), c]));
+    return docs
+      .map((d) => toAssessmentDto(d, settings, now))
+      .filter((a) => !a.isLocked)
+      .map((a) => ({ ...a, classCode: byId.get(a.classId)?.code ?? '', className: byId.get(a.classId)?.name ?? '' }));
   }
 
   async create(classId: string, input: CreateAssessmentInput, actor: AuthUser): Promise<AssessmentDto> {

@@ -4,6 +4,7 @@ import type {
   AssessmentGradesDto,
   CreateAssessmentInput,
   GradeDto,
+  PendingAssessmentDto,
   ListResultsQuery,
   ResultDto,
   UpdateAssessmentInput,
@@ -13,6 +14,7 @@ import { apiDelete, apiGet, apiGetBlob, apiGetPage, apiPatch, apiPost, apiPut } 
 
 export const gradesApi = {
   listAssessments: (classId: string) => apiGet<AssessmentDto[]>(`classes/${classId}/assessments`),
+  pendingAssessments: () => apiGet<PendingAssessmentDto[]>('assessments/pending'),
   createAssessment: (classId: string, input: CreateAssessmentInput) =>
     apiPost<AssessmentDto>(`classes/${classId}/assessments`, input),
   updateAssessment: (id: string, input: UpdateAssessmentInput) =>
