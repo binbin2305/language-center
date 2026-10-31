@@ -51,7 +51,7 @@ describe('W2 nối dây: enrollments ↔ fees ↔ grades ↔ attendance (FR-CLS-
     await t.close();
   });
 
-  it('(1) FR-PLT-03 + FR-FEE-01: placement → WAITING_CLASS → assign → đúng 1 hóa đơn TUITION HD2026…, enrollment.invoiceId = id đó', async () => {
+  it('(1) FR-PLT-03 + FR-PLT-04 + FR-FEE-01: placement → WAITING_CLASS → assign → đúng 1 hóa đơn TUITION HD2026…, enrollment.invoiceId = id đó', async () => {
     const course = await makeCourse(t.conn, { baseFee: 2_000_000 });
     const room = await makeRoom(t.conn);
     const st = await makeStudent(t.conn, { withUser: true });
