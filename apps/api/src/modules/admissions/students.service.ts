@@ -3,6 +3,8 @@ import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, FilterQuery, isValidObjectId, Model, Types } from 'mongoose';
 import {
   attendanceRate,
+  InvoiceStatus,
+  weightedAverage,
   AttendanceStatus,
   AuditAction,
   AuditLogDto,
@@ -31,6 +33,10 @@ import { ScopeService } from '../../common/scope/scope.service';
 import { Models } from '../../database/models';
 import { AuditLog } from '../../database/schemas/audit-log.schema';
 import { Attendance } from '../../database/schemas/attendance.schema';
+import { Assessment } from '../../database/schemas/assessment.schema';
+import { Class } from '../../database/schemas/class.schema';
+import { Grade } from '../../database/schemas/grade.schema';
+import { Invoice } from '../../database/schemas/invoice.schema';
 import { Enrollment } from '../../database/schemas/enrollment.schema';
 import { Student } from '../../database/schemas/student.schema';
 import { User } from '../../database/schemas/user.schema';
@@ -58,6 +64,10 @@ export class StudentsService {
     @InjectModel(Models.Student) private readonly students: Model<Student>,
     @InjectModel(Models.Enrollment) private readonly enrollments: Model<Enrollment>,
     @InjectModel(Models.Attendance) private readonly attendances: Model<Attendance>,
+    @InjectModel(Models.Class) private readonly classes: Model<Class>,
+    @InjectModel(Models.Assessment) private readonly assessments: Model<Assessment>,
+    @InjectModel(Models.Grade) private readonly grades: Model<Grade>,
+    @InjectModel(Models.Invoice) private readonly invoices: Model<Invoice>,
     @InjectModel(Models.AuditLog) private readonly auditLogs: Model<AuditLog>,
     @InjectModel(Models.User) private readonly users: Model<User>,
     @InjectConnection() private readonly conn: Connection,
@@ -110,8 +120,11 @@ export class StudentsService {
       sort: q.sort && SORTS.has(q.sort) ? q.sort : '-createdAt',
     });
     const rows = page.data as unknown as StudentLean[];
+    const current = await this.currentClassesOf(rows.map((r) => r._id), user.role === Role.TEACHER ? await this.scope.teacherClassIds(user.id) : null);
     const data: Array<StudentDto | StudentBriefDto> =
-      user.role === Role.TEACHER ? rows.map(toStudentBriefDto) : rows.map(toStudentDto);
+      user.role === Role.TEACHER
+        ? rows.map((r) => toStudentBriefDto(r, current.get(String(r._id)) ?? []))
+        : rows.map((r) => toStudentDto(r, current.get(String(r._id)) ?? []));
     return { data, meta: page.meta };
   }
 
@@ -133,18 +146,79 @@ export class StudentsService {
       .sort({ createdAt: 1, _id: 1 })
       .lean()) as unknown as EnrollmentLean[];
     const lean = student as unknown as StudentLean;
-    if (classScope) return { ...toStudentBriefDto(lean), enrollments: enrollments.map(toEnrollmentDto) };
+    const current = (await this.currentClassesOf([studentId], classScope)).get(String(studentId)) ?? [];
+    if (classScope) return { ...toStudentBriefDto(lean, current), enrollments: enrollments.map(toEnrollmentDto) };
     return {
-      ...toStudentDto(lean),
+      ...toStudentDto(lean, current),
       enrollments: enrollments.map(toEnrollmentDto),
-      // D7: averageScore / outstandingBalance are wired to real data by the Lead in W3.
-      summary: { attendanceRate: await this.attendanceRateOf(studentId), averageScore: null, outstandingBalance: 0 },
+      summary: {
+        attendanceRate: await this.attendanceRateOf(studentId),
+        averageScore: await this.averageScoreOf(studentId),
+        outstandingBalance: await this.outstandingBalanceOf(studentId),
+      },
     };
   }
 
   async me(user: AuthUser) {
     if (!user.studentId) throw new AppError(ErrorCode.NOT_FOUND);
     return this.get(user, user.studentId.toString());
+  }
+
+  /** D24: ENROLLED classes per student sorted by code; classScope (teacher) limits to the teacher's own classes. */
+  private async currentClassesOf(studentIds: Types.ObjectId[], classScope: Types.ObjectId[] | null): Promise<Map<string, StudentDto['currentClasses']>> {
+    const out = new Map<string, StudentDto['currentClasses']>();
+    if (studentIds.length === 0) return out;
+    const rows = await this.enrollments
+      .find(
+        {
+          studentId: { $in: studentIds },
+          status: EnrollmentStatus.ENROLLED,
+          classId: classScope ? { $in: classScope } : { $ne: null },
+        },
+        { studentId: 1, classId: 1 },
+      )
+      .lean();
+    const classDocs = await this.classes.find({ _id: { $in: rows.map((r) => r.classId) } }, { code: 1 }).lean();
+    const code = new Map(classDocs.map((c) => [String(c._id), c.code]));
+    for (const r of rows) {
+      const c = code.get(String(r.classId));
+      if (!c || !r.classId) continue;
+      const list = out.get(String(r.studentId)) ?? [];
+      list.push({ classId: r.classId.toString(), code: c });
+      out.set(String(r.studentId), list);
+    }
+    for (const list of out.values()) list.sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+    return out;
+  }
+
+  /** D22: mean (rounded to 2) of per-class weighted averages over confirmed, non-draft grades; classes from history scope. */
+  private async averageScoreOf(studentId: Types.ObjectId): Promise<number | null> {
+    const classIds = await this.scope.studentClassIds(studentId, 'history');
+    if (classIds.length === 0) return null;
+    const assessments = await this.assessments.find({ classId: { $in: classIds }, confirmedAt: { $ne: null } }, { classId: 1, weight: 1 }).lean();
+    if (assessments.length === 0) return null;
+    const grades = await this.grades
+      .find({ assessmentId: { $in: assessments.map((a) => a._id) }, studentId, isDraft: false }, { assessmentId: 1, score: 1 })
+      .lean();
+    const scoreOf = new Map(grades.map((g) => [String(g.assessmentId), g.score]));
+    const averages: number[] = [];
+    for (const classId of classIds) {
+      const items = assessments
+        .filter((a) => a.classId.equals(classId))
+        .map((a) => ({ score: scoreOf.get(String(a._id)) ?? null, weight: a.weight }));
+      const avg = weightedAverage(items);
+      if (avg !== null) averages.push(avg);
+    }
+    if (averages.length === 0) return null;
+    return Math.round((averages.reduce((x, y) => x + y, 0) / averages.length) * 100) / 100;
+  }
+
+  private async outstandingBalanceOf(studentId: Types.ObjectId): Promise<number> {
+    const [row] = await this.invoices.aggregate<{ total: number }>([
+      { $match: { studentId, status: { $ne: InvoiceStatus.VOID } } },
+      { $group: { _id: null, total: { $sum: '$balance' } } },
+    ]);
+    return row?.total ?? 0;
   }
 
   private async attendanceRateOf(studentId: Types.ObjectId): Promise<number | null> {
