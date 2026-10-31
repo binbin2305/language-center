@@ -110,6 +110,49 @@ describe('FR-GRD-02/03 Nhập điểm', () => {
     expect(g.body.data.rows).toHaveLength(3);
   });
 
+  it('FR-GRD-02 R10 score null xóa điểm nháp đã lưu; ghi đè điểm nháp', async () => {
+    const { teacher, a, students } = await setup(1);
+    const id = String(students[0].st._id);
+    await put(a._id, teacher.token, { grades: [{ studentId: id, score: 6 }] }).expect(200);
+    const over = await put(a._id, teacher.token, { grades: [{ studentId: id, score: 7.5 }] });
+    expect(over.body.data.rows[0].score).toBe(7.5);
+    const r = await put(a._id, teacher.token, { grades: [{ studentId: id, score: null }] });
+    expect(r.status).toBe(200);
+    expect(r.body.data.rows[0].score).toBeNull();
+  });
+
+  it('FR-GRD-03 R10 confirm:true với null cho HV đã có điểm -> 422 GRADES_INCOMPLETE liệt kê HV đó', async () => {
+    const { teacher, a, students } = await setup(2);
+    const [x, y] = students.map((q) => String(q.st._id));
+    await put(a._id, teacher.token, { grades: [{ studentId: x, score: 6 }, { studentId: y, score: 6 }] }).expect(200);
+    const r = await put(a._id, teacher.token, { grades: [{ studentId: x, score: null }], confirm: true });
+    expect(r.status).toBe(422);
+    expect(r.body.error.code).toBe(ErrorCode.GRADES_INCOMPLETE);
+    expect(r.body.error.details.studentIds).toEqual([x]);
+  });
+
+  it('FR-GRD-02 nhiều điểm sai liệt kê một lần; studentId trùng -> 400 VALIDATION_FAILED', async () => {
+    const { teacher, a, students } = await setup(2);
+    const [x, y] = students.map((q) => String(q.st._id));
+    const r = await put(a._id, teacher.token, { grades: [{ studentId: x, score: 11 }, { studentId: y, score: 7.1 }] });
+    expect(r.body.error.code).toBe(ErrorCode.SCORE_OUT_OF_RANGE);
+    expect([...r.body.error.details.studentIds].sort()).toEqual([x, y].sort());
+    const d = await put(a._id, teacher.token, { grades: [{ studentId: x, score: 5 }, { studentId: x, score: 6 }] });
+    expect(d.status).toBe(400);
+    expect(d.body.error.code).toBe(ErrorCode.VALIDATION_FAILED);
+    expect(d.body.error.details.fields.grades).toBe('DUPLICATE_STUDENT');
+  });
+
+  it('FR-GRD-03 R11 sau confirm thêm điểm cho HV roster chưa có điểm -> 200 isDraft false', async () => {
+    const { teacher, cls, a, students } = await setup(1);
+    await put(a._id, teacher.token, { grades: [{ studentId: String(students[0].st._id), score: 7 }], confirm: true }).expect(200);
+    const late = await makeStudent(t.conn, { withUser: true });
+    await makeEnrollment(t.conn, { studentId: late._id, classId: cls._id, courseId: cls.courseId, status: EnrollmentStatus.ENROLLED });
+    const r = await put(a._id, teacher.token, { grades: [{ studentId: String(late._id), score: 5 }] });
+    expect(r.status).toBe(200);
+    expect(r.body.data.rows.find((x: { studentId: string }) => x.studentId === String(late._id))).toMatchObject({ score: 5, isDraft: false });
+  });
+
   it('FR-GRD-03 PUT sau confirm với điểm đã có -> 422 INVALID_STATUS_TRANSITION', async () => {
     const { teacher, a, students } = await setup(1);
     const body = { grades: [{ studentId: String(students[0].st._id), score: 7 }], confirm: true };

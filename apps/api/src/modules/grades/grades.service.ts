@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Connection, Model, Types } from 'mongoose';
 import {
@@ -42,6 +42,8 @@ function assertWeight(weight: number): void {
 
 @Injectable()
 export class GradesService {
+  private readonly logger = new Logger(GradesService.name);
+
   constructor(
     @InjectConnection() private readonly conn: Connection,
     @InjectModel(Models.Assessment) private readonly assessments: Model<Assessment>,
@@ -147,13 +149,11 @@ export class GradesService {
 
   /** Roster (D14) = ENROLLED|COMPLETED of the class, plus graded students who left (left: true). */
   private async buildGrades(a: AssessmentDoc, s?: ClientSession): Promise<AssessmentGradesDto> {
-    const [roster, grades, settings] = await Promise.all([
-      this.enrollments
-        .find({ classId: a.classId, status: { $in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED] } }, null, { session: s })
-        .lean(),
-      this.grades.find({ assessmentId: a._id }, null, { session: s }).lean(),
-      this.settings.get(),
-    ]);
+    const settings = await this.settings.get();
+    const roster = await this.enrollments
+      .find({ classId: a.classId, status: { $in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED] } }, null, { session: s })
+      .lean();
+    const grades = await this.grades.find({ assessmentId: a._id }, null, { session: s }).lean();
     const byStudent = new Map(grades.map((g) => [String(g.studentId), g]));
     const rosterIds = new Set(roster.map((e) => String(e.studentId)));
     const students = await this.students
@@ -199,6 +199,9 @@ export class GradesService {
   async upsertGrades(id: string, input: UpsertGradesInput, actor: AuthUser): Promise<AssessmentGradesDto> {
     const current = await this.loadAssessment(id);
     await this.assertClassScope(current.classId, actor, true);
+    if (new Set(input.grades.map((g) => g.studentId)).size !== input.grades.length) {
+      throw fieldError('grades', 'DUPLICATE_STUDENT');
+    }
     const settings = await this.settings.get();
     const now = this.clock.now();
     const rosterUserIds: Types.ObjectId[] = [];
@@ -227,13 +230,12 @@ export class GradesService {
       if (input.confirm) {
         const missing = roster
           .map((e) => String(e.studentId))
-          .filter((k) => (entries.get(k)?.score ?? existingBy.get(k)?.score ?? null) === null);
+          .filter((k) => (entries.has(k) ? entries.get(k)!.score : existingBy.get(k)?.score ?? null) === null);
         if (missing.length) throw new AppError(ErrorCode.GRADES_INCOMPLETE, undefined, { studentIds: missing });
       }
 
       const confirmed = input.confirm || !!a.confirmedAt;
       for (const [studentId, g] of entries) {
-        if (g.score === null) continue;
         const e = byStudent.get(studentId)!;
         await this.grades.updateOne(
           { assessmentId: a._id, studentId: e.studentId },
@@ -266,8 +268,8 @@ export class GradesService {
           refType: NotificationRefType.ASSESSMENT,
           refId: current._id,
         });
-      } catch {
-        /* notification failure is non-fatal */
+      } catch (err) {
+        this.logger.error(`GRADES_PUBLISHED notify failed for assessment ${current._id}`, err instanceof Error ? err.stack : String(err));
       }
     }
     return result;
