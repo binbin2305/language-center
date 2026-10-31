@@ -15,8 +15,14 @@ import {
   ListInvoicesQuery,
   NotificationRefType,
   NotificationType,
+  CreateInvoiceInput,
+  fromDateOnly,
+  InvoiceDetailDto,
+  InvoiceKind,
+  InvoiceTeacherViewDto,
   Paginated,
   Role,
+  vnDay,
 } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
@@ -26,10 +32,12 @@ import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { NotificationsService } from '../../common/notifications/notifications.service';
 import { paginate } from '../../common/pagination';
+import { ScopeService } from '../../common/scope/scope.service';
 import { Models } from '../../database/models';
 import type { Invoice } from '../../database/schemas/invoice.schema';
+import type { Payment } from '../../database/schemas/payment.schema';
 import type { Student } from '../../database/schemas/student.schema';
-import { InvoiceLean, invoiceStatus, toInvoiceDto } from './fees.mapper';
+import { InvoiceLean, invoiceStatus, overdueFilter, toInvoiceDto, toInvoiceTeacherView, toPaymentDto, PaymentLean } from './fees.mapper';
 
 const SORTABLE = new Set(['createdAt', 'dueDate', 'code', 'finalAmount']);
 
@@ -41,6 +49,8 @@ export class InvoicesService {
     @InjectConnection() private readonly conn: Connection,
     @InjectModel(Models.Invoice) private readonly invoices: Model<Invoice>,
     @InjectModel(Models.Student) private readonly students: Model<Student>,
+    @InjectModel(Models.Payment) private readonly payments: Model<Payment>,
+    private readonly scope: ScopeService,
     private readonly counters: CounterService,
     private readonly audit: AuditService,
     private readonly clock: ClockService,
@@ -132,21 +142,108 @@ export class InvoicesService {
     return this.dto(doc);
   }
 
+  /** FR-FEE-06: M/S all; T their students (teacher view); H own. */
+  async list(q: ListInvoicesQuery, user: AuthUser): Promise<Paginated<InvoiceDto | InvoiceTeacherViewDto>> {
+    if (q.sort && !q.sort.split(',').every((k) => SORTABLE.has(k.trim().replace(/^[-+]/, '')))) {
+      throw new AppError(ErrorCode.VALIDATION_FAILED, 400, { sort: 'Trường sắp xếp không hợp lệ' });
+    }
+    const now = this.clock.now();
+    const and: Record<string, unknown>[] = [];
+    const visible = await this.visibleStudents(user);
+    if (visible) and.push({ studentId: { $in: visible } });
+    if (q.studentId) and.push({ studentId: new Types.ObjectId(q.studentId) });
+    if (q.classId) and.push({ classId: new Types.ObjectId(q.classId) });
+    if (q.status) and.push({ status: q.status });
+    if (q.kind) and.push({ kind: q.kind });
+    if (q.overdue) and.push(overdueFilter(now));
+    const due: Record<string, Date> = {};
+    if (q.from) due.$gte = fromDateOnly(q.from);
+    if (q.to) due.$lte = fromDateOnly(q.to);
+    if (q.from || q.to) and.push({ dueDate: due });
+    const page = await paginate(this.invoices, and.length ? { $and: and } : {}, { ...q, sort: q.sort ?? '-createdAt' });
+    const rows = page.data as unknown as InvoiceLean[];
+    const names = await this.studentNames(rows.map((r) => r.studentId));
+    const teacher = user.role === Role.TEACHER;
+    return {
+      data: rows.map((r) => (teacher ? toInvoiceTeacherView(r, now, names.get(String(r.studentId))) : toInvoiceDto(r, now, names.get(String(r.studentId))))),
+      meta: page.meta,
+    };
+  }
+
+  /** FR-FEE-06: out of scope is 404. */
+  async get(id: string, user: AuthUser): Promise<InvoiceDetailDto | InvoiceTeacherViewDto> {
+    const oid = this.toId(id);
+    const inv = await this.invoices.findById(oid).lean<InvoiceLean>();
+    if (!inv) throw new AppError(ErrorCode.NOT_FOUND);
+    const visible = await this.visibleStudents(user);
+    if (visible && !visible.some((v) => v.equals(inv.studentId))) throw new AppError(ErrorCode.NOT_FOUND);
+    const now = this.clock.now();
+    const names = (await this.studentNames([inv.studentId])).get(String(inv.studentId));
+    if (user.role === Role.TEACHER) return toInvoiceTeacherView(inv, now, names);
+    const pays = await this.payments.find({ invoiceId: oid }).sort({ paidAt: 1, _id: 1 }).lean<PaymentLean[]>();
+    return { ...toInvoiceDto(inv, now, names), payments: pays.map(toPaymentDto) };
+  }
+
+  /** FR-FEE-07: manual SURCHARGE invoice. */
+  async createSurcharge(input: CreateInvoiceInput, user: AuthUser): Promise<InvoiceDto> {
+    const studentId = new Types.ObjectId(input.studentId);
+    if (!(await this.students.exists({ _id: studentId }))) throw new AppError(ErrorCode.NOT_FOUND);
+    const doc = await withTransaction(this.conn, async (s) => {
+      const now = this.clock.now();
+      const period = vnDay(now).slice(0, 7).replace('-', '');
+      const seq = await this.counters.next(`invoice:${period}`, s);
+      const [created] = await this.invoices.create(
+        [
+          {
+            code: this.counters.formatCode('HD', period, seq, 4),
+            kind: InvoiceKind.SURCHARGE,
+            studentId,
+            ...(input.enrollmentId ? { enrollmentId: new Types.ObjectId(input.enrollmentId) } : {}),
+            ...(input.courseId ? { courseId: new Types.ObjectId(input.courseId) } : {}),
+            ...(input.classId ? { classId: new Types.ObjectId(input.classId) } : {}),
+            description: input.description,
+            amountDue: input.amountDue,
+            finalAmount: input.amountDue,
+            amountPaid: 0,
+            balance: input.amountDue,
+            dueDate: fromDateOnly(input.dueDate),
+            status: input.amountDue === 0 ? InvoiceStatus.PAID : InvoiceStatus.UNPAID,
+          },
+        ],
+        { session: s },
+      );
+      await this.audit.log(
+        { actor: user, action: AuditAction.CREATE, entity: 'invoice', entityId: created._id, after: { code: created.code, kind: InvoiceKind.SURCHARGE, amountDue: input.amountDue } },
+        s,
+      );
+      return created.toObject() as unknown as InvoiceLean;
+    });
+    return this.dto(doc);
+  }
+
+  /** Student ids the user may see; null = unrestricted (M, S). */
+  private async visibleStudents(user: AuthUser): Promise<Types.ObjectId[] | null> {
+    if (user.role === Role.TEACHER) return this.scope.teacherStudentIds(user.id);
+    if (user.role === Role.STUDENT) return user.studentId ? [user.studentId] : [];
+    return null;
+  }
+
+  private async studentNames(ids: Types.ObjectId[]): Promise<Map<string, { studentName: string; studentCode: string }>> {
+    const rows = await this.students.find({ _id: { $in: ids } }, { fullName: 1, code: 1 }).lean();
+    return new Map(rows.map((x) => [String(x._id), { studentName: x.fullName, studentCode: x.code }]));
+  }
+
   /** GET /invoices/discounts/pending — approval queue. */
   async pendingDiscounts(q: ListInvoicesQuery): Promise<Paginated<InvoiceDto>> {
     if (q.sort && !q.sort.split(',').every((k) => SORTABLE.has(k.trim().replace(/^[-+]/, '')))) {
       throw new AppError(ErrorCode.VALIDATION_FAILED, 400, { sort: 'Trường sắp xếp không hợp lệ' });
     }
-    const page = await paginate(this.invoices, { 'discount.status': DiscountStatus.PENDING_APPROVAL }, { ...q, sort: q.sort ?? '-createdAt' });
+    const page = await paginate(this.invoices, { 'discount.status': DiscountStatus.PENDING_APPROVAL, status: { $ne: InvoiceStatus.VOID } }, { ...q, sort: q.sort ?? '-createdAt' });
     const rows = page.data as unknown as InvoiceLean[];
-    const students = await this.students.find({ _id: { $in: rows.map((r) => r.studentId) } }, { fullName: 1, code: 1 }).lean();
-    const byId = new Map(students.map((x) => [String(x._id), x]));
+    const names = await this.studentNames(rows.map((r) => r.studentId));
     const now = this.clock.now();
     return {
-      data: rows.map((r) => {
-        const st = byId.get(String(r.studentId));
-        return toInvoiceDto(r, now, { studentName: st?.fullName, studentCode: st?.code });
-      }),
+      data: rows.map((r) => toInvoiceDto(r, now, names.get(String(r.studentId)))),
       meta: page.meta,
     };
   }

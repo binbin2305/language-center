@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
-import { ApplyDiscountInput, DecideDiscountInput, ListInvoicesQuery, RecordPaymentInput, Role, VoidInvoiceInput } from '@lc/shared';
+import { ApplyDiscountInput, CreateInvoiceInput, DecideDiscountInput, ListInvoicesQuery, RecordPaymentInput, Role, VoidInvoiceInput } from '@lc/shared';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -14,11 +14,29 @@ export class InvoicesController {
     private readonly payments: PaymentsService,
   ) {}
 
+  @Get()
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER, Role.STUDENT)
+  list(@CurrentUser() user: AuthUser, @Query(new ZodValidationPipe(ListInvoicesQuery)) q: ListInvoicesQuery) {
+    return this.svc.list(q, user);
+  }
+
+  @Post()
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async create(@CurrentUser() user: AuthUser, @Body(new ZodValidationPipe(CreateInvoiceInput)) input: CreateInvoiceInput) {
+    return { data: await this.svc.createSurcharge(input, user) };
+  }
+
   // Declared before any ':id' route so 'discounts' is not captured as an id.
   @Get('discounts/pending')
   @Roles(Role.MANAGER)
   pending(@Query(new ZodValidationPipe(ListInvoicesQuery)) q: ListInvoicesQuery) {
     return this.svc.pendingDiscounts(q);
+  }
+
+  @Get(':id')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.TEACHER, Role.STUDENT)
+  async detail(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return { data: await this.svc.get(id, user) };
   }
 
   @Post(':id/discount')

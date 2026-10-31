@@ -193,4 +193,12 @@ describe('FR-FEE-03 Giảm giá có duyệt', () => {
     const rs = await Promise.all([propose(inv._id, tenPercent), propose(inv._id, tenPercent, manager.token)]);
     expect(rs.map((r) => r.status).sort()).toEqual([201, 422]);
   });
+
+  it('FR-FEE-03: /invoices/discounts/pending loại hóa đơn VOID', async () => {
+    const a = await makeInvoice(t.conn);
+    await propose(a._id, tenPercent).expect(201);
+    await t.conn.model(Models.Invoice).updateOne({ _id: a._id }, { status: 'VOID' });
+    const res = await t.http().get('/api/v1/invoices/discounts/pending').set(auth(manager.token)).expect(200);
+    expect(res.body.data.map((d: { id: string }) => d.id)).not.toContain(String(a._id));
+  });
 });

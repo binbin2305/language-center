@@ -13,6 +13,7 @@ import {
   RecordPaymentInput,
   VoidInvoiceInput,
   VoidPaymentInput,
+  Role,
   vnDay,
 } from '@lc/shared';
 import { AuditService } from '../../common/audit/audit.service';
@@ -22,10 +23,13 @@ import { CounterService } from '../../common/db/counter.service';
 import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { NotificationsService } from '../../common/notifications/notifications.service';
+import { PdfService } from '../../common/pdf/pdf.service';
 import { Models } from '../../database/models';
 import type { Invoice } from '../../database/schemas/invoice.schema';
 import type { Payment } from '../../database/schemas/payment.schema';
+import type { User } from '../../database/schemas/user.schema';
 import type { Student } from '../../database/schemas/student.schema';
+import { receiptDefinition } from './receipt';
 import { InvoiceLean, invoiceStatus, PaymentLean, toInvoiceDto, toPaymentDto } from './fees.mapper';
 
 @Injectable()
@@ -41,6 +45,8 @@ export class PaymentsService {
     private readonly audit: AuditService,
     private readonly clock: ClockService,
     private readonly notifications: NotificationsService,
+    private readonly pdf: PdfService,
+    @InjectModel(Models.User) private readonly users: Model<User>,
   ) {}
 
   /** FR-FEE-04 (M, S). */
@@ -93,6 +99,32 @@ export class PaymentsService {
     });
     await this.notifyRecorded(invoice, payment);
     return toPaymentDto(payment);
+  }
+
+  /** FR-FEE-07: receipt PDF for M, S and the owning student (anyone else's is 404). */
+  async receipt(paymentId: string, user: AuthUser): Promise<{ filename: string; buffer: Buffer }> {
+    const p = await this.payments.findById(this.toId(paymentId)).lean<PaymentLean>();
+    if (!p) throw new AppError(ErrorCode.NOT_FOUND);
+    if (user.role === Role.STUDENT && !(user.studentId && user.studentId.equals(p.studentId))) throw new AppError(ErrorCode.NOT_FOUND);
+    const [inv, st, by] = await Promise.all([
+      this.invoices.findById(p.invoiceId, 'code').lean(),
+      this.students.findById(p.studentId, 'fullName code').lean(),
+      p.recordedBy ? this.users.findById(p.recordedBy, 'fullName username').lean() : null,
+    ]);
+    const buffer = await this.pdf.render(
+      receiptDefinition({
+        code: p.code,
+        invoiceCode: inv?.code ?? '',
+        studentName: st?.fullName ?? '',
+        studentCode: st?.code ?? '',
+        amount: p.amount,
+        method: p.method,
+        paidOn: vnDay(p.paidAt).split('-').reverse().join('/'),
+        recordedBy: by?.fullName ?? by?.username ?? '',
+        voided: p.status === PaymentStatus.VOIDED,
+      }),
+    );
+    return { filename: `${p.code}.pdf`, buffer };
   }
 
   /** FR-FEE-05 (M): void a payment; the invoice totals and status are recomputed. */

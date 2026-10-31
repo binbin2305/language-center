@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { InvoiceDto, PaymentDto, InvoiceStatus, toDateOnly, vnDay } from '@lc/shared';
+import { InvoiceDto, InvoiceTeacherViewDto, PaymentDto, InvoiceStatus, fromDateOnly, toDateOnly, vnDay } from '@lc/shared';
 import type { Payment } from '../../database/schemas/payment.schema';
 import type { Invoice } from '../../database/schemas/invoice.schema';
 
@@ -51,6 +51,27 @@ export function invoiceStatus(inv: { finalAmount: number; amountPaid: number }):
 /** Due date (VN day) already passed, money still owed, not void. A due date of today is not overdue. */
 export function isOverdue(inv: Pick<Invoice, 'dueDate' | 'balance' | 'status'>, now: Date): boolean {
   return toDateOnly(inv.dueDate) < vnDay(now) && inv.balance > 0 && inv.status !== InvoiceStatus.VOID;
+}
+
+/** Query equivalent of isOverdue (single definition): due before today's VN midnight, owing, not void. */
+export function overdueFilter(now: Date): Record<string, unknown> {
+  return { dueDate: { $lt: fromDateOnly(vnDay(now)) }, balance: { $gt: 0 }, status: { $ne: InvoiceStatus.VOID } };
+}
+
+/** FR-FEE-06: teacher view carries no payments, discount or amounts other than the balance. */
+export function toInvoiceTeacherView(inv: InvoiceLean, now: Date, names: { studentName?: string; studentCode?: string } = {}): InvoiceTeacherViewDto {
+  return {
+    id: inv._id.toString(),
+    code: inv.code,
+    kind: inv.kind,
+    studentId: inv.studentId.toString(),
+    classId: inv.classId?.toString() ?? null,
+    balance: inv.balance,
+    dueDate: toDateOnly(inv.dueDate),
+    status: inv.status,
+    overdue: isOverdue(inv, now),
+    ...names,
+  };
 }
 
 export type PaymentLean = Payment & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };

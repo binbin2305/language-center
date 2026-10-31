@@ -161,4 +161,15 @@ describe('FR-FEE-02 Hóa đơn học phí', () => {
     expect(await create(enr._id)).toBeNull();
     expect(await models(t.conn).Invoice.countDocuments({ enrollmentId: enr._id })).toBe(0);
   });
+
+  it('FR-FEE-02: khóa tạo hóa đơn theo enrollment là lock:invoice-enrollment:<id>; void bump lock:invoice:<invoiceId>', async () => {
+    const { enr } = await setup();
+    await create(enr._id);
+    const counters = t.conn.model<{ _id: string; seq: number }>('Counter');
+    expect(await counters.findById(`lock:invoice-enrollment:${enr._id}`).lean()).toMatchObject({ seq: 1 });
+    expect(await counters.findById(`lock:invoice:${enr._id}`).lean()).toBeNull();
+    const inv = await models(t.conn).Invoice.findOne({ enrollmentId: enr._id }).lean();
+    await voidIt(enr._id);
+    expect(await counters.findById(`lock:invoice:${inv!._id}`).lean()).toMatchObject({ seq: 1 });
+  });
 });

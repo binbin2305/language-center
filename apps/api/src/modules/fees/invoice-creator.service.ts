@@ -34,7 +34,7 @@ export class InvoiceCreatorService implements InvoiceCreator {
 
   async createForEnrollment(enrollmentId: Types.ObjectId, s: ClientSession): Promise<Types.ObjectId | null> {
     // Lock-key protocol: serialise concurrent creators of the same enrollment before reading.
-    await this.counters.next(`lock:invoice:${enrollmentId.toString()}`, s);
+    await this.counters.next(`lock:invoice-enrollment:${enrollmentId.toString()}`, s);
     const existing = await this.findChainInvoice(enrollmentId, s);
     if (existing) return existing._id;
 
@@ -87,6 +87,10 @@ export class InvoiceCreatorService implements InvoiceCreator {
   async voidForEnrollment(enrollmentId: Types.ObjectId, reason: string, s: ClientSession): Promise<void> {
     const inv = await this.findChainInvoice(enrollmentId, s);
     if (!inv || inv.status === InvoiceStatus.VOID || inv.amountPaid > 0) return;
+    // Per-invoice lock shared with payments: bump before re-reading so a racing payment is seen.
+    await this.counters.next(`lock:invoice:${inv._id.toString()}`, s);
+    const fresh = await this.invoices.findById(inv._id, 'status amountPaid').session(s).lean();
+    if (!fresh || fresh.status === InvoiceStatus.VOID || fresh.amountPaid > 0) return;
     const res = await this.invoices.updateOne(
       { _id: inv._id, amountPaid: 0, status: { $ne: InvoiceStatus.VOID } },
       { $set: { status: InvoiceStatus.VOID } },
