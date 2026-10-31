@@ -64,10 +64,10 @@ export default function InvoiceDetailPage() {
             {canUpdate && active && inv.balance > 0 ? (
               <Button onClick={() => setPaying(true)}>Ghi nhận thanh toán</Button>
             ) : null}
-            {canUpdate && active && !d ? (
+            {canUpdate && active && (!d || d.status === 'REJECTED') ? (
               <Button variant="outline" onClick={() => setDiscounting(true)}>Đề xuất giảm giá</Button>
             ) : null}
-            {canVoid && active ? (
+            {canVoid && active && inv.amountPaid === 0 ? (
               <Button variant="outline" onClick={() => setVoidingInvoice(true)}>Hủy hóa đơn</Button>
             ) : null}
           </>

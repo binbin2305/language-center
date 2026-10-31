@@ -112,6 +112,28 @@ describe('chi tiết hóa đơn', () => {
     expect(screen.queryByRole('button', { name: 'Hủy phiếu thu' })).not.toBeInTheDocument();
   });
 
+  it('giảm giá REJECTED → lại thấy "Đề xuất giảm giá"; PENDING_APPROVAL → không', async () => {
+    detail({ discount: discount({ status: 'REJECTED' }) });
+    const first = renderApp({ route: `/fees/invoices/${INV_ID}`, user: makeUser('ACADEMIC_STAFF') });
+    expect(await screen.findByRole('button', { name: 'Đề xuất giảm giá' }, T)).toBeInTheDocument();
+    first.unmount();
+    detail({ discount: discount() });
+    renderApp({ route: `/fees/invoices/${INV_ID}`, user: makeUser('ACADEMIC_STAFF') });
+    await screen.findByText('Chờ duyệt', {}, T);
+    expect(screen.queryByRole('button', { name: 'Đề xuất giảm giá' })).not.toBeInTheDocument();
+  });
+
+  it('"Hủy hóa đơn" ẩn khi đã đóng tiền (amountPaid > 0), hiện khi chưa đóng', async () => {
+    detail();
+    const first = renderApp({ route: `/fees/invoices/${INV_ID}`, user: makeUser('MANAGER') });
+    await screen.findByText('PT2026000001', {}, T);
+    expect(screen.queryByRole('button', { name: 'Hủy hóa đơn' })).not.toBeInTheDocument();
+    first.unmount();
+    detail({ amountPaid: 0, balance: 3000000, status: 'UNPAID' }, []);
+    renderApp({ route: `/fees/invoices/${INV_ID}`, user: makeUser('MANAGER') });
+    expect(await screen.findByRole('button', { name: 'Hủy hóa đơn' }, T)).toBeInTheDocument();
+  });
+
   it('in phiếu → tải payments/:id/receipt.pdf', async () => {
     detail();
     let hit = '';
