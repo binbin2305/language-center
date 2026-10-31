@@ -181,6 +181,32 @@ describe('tab Khóa học & lớp của học viên', () => {
     await waitFor(() => expect(body).toEqual({ status: 'CANCELLED', reason: 'Chuyển nhà' }));
   });
 
+  it('RESERVED có Học lại và Rút (không Chuyển lớp/Bảo lưu); Rút → POST withdraw CANCELLED', async () => {
+    server.use(
+      http.get('*/api/v1/students/:id', () =>
+        HttpResponse.json({ data: { id: STU, code: 'HV2026001', fullName: 'Nguyễn Văn An', status: 'ACTIVE' } }),
+      ),
+      http.get('*/api/v1/enrollments', () => page([enrollment({ status: 'RESERVED', classId: CLS_B1, className: 'Lớp B1' })])),
+    );
+    let body: unknown;
+    server.use(
+      http.post('*/api/v1/enrollments/:id/withdraw', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ data: enrollment({ status: 'CANCELLED' }) });
+      }),
+    );
+    const user = userEvent.setup();
+    renderApp({ route: `/students/${STU}?tab=enrollments`, user: makeUser('ACADEMIC_STAFF') });
+    expect(await screen.findByRole('button', { name: 'Học lại' }, T)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Chuyển lớp' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bảo lưu' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Rút' }));
+    const dlg = await screen.findByRole('dialog');
+    await user.type(within(dlg).getByLabelText('Lý do'), 'Không học nữa');
+    await user.click(within(dlg).getByRole('button', { name: 'Xác nhận rút' }));
+    await waitFor(() => expect(body).toEqual({ status: 'CANCELLED', reason: 'Không học nữa' }));
+  });
+
   it('Chuyển lớp: chọn lớp đích + lý do → POST transfer', async () => {
     setup();
     let body: unknown;

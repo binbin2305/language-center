@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { can, type EnrollmentDto } from '@lc/shared';
+import { can, canTransition, ENROLLMENT_TRANSITIONS, type EnrollmentDto } from '@lc/shared';
 import { EmptyState } from '@/components/common/empty-state';
 import { ErrorState } from '@/components/common/error-state';
 import { StatusBadge } from '@/components/common/status-badge';
@@ -51,9 +51,6 @@ export default function StudentEnrollmentsTab() {
                   <Button size="sm" variant="outline" onClick={() => setAction({ kind: 'reserve', enrollment: e })}>
                     Bảo lưu
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setAction({ kind: 'cancel', enrollment: e })}>
-                    Rút
-                  </Button>
                 </>
               ) : null}
               {manage && e.status === 'RESERVED' ? (
@@ -69,6 +66,11 @@ export default function StudentEnrollmentsTab() {
                   }
                 >
                   Học lại
+                </Button>
+              ) : null}
+              {manage && canTransition(ENROLLMENT_TRANSITIONS, e.status, 'CANCELLED') ? (
+                <Button size="sm" variant="outline" onClick={() => setAction({ kind: 'cancel', enrollment: e })}>
+                  Rút
                 </Button>
               ) : null}
             </div>
