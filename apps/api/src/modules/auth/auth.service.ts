@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { AuthResultDto, ChangePasswordInput, ErrorCode, LoginInput, MeDto, UserStatus } from '@lc/shared';
+import { AuthResultDto, ChangePasswordInput, ErrorCode, LoginInput, MeDto, Role, UserStatus } from '@lc/shared';
 import { ClockService } from '../../common/clock/clock.service';
 import { AppError } from '../../common/errors/app-error';
 import { Models } from '../../database/models';
+import { Student } from '../../database/schemas/student.schema';
 import { User, UserDoc } from '../../database/schemas/user.schema';
 import { burnPasswordCheck, hashPassword, verifyPassword } from './password';
 import { TokenService } from './token.service';
@@ -49,14 +50,16 @@ export function toMeDto(u: UserDoc): MeDto {
 export class AuthService {
   constructor(
     @InjectModel(Models.User) private readonly users: Model<User>,
+    @InjectModel(Models.Student) private readonly students: Model<Student>,
     private readonly tokens: TokenService,
     private readonly clock: ClockService,
   ) {}
 
   async login(input: LoginInput): Promise<AuthSession> {
-    const user = await this.users
-      .findOne({ username: normalizeLoginUsername(input.username), deletedAt: null })
-      .select('+passwordHash');
+    const username = normalizeLoginUsername(input.username);
+    let user = await this.users.findOne({ username, deletedAt: null }).select('+passwordHash');
+    // D23: an email that is no username may identify exactly one student; 0 or >=2 matches never resolve.
+    if (!user && username.includes('@')) user = await this.resolveStudentByEmail(username);
     if (!user) {
       await burnPasswordCheck(input.password);
       throw new AppError(ErrorCode.INVALID_CREDENTIALS);
@@ -85,6 +88,16 @@ export class AuthService {
     );
     if (!reset) throw new AppError(ErrorCode.ACCOUNT_LOCKED);
     return this.startSession(user);
+  }
+
+  private async resolveStudentByEmail(email: string): Promise<UserDoc | null> {
+    const matches = await this.students
+      .find({ email, deletedAt: null, userId: { $exists: true, $ne: null } })
+      .select('userId')
+      .limit(2)
+      .lean();
+    if (matches.length !== 1) return null;
+    return this.users.findOne({ _id: matches[0].userId, role: Role.STUDENT, deletedAt: null }).select('+passwordHash');
   }
 
   /** Atomically records a failed attempt; returns lockedUntil when this attempt (or a concurrent one) locked the account. */

@@ -68,3 +68,5 @@ pnpm --filter api seed:demo --reset  # xóa dữ liệu (giữ tài khoản ADMI
 ```
 
 Mật khẩu chung `Password1`: `manager@center.local`, `staff1@center.local`, `staff2@center.local`, `teacher1..5@center.local`, học viên `HV202600001`…`HV202600060`. Gồm 3 khóa, 6 phòng, 8 lớp (đang học / chờ mở / đã kết thúc), ~200 buổi học, điểm danh và điểm cho buổi đã qua, hóa đơn đủ trạng thái, 15 lead, 1 đợt kiểm tra đầu vào, vài thông báo. Script ghi thẳng vào DB (không qua service); bản seed chính thức qua service là việc của W3-L3.
+
+Học viên đăng nhập bằng mã HV hoặc bằng email hồ sơ (không phân biệt hoa/thường). Nếu nhiều HV dùng chung một email (vd. email phụ huynh), đăng nhập bằng email bị từ chối (401) — dùng mã HV. Nhân viên đăng nhập bằng email như cũ.
