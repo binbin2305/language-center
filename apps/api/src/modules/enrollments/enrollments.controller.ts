@@ -1,15 +1,19 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ChangeEnrollmentCourseInput, CreateEnrollmentInput, ListEnrollmentsQuery, Role, SkipPlacementInput } from '@lc/shared';
+import { AssignClassInput, ChangeEnrollmentCourseInput, CreateEnrollmentInput, ListEnrollmentsQuery, Role, SkipPlacementInput } from '@lc/shared';
 import { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { AssignmentService } from './assignment.service';
 import { EnrollmentsService } from './enrollments.service';
 
 @Controller('enrollments')
 @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
 export class EnrollmentsController {
-  constructor(private readonly svc: EnrollmentsService) {}
+  constructor(
+    private readonly svc: EnrollmentsService,
+    private readonly assignment: AssignmentService,
+  ) {}
 
   @Post()
   @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.STUDENT)
@@ -51,5 +55,15 @@ export class EnrollmentsController {
     @Body(new ZodValidationPipe(SkipPlacementInput)) body: SkipPlacementInput,
   ) {
     return { data: await this.svc.toDto(await this.svc.skipPlacement(id, body, user)) };
+  }
+
+  @Post(':id/assign')
+  @Roles(Role.MANAGER, Role.ACADEMIC_STAFF)
+  async assign(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(AssignClassInput)) body: AssignClassInput,
+  ) {
+    return { data: await this.assignment.assign(id, body, user) };
   }
 }
