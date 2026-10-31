@@ -1,10 +1,13 @@
 import { http, HttpResponse } from 'msw';
 import type { RequestHandler } from 'msw';
 import { attendanceHandlers } from './attendance.handlers';
+import { dashboardHandlers } from './dashboard.handlers';
 import { enrollmentsHandlers } from './enrollments.handlers';
 import { feesHandlers } from './fees.handlers';
 import { gradesHandlers } from './grades.handlers';
+import { homeHandlers } from './home.handlers';
 import { placementHandlers } from './placement.handlers';
+import { reportsHandlers } from './reports.handlers';
 import { scheduleHandlers } from './schedule.handlers';
 import { wave1Handlers } from './wave1.handlers';
 
@@ -22,4 +25,7 @@ export const handlers: RequestHandler[] = [
   ...attendanceHandlers,
   ...gradesHandlers,
   ...feesHandlers,
+  ...reportsHandlers,
+  ...dashboardHandlers,
+  ...homeHandlers,
 ];

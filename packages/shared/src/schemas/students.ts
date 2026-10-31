@@ -14,6 +14,8 @@ export const StudentDocumentDto = z.object({
 });
 export type StudentDocumentDto = z.infer<typeof StudentDocumentDto>;
 
+const CurrentClassDto = z.object({ classId: zObjectId, code: z.string() });
+
 export const StudentDto = z.object({
   ...zDtoBase,
   code: z.string(),
@@ -28,6 +30,8 @@ export const StudentDto = z.object({
   userId: zObjectId.nullable().optional(),
   documents: z.array(StudentDocumentDto),
   note: z.string().nullish(),
+  /** D24: ENROLLED classes sorted by code (teachers see only their own classes). */
+  currentClasses: z.array(CurrentClassDto),
 });
 export type StudentDto = z.infer<typeof StudentDto>;
 
@@ -50,6 +54,7 @@ export const StudentBriefDto = z.object({
   dob: zDateOnly,
   phone: z.string(),
   status: z.nativeEnum(StudentStatus),
+  currentClasses: z.array(CurrentClassDto),
 });
 export type StudentBriefDto = z.infer<typeof StudentBriefDto>;
 

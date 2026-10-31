@@ -86,5 +86,6 @@ EnrollmentSchema.index(
 );
 EnrollmentSchema.index({ classId: 1, status: 1 });
 EnrollmentSchema.index({ status: 1, waitingSince: 1 });
+EnrollmentSchema.index({ classHistory: 1 });
 
 export type EnrollmentDoc = HydratedDocument<Enrollment>;

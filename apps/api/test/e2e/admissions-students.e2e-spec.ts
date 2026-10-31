@@ -116,7 +116,7 @@ describe('FR-STU-01/02 Học viên', () => {
     });
     it('response GV chỉ có trường Brief, không email/address/summary', async () => {
       const res = await list(teacher.token, '?q=nguyen').expect(200);
-      expect(Object.keys(res.body.data[0]).sort()).toEqual(['code', 'dob', 'fullName', 'id', 'phone', 'status']);
+      expect(Object.keys(res.body.data[0]).sort()).toEqual(['code', 'currentClasses', 'dob', 'fullName', 'id', 'phone', 'status']);
       const d = await detail(teacher.token, hvA._id).expect(200);
       expect(d.body.data.email).toBeUndefined();
       expect(d.body.data.address).toBeUndefined();

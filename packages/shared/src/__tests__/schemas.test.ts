@@ -230,7 +230,7 @@ describe('smoke: mỗi file schema', () => {
     expect(S.FinanceReportQuery.safeParse({ from: '2026-01-01', to: '2026-01-31', groupBy: 'x' }).success).toBe(false);
     expect(S.ExportReportQuery.safeParse({ format: 'xlsx', from: '2026-01-01', to: '2026-01-31' }).success).toBe(true);
     expect(S.ReportTypeParam.safeParse('finance').success).toBe(true);
-    expect(S.DashboardDto.safeParse({ activeStudents: 1, ongoingClasses: 1, sessionsToday: 1, overdueInvoices: 0, waitingEnrollments: 0 }).success).toBe(true);
+    expect(S.DashboardDto.safeParse({ activeStudents: 1, ongoingClasses: 1, sessionsToday: 1, overdueInvoices: 0, waitingEnrollments: 0, todaySessions: [], admissionsTrend: [] }).success).toBe(true);
     expect(S.AdmissionsReportDto.safeParse({ totals: { leads: 1, newProfiles: 1, conversionRate: 1, enrolled: 1, waiting: 0 }, rows: [] }).success).toBe(true);
     expect(S.AttendanceReportDto.safeParse({ byClass: [], byStudent: [], overThreshold: [] }).success).toBe(true);
     expect(S.AcademicReportDto.safeParse({ rows: [], distribution: { EXCELLENT: 0, GOOD: 0, FAIR: 0, AVERAGE: 0, FAIL: 0 }, passRate: 0, failRate: 0 }).success).toBe(true);
@@ -252,7 +252,7 @@ describe('smoke: mỗi file schema', () => {
 
 const studentDto = {
   id: id(1), code: 'HV202600001', fullName: 'A', dob: '2010-01-01', gender: 'MALE', phone: '0912345678', email: null, address: '',
-  status: 'ACTIVE', leadId: null, userId: null, documents: [], note: '', createdAt: ts, updatedAt: ts,
+  status: 'ACTIVE', leadId: null, userId: null, documents: [], note: '', currentClasses: [], createdAt: ts, updatedAt: ts,
 };
 const enrollmentDto = {
   id: id(1), studentId: id(2), courseId: id(3), classId: null, status: 'PENDING_PLACEMENT', placementLevel: null, placementSkipped: null,

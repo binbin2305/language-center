@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { GradeClass } from '../enums';
-import { zDateOnly, zMoney, zObjectId } from './common';
+import { zDateOnly, zDateTime, zMoney, zObjectId } from './common';
 
 const range = { from: zDateOnly, to: zDateOnly };
 
@@ -58,6 +58,20 @@ export const DashboardDto = z.object({
   sessionsToday: count,
   overdueInvoices: count,
   waitingEnrollments: count,
+  todaySessions: z.array(
+    z.object({
+      sessionId: zObjectId,
+      startAt: zDateTime,
+      endAt: zDateTime,
+      classId: zObjectId,
+      classCode: z.string(),
+      roomCode: z.string().nullable(),
+      teacherName: z.string().nullable(),
+      attendanceTaken: z.boolean(),
+    }),
+  ),
+  /** Last 6 months, oldest first. */
+  admissionsTrend: z.array(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/), leads: count, profiles: count })),
 });
 export type DashboardDto = z.infer<typeof DashboardDto>;
 

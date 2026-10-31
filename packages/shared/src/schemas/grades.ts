@@ -66,6 +66,10 @@ export const AssessmentDto = z.object({
 });
 export type AssessmentDto = z.infer<typeof AssessmentDto>;
 
+/** GET /assessments/pending (TEACHER home): unconfirmed, unlocked, already-held assessments. */
+export const PendingAssessmentDto = AssessmentDto.extend({ classCode: z.string(), className: z.string() });
+export type PendingAssessmentDto = z.infer<typeof PendingAssessmentDto>;
+
 export const GradeHistoryEntry = z.object({
   fromScore: zScoreShape,
   toScore: zScoreShape,
