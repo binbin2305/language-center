@@ -13,12 +13,13 @@ function dedupe(list: Array<Types.ObjectId | null | undefined>): Types.ObjectId[
 }
 
 /**
- * D38: ENROLLED|COMPLETED enrollments seated now (`classId`) or ever (`classHistory`, R22) in one of the classes.
+ * D38 (Ruling R7): ENROLLED|COMPLETED|TRANSFERRED enrollments seated now (`classId`) or ever (`classHistory`, R22)
+ * in one of the classes — a transferred-out row keeps `classId` = the old class, so its teacher keeps the student.
  * Both branches are indexed ({ classId, status } and { classHistory }).
  */
 export function teacherStudentsFilter(classIds: Types.ObjectId[]): FilterQuery<Enrollment> {
   return {
-    status: { $in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED] },
+    status: { $in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED, EnrollmentStatus.TRANSFERRED] },
     $or: [{ classId: { $in: classIds } }, { classHistory: { $in: classIds } }],
   };
 }
@@ -63,7 +64,7 @@ export class ScopeService {
     return dedupe(rows.flatMap((r) => [r.classId, ...(r.classHistory ?? [])]));
   }
 
-  /** D38: students ENROLLED or COMPLETED in the teacher's classes, including classes they were seated in before (R22). */
+  /** D38/R7: students ENROLLED, COMPLETED or TRANSFERRED out of the teacher's classes, including classes they were seated in before (R22). */
   async teacherStudentIds(userId: Types.ObjectId): Promise<Types.ObjectId[]> {
     const classIds = await this.teacherClassIds(userId);
     if (classIds.length === 0) return [];

@@ -178,6 +178,39 @@ describe('FR-STU-01 D38 GV thấy HV đã chuyển khỏi lớp mình', () => {
     expect((await t.http().get(`/api/v1/students/${st._id}`).set(auth(teacher.token))).status).toBe(404);
   });
 
+  it('R7 chuyển lớp thật A→B qua API: GV lớp A GET /students/:id → 200, có trong GET /students; GV không liên quan → 404', async () => {
+    const staff = auth((await loginAs(t, Role.ACADEMIC_STAFF)).token);
+    const teacherA = await loginAs(t, Role.TEACHER);
+    const course = await makeCourse(t.conn);
+    const clsA = await makeClass(t.conn, { courseId: course._id, teacherId: teacherA.user._id });
+    const clsB = await makeClass(t.conn, { courseId: course._id });
+    const st = await makeStudent(t.conn);
+    const e = await makeEnrollment(t.conn, {
+      studentId: st._id,
+      courseId: course._id,
+      status: EnrollmentStatus.WAITING_CLASS,
+      placementLevel: 'A1',
+      waitingSince: t.clock.now(),
+    });
+    await t.http().post(`/api/v1/enrollments/${e._id}/assign`).set(staff).send({ classId: String(clsA._id) }).expect(201);
+    await t
+      .http()
+      .post(`/api/v1/enrollments/${e._id}/transfer`)
+      .set(staff)
+      .send({ toClassId: String(clsB._id), reason: 'Đổi giờ học' })
+      .expect(201);
+    expect((await models(t.conn).Enrollment.findById(e._id).lean())?.status).toBe(EnrollmentStatus.TRANSFERRED);
+
+    const detail = await t.http().get(`/api/v1/students/${st._id}`).set(auth(teacherA.token));
+    expect(detail.status).toBe(200);
+    const list = await t.http().get('/api/v1/students?limit=100').set(auth(teacherA.token)).expect(200);
+    expect((list.body.data as Array<{ id: string }>).map((s) => s.id)).toContain(String(st._id));
+
+    const other = await loginAs(t, Role.TEACHER);
+    await makeClass(t.conn, { teacherId: other.user._id });
+    expect((await t.http().get(`/api/v1/students/${st._id}`).set(auth(other.token))).status).toBe(404);
+  });
+
   it('truy vấn HV của GV dùng index (không COLLSCAN)', async () => {
     const plan = await models(t.conn)
       .Enrollment.find(teacherStudentsFilter([new Types.ObjectId(), new Types.ObjectId()]), { studentId: 1 })
