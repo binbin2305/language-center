@@ -86,7 +86,8 @@ export const AdmissionsReportDto = z.object({
   }),
   rows: z.array(
     z.object({
-      courseId: zObjectId,
+      /** ObjectId, or the sentinel 'none' for profiles without a course (D39). */
+      courseId: z.union([zObjectId, z.literal('none')]),
       courseName: z.string(),
       leads: count,
       newProfiles: count,

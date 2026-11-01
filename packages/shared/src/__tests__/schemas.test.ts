@@ -236,6 +236,13 @@ describe('smoke: mỗi file schema', () => {
     expect(S.AcademicReportDto.safeParse({ rows: [], distribution: { EXCELLENT: 0, GOOD: 0, FAIR: 0, AVERAGE: 0, FAIL: 0 }, passRate: 0, failRate: 0 }).success).toBe(true);
     expect(S.FinanceReportDto.safeParse({ totals: { revenue: 0, totalDue: 0, outstanding: 0, overdue: 0, totalDiscount: 0 }, rows: [] }).success).toBe(true);
   });
+  it('FR-RPT-01 admissions row courseId nhận ObjectId hoặc sentinel "none", chuỗi lạ bị từ chối', () => {
+    const row = (courseId: string) => ({ courseId, courseName: 'Khác', leads: 0, newProfiles: 1, conversionRate: 0, enrolled: 0, waiting: 0 });
+    const dto = (courseId: string) => S.AdmissionsReportDto.safeParse({ totals: { leads: 0, newProfiles: 1, conversionRate: 0, enrolled: 0, waiting: 0 }, rows: [row(courseId)] }).success;
+    expect(dto('none')).toBe(true);
+    expect(dto(id(1))).toBe(true);
+    expect(dto('not-an-id')).toBe(false);
+  });
   it('notifications', () => {
     expect(S.ListNotificationsQuery.parse({ unread: 'true' })).toMatchObject({ unread: true });
     const n = { id: id(1), type: 'CLASS_ASSIGNED', title: 't', body: 'b', refId: id(2), readAt: null, createdAt: ts };
