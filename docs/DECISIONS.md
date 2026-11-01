@@ -162,3 +162,4 @@ Snapshot-isolated transactions cannot see each other's inserts, so invariants th
 
 ## Wave 4 hardening notes
 
+- **H-04 OpenAPI:** `apps/api/src/openapi/build-document.ts` (`buildOpenApiDocument(routes)`) sinh OpenAPI 3.0.3 bằng `OpenApiGeneratorV3` từ `listRoutes(app)`; `extendZodWithOpenApi(z)` chỉ gọi trong module này. Schema `ZodEffects` được bóc về object để query thành `parameters`; route không có schema path dùng `string` cho từng `:param`. Mỗi route không public có `security: [{ bearer: [] }]` và `x-roles`; response chỉ khai báo `default` (envelope chung), chưa mô tả DTO phản hồi. `setupOpenApi` không mount khi `NODE_ENV=production`.
