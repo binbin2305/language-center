@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** Fail-closed allowlist (NFR-01): dev-only features (OpenAPI docs, APP_CLOCK_START) require one of these. */
+export const NON_PRODUCTION_ENVS: readonly string[] = ['development', 'e2e', 'test'];
+
 /** Express `trust proxy`: 'true'/'false', a hop count, or an address/subnet list. Default false. */
 const TrustProxy = z
   .string()
@@ -27,7 +30,7 @@ const EnvSchema = z.object({
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   SEED_ADMIN_EMAIL: z.string().optional(),
   SEED_ADMIN_PASSWORD: z.string().optional(),
-  /** D30: ISO-8601 instant with offset (e.g. 2026-11-02T13:00:00Z); ignored when NODE_ENV=production. */
+  /** D30: ISO-8601 instant with offset (e.g. 2026-11-02T13:00:00Z); ignored unless NODE_ENV is development/e2e/test. */
   APP_CLOCK_START: z.preprocess((v) => (v === '' ? undefined : v), z.string().datetime({ offset: true }).optional()),
 });
 export type Env = z.infer<typeof EnvSchema>;

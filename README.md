@@ -32,6 +32,7 @@ cp apps/api/.env.example apps/api/.env   # đổi JWT_ACCESS_SECRET (>= 32 ký t
 | `pnpm --filter api perf` | đo p95 các endpoint chính trên dữ liệu lớn (NFR-02, xem "Hiệu năng") |
 | `pnpm --filter api migrate:class-history` | điền `classHistory` cho ghi danh cũ (chạy một lần sau khi nâng cấp từ bản trước W2) |
 | `pnpm --filter api migrate:attendance-start-at` | điền `attendance.startAt` cho điểm danh cũ (R12): **bước trước khi mở traffic** khi nâng cấp lên W4, chạy ngay sau deploy lúc ít truy cập (quét mỗi dòng điểm danh một lần, theo lô, chạy lại an toàn). Chưa chạy thì điểm danh cũ không xuất hiện trong `GET /attendance?from/to` và `/attendance/summary?from/to` |
+| Index mới (W4) | được tạo bằng `autoIndex` ở lần khởi động đầu trên dữ liệu production (MongoDB ≥ 4.2 build index không chặn đọc/ghi); với collection rất lớn nên khởi động lúc ít truy cập và theo dõi log |
 | `scripts/fr-coverage.sh [--strict]` | FR trong PRD chưa có test nào nhắc tới |
 
 ## Chạy dev không cần Docker
@@ -70,7 +71,7 @@ caffeinate -i pnpm e2e
 
 ## Tài liệu API (OpenAPI)
 
-Khi chạy ngoài production, API phục vụ Swagger UI tại `http://localhost:3000/api/docs` và JSON tại `/api/docs-json` (không cần token). Tài liệu được sinh tự động từ danh sách route Nest và schema zod của `@lc/shared` (body, query, path param), mỗi route ghi `x-roles` và yêu cầu bearer token trừ route public (login, refresh, health). Khi `NODE_ENV=production` cả hai đường dẫn trả 404.
+Khi chạy ngoài production, API phục vụ Swagger UI tại `http://localhost:3000/api/docs` và JSON tại `/api/docs-json` (không cần token). Tài liệu được sinh tự động từ danh sách route Nest và schema zod của `@lc/shared` (body, query, path param), mỗi route ghi `x-roles` và yêu cầu bearer token trừ route public (login, refresh, health). Cơ chế fail-closed: Swagger và `APP_CLOCK_START` chỉ bật khi `NODE_ENV` là `development`, `e2e` hoặc `test`; mọi giá trị khác (`production`, `staging`, ...) thì `/api/docs` trả 404 và dùng giờ hệ thống. **Khi deploy phải đặt `NODE_ENV=production`** (mẫu `apps/api/.env.example` mặc định `development`).
 
 ## Hiệu năng (NFR-02)
 

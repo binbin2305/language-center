@@ -115,3 +115,32 @@ describe('H-04 OpenAPI — NODE_ENV=production', () => {
     expect((await request(server).get('/api/docs-json')).status).toBe(404);
   });
 });
+
+describe.each(['staging', 'prod'])('H-04 OpenAPI — NODE_ENV=%s (fail-closed)', (nodeEnv) => {
+  const saved = { NODE_ENV: process.env.NODE_ENV, MONGODB_URI: process.env.MONGODB_URI };
+  let app: NestExpressApplication;
+
+  beforeAll(async () => {
+    const base = process.env.MONGO_TEST_URI;
+    if (!base) throw new Error('MONGO_TEST_URI is not set; run via jest-security.config.ts');
+    process.env.MONGODB_URI = base.replace('/?', `/lc_test_${randomBytes(6).toString('hex')}?`);
+    process.env.NODE_ENV = nodeEnv;
+    app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: false });
+    setupApp(app);
+    await app.init();
+  });
+  afterAll(async () => {
+    await app.get<Connection>(getConnectionToken()).dropDatabase();
+    await app.close();
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  it('NFR-01 NODE_ENV ngoài {development,e2e,test} → /api/docs và /api/docs-json 404', async () => {
+    const server = app.getHttpServer();
+    expect((await request(server).get('/api/docs')).status).toBe(404);
+    expect((await request(server).get('/api/docs-json')).status).toBe(404);
+  });
+});

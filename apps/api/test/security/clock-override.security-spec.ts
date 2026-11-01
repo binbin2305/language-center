@@ -22,6 +22,22 @@ describe('NFR-01 Đồng hồ giả bị bỏ qua ở production', () => {
     expect(warn).toHaveBeenCalledWith('APP_CLOCK_START ignored in production');
   });
 
+  it.each(['staging', 'prod', 'Production'])(
+    'fail-closed: NODE_ENV=%s + APP_CLOCK_START → SystemClock + cảnh báo',
+    (nodeEnv) => {
+      const warn = jest.fn();
+      const clock = createClock({ NODE_ENV: nodeEnv, APP_CLOCK_START: FAKE_START }, { warn });
+      expect(clock).toBeInstanceOf(SystemClock);
+      expect(Math.abs(clock.now().getTime() - Date.now())).toBeLessThan(1000);
+      expect(warn).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['development', 'e2e', 'test'])('NODE_ENV=%s vẫn nhận APP_CLOCK_START', (nodeEnv) => {
+    const clock = createClock({ NODE_ENV: nodeEnv, APP_CLOCK_START: FAKE_START });
+    expect(clock).not.toBeInstanceOf(SystemClock);
+  });
+
   describe('NestFactory app với NODE_ENV=production + APP_CLOCK_START', () => {
     const saved = {
       NODE_ENV: process.env.NODE_ENV,
