@@ -1,4 +1,4 @@
-import mongoose, { Connection } from 'mongoose';
+import mongoose, { Connection, Types } from 'mongoose';
 
 /** One driver call seen through `mongoose.set('debug', fn)`: collection name, method, casted arguments. */
 export interface CapturedQuery {
@@ -41,12 +41,18 @@ function pickFindOptions(opts: unknown): Doc {
   return out;
 }
 
-/** True when any winning-plan node (any depth, incl. aggregate $cursor stages) is a COLLSCAN; rejected plans are ignored. */
-function planHasCollscan(node: unknown): boolean {
+/**
+ * True when any winning-plan node (any depth: inputStage(s), aggregate $cursor stages, SBE queryPlan) is a
+ * COLLSCAN, or an SBE EQ_LOOKUP whose strategy is not IndexedLoopJoin (Hash/NestedLoopJoin scan the foreign
+ * collection). Rejected plans are ignored. Classic-engine $lookup/$unionWith foreign sides are not in this
+ * output; hasCollscan explains them separately.
+ */
+export function planHasCollscan(node: unknown): boolean {
   if (Array.isArray(node)) return node.some(planHasCollscan);
   if (!node || typeof node !== 'object') return false;
   const obj = node as Doc;
   if (obj.stage === 'COLLSCAN') return true;
+  if (obj.stage === 'EQ_LOOKUP' && obj.strategy !== 'IndexedLoopJoin') return true;
   return Object.entries(obj).some(([k, v]) => k !== 'rejectedPlans' && planHasCollscan(v));
 }
 
@@ -76,9 +82,39 @@ export async function explainQuery(conn: Connection, q: CapturedQuery): Promise<
   }
 }
 
-/** Explains the captured read with verbosity queryPlanner and walks the winning plan recursively. */
+async function aggregateScans(conn: Connection, coll: string, pipeline: Doc[], letVars: Doc): Promise<boolean> {
+  const plan = await conn.db!.collection(coll).aggregate(pipeline, Object.keys(letVars).length ? { let: letVars } : {}).explain('queryPlanner');
+  return planHasCollscan(plan) || foreignScans(conn, pipeline);
+}
+
+/**
+ * Explains the foreign side of every $lookup (and $unionWith, also inside $facet) on its own collection:
+ * a placeholder equality on `foreignField` stands for the per-document lookup, prepended to the
+ * sub-pipeline; `let` variables are bound to null. Nested lookups recurse.
+ */
+async function foreignScans(conn: Connection, pipeline: Doc[]): Promise<boolean> {
+  for (const stage of pipeline) {
+    const lookup = stage.$lookup as Doc | undefined;
+    if (lookup) {
+      const pre = typeof lookup.foreignField === 'string' ? [{ $match: { [lookup.foreignField]: new Types.ObjectId() } }] : [];
+      const letVars = Object.fromEntries(Object.keys((lookup.let as Doc | undefined) ?? {}).map((k) => [k, null]));
+      if (await aggregateScans(conn, lookup.from as string, [...pre, ...((lookup.pipeline as Doc[] | undefined) ?? [])], letVars)) return true;
+    }
+    const union = stage.$unionWith as string | Doc | undefined;
+    if (union) {
+      const u = typeof union === 'string' ? { coll: union } : union;
+      if (await aggregateScans(conn, u.coll as string, (u.pipeline as Doc[] | undefined) ?? [], {})) return true;
+    }
+    const facet = stage.$facet as Record<string, Doc[]> | undefined;
+    if (facet) for (const sub of Object.values(facet)) if (await foreignScans(conn, sub)) return true;
+  }
+  return false;
+}
+
+/** Explains the captured read (queryPlanner), walks the winning plan, then the foreign sides of an aggregate. */
 export async function hasCollscan(conn: Connection, q: CapturedQuery): Promise<boolean> {
-  return planHasCollscan(await explainQuery(conn, q));
+  if (planHasCollscan(await explainQuery(conn, q))) return true;
+  return q.method === 'aggregate' ? foreignScans(conn, q.args[0] as Doc[]) : false;
 }
 
 /** Nearest-rank p95: element at index ceil(0.95·n) − 1 of the ascending copy. */

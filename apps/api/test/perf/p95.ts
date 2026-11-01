@@ -5,7 +5,8 @@
  * Own MongoMemoryReplSet (wiredTiger, temp dbPath) → runSeedDemo → runSeedLarge → in-process app
  * listening on an ephemeral port → per endpoint 5 warm-up + 50 sequential timed requests as the
  * demo manager, then one more request under captureQueries whose reads are explained (queryPlanner).
- * Prints `endpoint | p50 | p95 | COLLSCAN`; exit 1 if any p95 ≥ 300ms, any COLLSCAN or any non-200.
+ * Prints `endpoint | p50 | p95 | COLLSCAN`; exit 1 if any p95 ≥ 300ms, any COLLSCAN, any non-200, an endpoint
+ * with 0 captured reads or a captured call explain.ts cannot explain (no vacuous pass).
  * Usage: caffeinate -i pnpm --filter api perf   (not part of the full chain; run in H-02 and Task M)
  */
 import 'reflect-metadata';
@@ -186,13 +187,15 @@ async function main(): Promise<void> {
     console.log('| endpoint | p50 (ms) | p95 (ms) | rows (page/total) | reads explained | COLLSCAN |');
     console.log('|---|---:|---:|---:|---:|---|');
     for (const r of rows) {
-      const bad = r.p95 >= LIMIT_MS || r.collscans.length > 0;
+      // A check that explained nothing (0 reads) or skipped a call proves nothing: fail rather than pass vacuously.
+      const bad = r.p95 >= LIMIT_MS || r.collscans.length > 0 || r.reads === 0 || r.skipped.length > 0;
       if (bad) failed = true;
       console.log(`| \`GET ${r.endpoint}\` | ${fmt(r.p50)} | ${fmt(r.p95)}${r.p95 >= LIMIT_MS ? ' ✗' : ''} | ${r.rows} | ${r.reads} | ${r.collscans.length ? `YES (${r.collscans.length})` : 'no'} |`);
     }
     for (const r of rows) {
       for (const c of r.collscans) console.log(`COLLSCAN in GET ${r.endpoint}: ${c}`);
-      if (r.skipped.length) console.log(`not explained in GET ${r.endpoint}: ${r.skipped.join(', ')}`);
+      if (r.reads === 0) console.log(`NO READS CAPTURED in GET ${r.endpoint}: the COLLSCAN check is vacuous (debug hook not firing?)`);
+      if (r.skipped.length) console.log(`NOT EXPLAINABLE in GET ${r.endpoint}: ${r.skipped.join(', ')} (extend explain.ts)`);
     }
     console.log(failed ? '\nNFR-02 FAIL' : '\nNFR-02 PASS');
   } finally {
