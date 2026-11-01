@@ -6,7 +6,7 @@ import { makeUser } from '../factories/user.factory';
 import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
 
-describe('FR-SCH-01..03 Tạo buổi học và lịch lặp', () => {
+describe('FR-SCH-01 FR-SCH-02 FR-SCH-03 Tạo buổi học và lịch lặp', () => {
   let t: TestApp;
   let manager: string;
   let staff: string;

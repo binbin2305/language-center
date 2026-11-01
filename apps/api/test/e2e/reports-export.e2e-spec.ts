@@ -84,7 +84,7 @@ describe('FR-RPT-05 Xuất báo cáo (GET /reports/:type/export)', () => {
     expect(await pdfText(p.body as Buffer)).toContain('Không có dữ liệu');
   });
 
-  it('FR-RPT-03/05 học tập: lớp không có điểm trong khoảng (students 0) → xuất "Không có dữ liệu"', async () => {
+  it('FR-RPT-03 FR-RPT-05 học tập: lớp không có điểm trong khoảng (students 0) → xuất "Không có dữ liệu"', async () => {
     const json = await t.http().get(`/api/v1/reports/academic?from=${FROM}&to=${TO}`).set(auth(manager));
     expect(json.body.data.rows.length).toBeGreaterThan(0);
     expect(json.body.data.rows.every((r: { students: number }) => r.students === 0)).toBe(true);
@@ -95,7 +95,7 @@ describe('FR-RPT-05 Xuất báo cáo (GET /reports/:type/export)', () => {
     expect(await pdfText(p.body as Buffer)).toContain('Không có dữ liệu');
   });
 
-  it('FR-RPT-04/05 tài chính: pdf định dạng tiền VND, xlsx giữ số', async () => {
+  it('FR-RPT-04 FR-RPT-05 tài chính: pdf định dạng tiền VND, xlsx giữ số', async () => {
     const p = await exp(manager, 'finance', `format=pdf&from=${FROM}&to=${TO}`);
     const text = await pdfText(p.body as Buffer);
     expect(text).toContain('1.234.500');
@@ -104,6 +104,27 @@ describe('FR-RPT-05 Xuất báo cáo (GET /reports/:type/export)', () => {
     const ws = await sheet((await exp(manager, 'finance', `format=xlsx&from=${FROM}&to=${TO}`)).body as Buffer);
     expect(ws.getRow(2).getCell(2).value).toBe(234_500); // Doanh thu
     expect(ws.getRow(2).getCell(3).value).toBe(1_234_500); // Tổng phải thu
+  });
+
+  it('FR-RPT-05 pdf tài chính chứa "1.500.000 ₫" (formatVnd) không chứa "1500000"', async () => {
+    const inv = await makeInvoice(t.conn, { courseId: (await makeCourse(t.conn))._id, amountDue: 1_500_000, finalAmount: 1_500_000, balance: 1_500_000 });
+    await t.conn.collection('invoices').updateOne({ _id: inv._id }, { $set: { createdAt: new Date('2026-05-12T03:00:00Z') } });
+    const p = await exp(manager, 'finance', 'format=pdf&from=2026-05-01&to=2026-05-31');
+    const text = await pdfText(p.body as Buffer);
+    expect(text).toContain('1.500.000 ₫');
+    expect(text).not.toContain('1500000');
+  });
+
+  it.each([
+    ['admissions', ['Khóa học', 'Lead', 'Hồ sơ mới', 'Tỷ lệ chuyển đổi', 'Đã ghi danh', 'Chờ xếp lớp']],
+    ['attendance', ['Lớp', 'Số buổi', 'Số bản ghi', 'Tỷ lệ chuyên cần']],
+    ['academic', ['Lớp', 'Giáo viên', 'Số học viên', 'Điểm trung bình', 'Tỷ lệ đạt']],
+    ['finance', ['Nhóm', 'Doanh thu', 'Tổng phải thu', 'Còn nợ', 'Quá hạn', 'Giảm giá']],
+  ])('FR-RPT-05 pdf rỗng %s có đủ mọi header + "Không có dữ liệu"', async (type, headers) => {
+    const p = await exp(manager, type, 'format=pdf&from=2020-01-01&to=2020-01-31');
+    const text = await pdfText(p.body as Buffer);
+    for (const h of headers) expect(text).toContain(h);
+    expect(text).toContain('Không có dữ liệu');
   });
 
   it('FR-RPT-05 type lạ → 400, lỗi vẫn là JSON', async () => {

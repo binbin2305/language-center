@@ -4,7 +4,7 @@ import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
 import { makeCourse, makeLead, makeStudent, models } from '../factories';
 
-describe('FR-ADM-03..05 Tạo hồ sơ từ lead', () => {
+describe('FR-ADM-03 FR-ADM-04 FR-ADM-05 Tạo hồ sơ từ lead', () => {
   let t: TestApp;
   let staff: string;
   let manager: string;

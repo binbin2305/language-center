@@ -6,7 +6,7 @@ import { makeCourse, makeLead, makeStudent } from '../factories';
 import { Models } from '../../src/database/models';
 import { Lead } from '../../src/database/schemas/lead.schema';
 
-describe('FR-ADM-01/02/08 Lead', () => {
+describe('FR-ADM-01 FR-ADM-02 FR-ADM-08 Lead', () => {
   let t: TestApp;
   let staff: string;
   let manager: string;

@@ -4,11 +4,12 @@ import { makeClass, makeEnrollment, makeSession } from '../factories/academic.fa
 import { makeStudent } from '../factories/student.factory';
 import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
+import { AttendanceService } from '../../src/modules/attendance/attendance.service';
 
 const START = new Date('2026-01-06T02:00:00Z');
 const END = new Date('2026-01-06T04:00:00Z');
 
-describe('FR-ATT-01/02 Điểm danh', () => {
+describe('FR-ATT-01 FR-ATT-02 Điểm danh', () => {
   let t: TestApp;
   beforeAll(async () => {
     t = await createTestApp();
@@ -67,6 +68,37 @@ describe('FR-ATT-01/02 Điểm danh', () => {
     expect(rows).toHaveLength(4);
     s.students.forEach((x, i) => expect(rows.find((r) => String(r.studentId) === String(x.st._id))?.status).toBe(sts[i]));
     expect(String(rows[0]!.recordedBy)).toBe(String(s.teacher.user._id));
+  });
+
+  it('FR-ATT-01 R12 bản ghi điểm danh mang startAt của buổi (denormalized khi ghi)', async () => {
+    const s = await seed(2);
+    expect((await put(s.id, s.teacher.token, s.records())).status).toBe(200);
+    const rows = await t.conn.model('Attendance').find({ sessionId: s.id }).lean<{ startAt?: Date; classId: Types.ObjectId }[]>();
+    expect(rows).toHaveLength(2);
+    for (const r of rows) {
+      expect(r.startAt).toEqual(START);
+      expect(String(r.classId)).toBe(String(s.cls._id));
+    }
+  });
+
+  it('FR-ATT-01 R12 buổi bị dời giờ giữa lúc đọc và lúc claim → bản ghi mang startAt mới (đọc trong transaction)', async () => {
+    const s = await seed(2);
+    const moved = new Date(START.getTime() - 5 * 60_000);
+    const svc = t.app.get(AttendanceService) as unknown as { loadScoped: (...a: unknown[]) => Promise<unknown> };
+    const original = svc.loadScoped.bind(svc);
+    const spy = jest.spyOn(svc, 'loadScoped').mockImplementationOnce(async (...a: unknown[]) => {
+      const loaded = await original(...a);
+      // A reschedule commits after the read, before take() opens its transaction.
+      await t.conn.collection('sessions').updateOne({ _id: s.session._id }, { $set: { startAt: moved } });
+      return loaded;
+    });
+    try {
+      expect((await put(s.id, s.teacher.token, s.records())).status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
+    const rows = await t.conn.model('Attendance').find({ sessionId: s.id }).lean<{ startAt: Date }[]>();
+    expect(rows.map((r) => r.startAt.toISOString())).toEqual([moved.toISOString(), moved.toISOString()]);
   });
 
   it('FR-ATT-01 GV dạy thay (session.teacherId) -> 200 và GV đó thấy buổi', async () => {

@@ -35,6 +35,7 @@ import { SCHEDULE_CONFLICT_CHECKER, type ScheduleConflictChecker } from '../../c
 import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
 import { Models } from '../../database/models';
+import type { Attendance } from '../../database/schemas/attendance.schema';
 import type { Class, ClassDoc } from '../../database/schemas/class.schema';
 import type { Room, RoomDoc } from '../../database/schemas/room.schema';
 import type { Session, SessionDoc } from '../../database/schemas/session.schema';
@@ -70,6 +71,7 @@ export class ScheduleService {
     @InjectModel(Models.Class) private readonly classes: Model<Class>,
     @InjectModel(Models.Room) private readonly rooms: Model<Room>,
     @InjectModel(Models.User) private readonly users: Model<User>,
+    @InjectModel(Models.Attendance) private readonly attendances: Model<Attendance>,
     @Inject(SCHEDULE_CONFLICT_CHECKER) private readonly checker: ScheduleConflictChecker,
     private readonly audit: AuditService,
     private readonly counters: CounterService,
@@ -187,6 +189,10 @@ export class ScheduleService {
         { new: true, session: s },
       );
       if (!updated) throw new AppError(ErrorCode.SESSION_LOCKED);
+      // R12: attendance carries a copy of startAt; keep it in step (normally none exist before the session starts).
+      if (updated.startAt.getTime() !== current.startAt.getTime()) {
+        await this.attendances.updateMany({ sessionId: updated._id }, { $set: { startAt: updated.startAt } }, { session: s, timestamps: false });
+      }
       await this.audit.log(
         { actor, action: AuditAction.UPDATE, entity: Models.Session, entityId: updated._id, before: current.toObject(), after: updated.toObject() },
         s,

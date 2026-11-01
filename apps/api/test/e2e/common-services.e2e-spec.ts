@@ -191,7 +191,7 @@ describe('common services', () => {
       expect(ids(await scope.studentClassIds(st._id, 'history'))).toEqual(ids([old._id, cur._id]));
       expect(ids(await scope.studentClassIds(st._id, 'current'))).toEqual([String(cur._id)]);
     });
-    it('teacherStudentIds: ENROLLED hoặc COMPLETED, bỏ trùng', async () => {
+    it('teacherStudentIds (R9): ENROLLED/COMPLETED/TRANSFERRED có classId lớp GV, bỏ trùng; CANCELLED và RESERVED chưa từng xếp lớp qua classHistory thì không', async () => {
       const scope = t.app.get(ScopeService);
       const teacher = await makeTeacher(t.conn);
       const cls = await makeClass(t.conn, { teacherId: teacher._id });
@@ -202,7 +202,22 @@ describe('common services', () => {
       await makeEnrollment(t.conn, { studentId: a._id, classId: cls._id, status: EnrollmentStatus.COMPLETED });
       await makeEnrollment(t.conn, { studentId: b._id, classId: cls._id, status: EnrollmentStatus.COMPLETED });
       await makeEnrollment(t.conn, { studentId: c._id, classId: cls._id, status: EnrollmentStatus.TRANSFERRED });
-      expect(ids(await scope.teacherStudentIds(teacher._id))).toEqual(ids([a._id, b._id]));
+      const d = await makeStudent(t.conn);
+      await makeEnrollment(t.conn, { studentId: d._id, classId: cls._id, status: EnrollmentStatus.CANCELLED });
+      // RESERVED chưa từng được xếp lớp: classHistory rỗng nên không vào phạm vi GV (R9).
+      await makeEnrollment(t.conn, { studentId: d._id, classId: cls._id, status: EnrollmentStatus.RESERVED, classHistory: [] });
+      expect(ids(await scope.teacherStudentIds(teacher._id))).toEqual(ids([a._id, b._id, c._id]));
+    });
+    it('R9 teacherCurrentStudentIds: chỉ ENROLLED hoặc COMPLETED có classId lớp GV (không TRANSFERRED, không classHistory)', async () => {
+      const scope = t.app.get(ScopeService);
+      const teacher = await makeTeacher(t.conn);
+      const cls = await makeClass(t.conn, { teacherId: teacher._id });
+      const [a, b, c, d] = [await makeStudent(t.conn), await makeStudent(t.conn), await makeStudent(t.conn), await makeStudent(t.conn)];
+      await makeEnrollment(t.conn, { studentId: a._id, classId: cls._id, status: EnrollmentStatus.ENROLLED });
+      await makeEnrollment(t.conn, { studentId: b._id, classId: cls._id, status: EnrollmentStatus.COMPLETED });
+      await makeEnrollment(t.conn, { studentId: c._id, classId: cls._id, status: EnrollmentStatus.TRANSFERRED });
+      await makeEnrollment(t.conn, { studentId: d._id, classId: null, status: EnrollmentStatus.WAITING_CLASS, classHistory: [cls._id] });
+      expect(ids(await scope.teacherCurrentStudentIds(teacher._id))).toEqual(ids([a._id, b._id]));
     });
   });
 

@@ -28,6 +28,7 @@ import { ClockService } from '../../common/clock/clock.service';
 import { CounterService } from '../../common/db/counter.service';
 import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
+import { countFor } from '../../common/pagination';
 import { ScopeService } from '../../common/scope/scope.service';
 import { SettingsService } from '../../common/settings/settings.service';
 import { Models } from '../../database/models';
@@ -119,19 +120,24 @@ export class AttendanceService {
     const studentIds = await withTransaction(this.conn, async (s) => {
       // Lock-key protocol: bump before reading the roster invariant.
       await this.counters.next(`lock:class:${session.classId.toString()}`, s);
-      const roster = await this.roster(session, s);
+      // Claim first: `claimed` is the session as of this transaction, so a reschedule committed after
+      // loadScoped() cannot leave a stale startAt (R12) or roster. Any later throw rolls the claim back.
+      const claimed = await this.sessions
+        .findOneAndUpdate(
+          { _id: session._id, attendanceTakenAt: null, status: SessionStatus.SCHEDULED },
+          { $set: { attendanceTakenAt: now, ...(input.sessionNote !== undefined ? { attendanceNote: input.sessionNote } : {}) } },
+          { new: true, session: s },
+        )
+        .lean<SessionRec>();
+      if (!claimed) throw new AppError(ErrorCode.ATTENDANCE_ALREADY_TAKEN);
+      if (now.getTime() < claimed.startAt.getTime() - EARLY_MS) throw new AppError(ErrorCode.ATTENDANCE_TOO_EARLY);
+
+      const roster = await this.roster(claimed, s);
       const rosterIds = new Set(roster.map((e) => e.studentId.toString()));
       const unknown = [...byStudent.keys()].filter((sid) => !rosterIds.has(sid));
       if (unknown.length > 0) throw new AppError(ErrorCode.STUDENT_NOT_IN_ROSTER, undefined, { studentIds: unknown });
       const missing = [...rosterIds].filter((sid) => !byStudent.has(sid));
       if (missing.length > 0) throw new AppError(ErrorCode.ATTENDANCE_INCOMPLETE, undefined, { studentIds: missing });
-
-      const claimed = await this.sessions.findOneAndUpdate(
-        { _id: session._id, attendanceTakenAt: null, status: SessionStatus.SCHEDULED },
-        { $set: { attendanceTakenAt: now, ...(input.sessionNote !== undefined ? { attendanceNote: input.sessionNote } : {}) } },
-        { new: true, session: s },
-      );
-      if (!claimed) throw new AppError(ErrorCode.ATTENDANCE_ALREADY_TAKEN);
 
       await this.attendances.bulkWrite(
         roster.map((e) => {
@@ -141,8 +147,9 @@ export class AttendanceService {
               filter: { sessionId: session._id, studentId: e.studentId },
               update: {
                 $setOnInsert: {
-                  sessionId: session._id,
-                  classId: session.classId,
+                  sessionId: claimed._id,
+                  classId: claimed.classId,
+                  startAt: claimed.startAt,
                   studentId: e.studentId,
                   enrollmentId: e._id,
                   status: r.status,
@@ -220,6 +227,7 @@ export class AttendanceService {
               $setOnInsert: {
                 sessionId: session._id,
                 classId: session.classId,
+                startAt: session.startAt,
                 studentId,
                 enrollmentId: enrollmentByStudent.get(r.studentId),
                 status: r.status,
@@ -343,63 +351,60 @@ export class AttendanceService {
     return match;
   }
 
-  /** Attendance joined with its session; cancelled sessions and out-of-range VN days are dropped. */
-  private joinSession(match: Record<string, unknown>, q: { from?: string; to?: string }) {
+  /**
+   * R12: the history filter runs on attendance itself (denormalized startAt; classId/studentId scope), so it is
+   * index-backed and no session is joined before paging. Records of cancelled sessions (taken in the early
+   * window, then cancelled; never attendance on an untaken session) are excluded by id. Bounded to taken
+   * cancelled sessions, read through status_1_startAt_1__id_1.
+   */
+  private async rangeMatch(match: Record<string, unknown>, q: { from?: string; to?: string }): Promise<Record<string, unknown>> {
     const startAt: Record<string, Date> = {};
     if (q.from) startAt.$gte = startOfVnDay(q.from);
     if (q.to) startAt.$lt = startOfVnDay(addVnDays(q.to, 1));
-    return [
-      { $match: match },
-      { $lookup: { from: this.sessions.collection.name, localField: 'sessionId', foreignField: '_id', as: 'session' } },
-      { $unwind: '$session' },
-      {
-        $match: {
-          'session.status': { $ne: SessionStatus.CANCELLED },
-          ...(Object.keys(startAt).length ? { 'session.startAt': startAt } : {}),
-        },
-      },
-    ];
+    const ranged = Object.keys(startAt).length ? { startAt } : {};
+    const cancelled = await this.sessions.distinct('_id', { status: SessionStatus.CANCELLED, ...ranged, attendanceTakenAt: { $ne: null } });
+    return { ...match, ...ranged, ...(cancelled.length ? { sessionId: { $nin: cancelled } } : {}) };
   }
 
   async list(q: ListAttendanceQuery, user: AuthUser): Promise<Paginated<AttendanceDto>> {
     const empty = { data: [], meta: { page: q.page, limit: q.limit, total: 0 } };
-    const match = await this.historyMatch(q, user);
-    if (!match) return empty;
-    const [res] = await this.attendances.aggregate<{
-      rows: (Attendance & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date; session: Session })[];
-      count: { n: number }[];
-    }>([
-      ...this.joinSession(match, q),
-      {
-        $facet: {
-          rows: [
-            { $sort: { 'session.startAt': -1, _id: -1 } },
-            { $skip: (q.page - 1) * q.limit },
-            { $limit: q.limit },
-          ],
-          count: [{ $count: 'n' }],
-        },
-      },
+    const scoped = await this.historyMatch(q, user);
+    if (!scoped) return empty;
+    const match = await this.rangeMatch(scoped, q);
+    const [rows, total] = await Promise.all([
+      this.attendances
+        .find(match)
+        .sort({ startAt: -1, _id: -1 })
+        .skip((q.page - 1) * q.limit)
+        .limit(q.limit)
+        .lean<(Attendance & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date })[]>(),
+      countFor(this.attendances, match),
     ]);
-    const rows = res?.rows ?? [];
-    const [studentDocs, classDocs] = await Promise.all([
+    // Rows written before R12 and not yet migrated have no startAt: read it from their sessions (page rows only).
+    const legacy = rows.filter((r) => !r.startAt).map((r) => r.sessionId);
+    const [studentDocs, classDocs, legacySessions] = await Promise.all([
       this.students.find({ _id: { $in: rows.map((r) => r.studentId) } }, { fullName: 1 }).lean(),
       this.classes.find({ _id: { $in: rows.map((r) => r.classId) } }, { code: 1 }).lean(),
+      legacy.length ? this.sessions.find({ _id: { $in: legacy } }, { startAt: 1 }).lean() : [],
     ]);
     const names = new Map(studentDocs.map((x) => [String(x._id), x.fullName]));
     const codes = new Map(classDocs.map((x) => [String(x._id), x.code]));
+    const legacyStart = new Map(legacySessions.map((x) => [String(x._id), x.startAt]));
+    // Sessions are never deleted, so the createdAt fallback only guards against a corrupt orphan row.
+    const startOf = (r: (typeof rows)[number]): Date => r.startAt ?? legacyStart.get(String(r.sessionId)) ?? r.createdAt;
     return {
-      data: rows.map((r) => toAttendanceDto(r, r.session.startAt, names.get(String(r.studentId)), codes.get(String(r.classId)))),
-      meta: { page: q.page, limit: q.limit, total: res?.count[0]?.n ?? 0 },
+      data: rows.map((r) => toAttendanceDto(r, startOf(r), names.get(String(r.studentId)), codes.get(String(r.classId)))),
+      meta: { page: q.page, limit: q.limit, total },
     };
   }
 
   async summary(q: AttendanceSummaryQuery, user: AuthUser): Promise<{ data: AttendanceSummaryRowDto[] }> {
-    const match = await this.historyMatch(q, user);
-    if (!match) return { data: [] };
+    const scoped = await this.historyMatch(q, user);
+    if (!scoped) return { data: [] };
+    const match = await this.rangeMatch(scoped, q);
     const field = q.groupBy === 'student' ? 'studentId' : 'classId';
     const groups = await this.attendances.aggregate<{ _id: Types.ObjectId; counts: { s: AttendanceStatus; n: number }[] }>([
-      ...this.joinSession(match, q),
+      { $match: match },
       { $group: { _id: { k: `$${field}`, s: '$status' }, n: { $sum: 1 } } },
       { $group: { _id: '$_id.k', counts: { $push: { s: '$_id.s', n: '$n' } } } },
     ]);

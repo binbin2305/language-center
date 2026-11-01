@@ -97,6 +97,20 @@ describe('FR-RPT-01 Báo cáo tuyển sinh (GET /reports/admissions)', () => {
     expect(r.body.data.totals.waiting).toBe(1);
   });
 
+  it("FR-RPT-01 hồ sơ không có khóa → hàng key 'none' nhãn \"Khác\"; Σ rows.newProfiles = totals.newProfiles", async () => {
+    const orphan = await makeStudent(t.conn);
+    await setAt('students', orphan._id, vn('2026-03-01', '10:00'));
+    const r = await get((await loginAs(t, Role.MANAGER)).token, 'from=2026-03-01&to=2026-03-02');
+    expect(r.status).toBe(200);
+    const none = r.body.data.rows.find((x: { courseId: string }) => x.courseId === 'none');
+    expect(none).toMatchObject({ courseName: 'Khác', newProfiles: 1, leads: 0 });
+    const sum = r.body.data.rows.reduce((s: number, x: { newProfiles: number }) => s + x.newProfiles, 0);
+    expect(sum).toBe(r.body.data.totals.newProfiles);
+    // lọc theo khóa: không có hàng 'none'
+    const f = await get((await loginAs(t, Role.MANAGER)).token, `from=2026-03-01&to=2026-03-02&courseId=${courseA}`);
+    expect(f.body.data.rows.some((x: { courseId: string }) => x.courseId === 'none')).toBe(false);
+  });
+
   it('FR-RPT-01 from > to -> 400 fields.to', async () => {
     const r = await get((await loginAs(t, Role.MANAGER)).token, 'from=2026-01-12&to=2026-01-10');
     expect(r.status).toBe(400);

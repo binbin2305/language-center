@@ -54,5 +54,9 @@ export const SessionSchema = new Schema<Session>(
 SessionSchema.index({ roomId: 1, startAt: 1, endAt: 1 });
 SessionSchema.index({ teacherId: 1, startAt: 1, endAt: 1 });
 SessionSchema.index({ classId: 1, startAt: 1 });
+// GET /sessions?from&to: range on startAt, sorted startAt,_id (NFR-02).
+SessionSchema.index({ startAt: 1, _id: 1 });
+// GET /attendance: cancelled sessions that still hold attendance (taken in the 15-minute early window).
+SessionSchema.index({ status: 1, startAt: 1, _id: 1 });
 
 export type SessionDoc = HydratedDocument<Session>;

@@ -71,7 +71,11 @@ describe('FR-RPT-02 Báo cáo chuyên cần (GET /reports/attendance)', () => {
     const before = await sess(a, '2026-01-09', { startAt: vn('2026-01-09', '23:59'), endAt: vn('2026-01-10', '00:30') });
     await rec(before, a, m2, eA2, UNEXCUSED);
     // Buổi hủy: không tính (khớp /attendance/summary)
-    const cancelled = await sess(a, '2026-01-11', { status: SessionStatus.CANCELLED, cancelReason: 'nghỉ lễ', startAt: vn('2026-01-11', '15:00'), endAt: vn('2026-01-11', '16:00') });
+    const cancelled = await sess(a, '2026-01-11', {
+      status: SessionStatus.CANCELLED, cancelReason: 'nghỉ lễ', startAt: vn('2026-01-11', '15:00'), endAt: vn('2026-01-11', '16:00'),
+      // Realistic: a cancelled session only holds attendance when it was taken (early window) before the cancel.
+      attendanceTakenAt: vn('2026-01-11', '14:50'),
+    });
     await rec(cancelled, a, m2, eA2, UNEXCUSED);
     // Lớp B: s1 1 buổi
     const bs = await sess(b, '2026-01-11');

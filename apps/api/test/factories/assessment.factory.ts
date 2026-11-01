@@ -19,6 +19,7 @@ export async function makeAttendance(conn: Connection, p: Partial<Attendance> = 
   return models(conn).Attendance.create({
     sessionId: session._id,
     classId: session.classId,
+    startAt: session.startAt,
     studentId,
     enrollmentId,
     status: AttendanceStatus.PRESENT,

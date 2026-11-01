@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, HttpCode, Param, Post, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, StreamableFile } from '@nestjs/common';
 import { Role, VoidPaymentInput } from '@lc/shared';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
@@ -22,10 +22,10 @@ export class PaymentsController {
   }
 
   @Get(':id/receipt.pdf')
-  @Header('Content-Type', 'application/pdf')
   @Roles(Role.MANAGER, Role.ACADEMIC_STAFF, Role.STUDENT)
   async receipt(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     const { filename, buffer } = await this.svc.receipt(id, user);
-    return new StreamableFile(buffer, { disposition: `inline; filename="${filename}"` });
+    // Content-Type set on the file (not @Header) so 403/404 error envelopes stay application/json.
+    return new StreamableFile(buffer, { type: 'application/pdf', disposition: `inline; filename="${filename}"` });
   }
 }

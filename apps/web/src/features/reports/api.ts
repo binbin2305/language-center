@@ -12,6 +12,7 @@ export interface ReportParams {
   to: string;
   courseId?: string;
   classId?: string;
+  teacherId?: string;
   groupBy?: 'month' | 'course' | 'class';
 }
 

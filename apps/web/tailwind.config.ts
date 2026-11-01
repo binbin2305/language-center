@@ -5,6 +5,8 @@ const token = (name: string) => `hsl(var(--${name}))`;
 
 export default {
   darkMode: ['class'],
+  // The .dark token block lives in @layer base; without a safelist Tailwind purges it from the production CSS (CR L-HARDENING-4).
+  safelist: ['dark'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     container: { center: true, padding: '1rem', screens: { '2xl': '1400px' } },

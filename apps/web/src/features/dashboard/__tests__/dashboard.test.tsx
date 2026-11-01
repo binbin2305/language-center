@@ -125,6 +125,15 @@ describe('dashboard quản lý/học vụ (FR-RPT-06)', () => {
     ).toEqual(['T11', '15', '9']);
   });
 
+  it('series biểu đồ (dashboard trend) dùng stroke "var(--chart-N)", không có mã hex', async () => {
+    serve(dashboard);
+    open();
+    const chart = await screen.findByRole('img', { name: 'Tuyển sinh 6 tháng gần nhất' }, T);
+    expect(chart.innerHTML).toMatch(/stroke="var\(--chart-1\)"/);
+    expect(chart.innerHTML).toMatch(/stroke="var\(--chart-2\)"/);
+    expect(chart.innerHTML).not.toMatch(/#[0-9a-fA-F]{6}\b/);
+  });
+
   it('render h1 "Tổng quan" khi đang tải', async () => {
     server.use(http.get('*/api/v1/reports/dashboard', async () => new Promise(() => {})));
     open();

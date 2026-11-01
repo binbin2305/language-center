@@ -10,8 +10,9 @@ import { StatCard } from './stat-card';
 
 export const EMPTY_TEXT = 'Không có dữ liệu thống kê cho khoảng thời gian này';
 const pct = (r: number | null) => (r === null ? '—' : `${(r * 100).toFixed(1)}%`);
-const BLUE = '#2563eb';
-const AMBER = '#d97706';
+const BLUE = 'var(--chart-1)';
+const AMBER = 'var(--chart-2)';
+const GREEN = 'var(--chart-3)';
 
 interface QueryLike<T> {
   data?: T;
@@ -62,7 +63,7 @@ export function AdmissionsContent({ q }: { q: QueryLike<AdmissionsReportDto> }) 
             series={[
               { key: 'leads', name: 'Liên hệ', color: BLUE },
               { key: 'newProfiles', name: 'Hồ sơ', color: AMBER },
-              { key: 'enrolled', name: 'Ghi danh', color: '#059669' },
+              { key: 'enrolled', name: 'Ghi danh', color: GREEN },
             ]}
           />
           <Grid
@@ -163,7 +164,7 @@ export function FinanceContent({ q }: { q: QueryLike<FinanceReportDto> }) {
             <StatCard label="Doanh thu"><MoneyText value={d.totals.revenue} /></StatCard>
             <StatCard label="Tổng phải thu"><MoneyText value={d.totals.totalDue} /></StatCard>
             <StatCard label="Còn nợ"><MoneyText value={d.totals.outstanding} /></StatCard>
-            <StatCard label="Quá hạn"><MoneyText value={d.totals.overdue} /></StatCard>
+            <StatCard label="Quá hạn" hint="trên hóa đơn tạo trong khoảng"><MoneyText value={d.totals.overdue} /></StatCard>
             <StatCard label="Giảm giá"><MoneyText value={d.totals.totalDiscount} /></StatCard>
           </div>
           <ReportChart

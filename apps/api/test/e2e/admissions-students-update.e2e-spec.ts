@@ -8,7 +8,7 @@ import { Models } from '../../src/database/models';
 import { createTestApp, TestApp } from '../helpers/test-app';
 import { DEFAULT_PASSWORD, makeStudent } from '../factories';
 
-describe('FR-STU-03/04 FR-ADM-06 Cập nhật hồ sơ, giấy tờ, lịch sử', () => {
+describe('FR-STU-03 FR-STU-04 FR-ADM-06 Cập nhật hồ sơ, giấy tờ, lịch sử', () => {
   let t: TestApp;
   let uploadDir: string;
   let manager: { token: string; id: Types.ObjectId };

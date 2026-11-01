@@ -5,7 +5,7 @@ import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
 import { makeClass, makeCourse, makeEnrollment, makeStudent, models } from '../factories';
 
-describe('FR-CLS-07..11 Vòng đời enrollment', () => {
+describe('FR-CLS-07 FR-CLS-08 FR-CLS-10 FR-CLS-11 Vòng đời enrollment', () => {
   let t: TestApp;
   let manager: string;
   let managerId: string;

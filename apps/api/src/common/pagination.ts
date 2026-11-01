@@ -23,6 +23,20 @@ function parseSort(sort: string): Record<string, 1 | -1> {
   return out;
 }
 
+/** True for `{}` and for `$and` lists whose members are all empty: the filter matches every document. */
+export function isEmptyFilter(filter: object): boolean {
+  const entries = Object.entries(filter);
+  return entries.every(([k, v]) => k === '$and' && Array.isArray(v) && v.every((x: object) => isEmptyFilter(x)));
+}
+
+/**
+ * Total for a list (R11): an empty filter reads collection metadata (estimatedDocumentCount, no scan);
+ * any other filter counts through its index with countDocuments.
+ */
+export function countFor<T>(model: Model<T>, filter: FilterQuery<T>): Promise<number> {
+  return isEmptyFilter(filter) ? model.estimatedDocumentCount() : model.countDocuments(filter);
+}
+
 export async function paginate<T>(
   model: Model<T>,
   filter: FilterQuery<T>,
@@ -41,7 +55,7 @@ export async function paginate<T>(
       .skip((q.page - 1) * q.limit)
       .limit(q.limit)
       .lean(),
-    model.countDocuments(filter),
+    countFor(model, filter),
   ]);
   return { data: data as unknown as T[], meta: { page: q.page, limit: q.limit, total } };
 }

@@ -9,7 +9,7 @@ import { loginAs } from '../helpers/auth';
 import { createTestApp, DEFAULT_NOW, TestApp } from '../helpers/test-app';
 
 // DEFAULT_NOW = 2026-01-05T02:00:00Z (09:00 VN Monday)
-describe('FR-SCH-06..08 Xem lịch theo phạm vi và thông báo', () => {
+describe('FR-SCH-06 FR-SCH-07 FR-SCH-08 Xem lịch theo phạm vi và thông báo', () => {
   let t: TestApp;
   let manager: string;
   let staff: string;

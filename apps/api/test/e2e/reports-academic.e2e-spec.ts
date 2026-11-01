@@ -127,6 +127,20 @@ describe('FR-RPT-03 Báo cáo học tập (GET /reports/academic)', () => {
     expect(r.body.data.rows.map((x: { classId: string }) => x.classId).sort()).toEqual([c1.id, c2.id, c3.id].sort());
   });
 
+  it('FR-RPT-03 lớp kết thúc trước from không có trong rows; lớp bắt đầu sau to không có; lớp chồng một ngày có', async () => {
+    const course = await makeCourse(t.conn);
+    const mk = (startDate: string, endDate: string) => makeClass(t.conn, { courseId: course._id, startDate: vn(startDate), endDate: vn(endDate) } as never);
+    const before = await mk('2025-10-01', '2026-01-31');
+    const after = await mk('2026-03-01', '2026-06-01');
+    const touchFrom = await mk('2025-12-01', '2026-02-01');
+    const touchTo = await mk('2026-02-28', '2026-06-01');
+    const r = await get(manager, `from=${FROM}&to=${TO}&courseId=${course._id.toString()}`);
+    const ids = r.body.data.rows.map((x: { classId: string }) => x.classId);
+    expect(ids).not.toContain(before._id.toString());
+    expect(ids).not.toContain(after._id.toString());
+    expect(ids.sort()).toEqual([touchFrom._id.toString(), touchTo._id.toString()].sort());
+  });
+
   it('FR-RPT-03 to < from -> 400', async () => {
     expect((await get(manager, 'from=2026-02-28&to=2026-02-01')).status).toBe(400);
   });

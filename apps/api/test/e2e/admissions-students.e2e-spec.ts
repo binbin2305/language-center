@@ -5,7 +5,7 @@ import { Models } from '../../src/database/models';
 import { createTestApp, TestApp } from '../helpers/test-app';
 import { makeAttendance, makeClass, makeCourse, makeEnrollment, makeSession, makeStudent } from '../factories';
 
-describe('FR-STU-01/02 Học viên', () => {
+describe('FR-STU-01 FR-STU-02 Học viên', () => {
   let t: TestApp;
   let manager: string;
   let staff: string;

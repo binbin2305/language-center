@@ -68,5 +68,7 @@ export const ClassSchema = new Schema<Class>(
 ClassSchema.index({ code: 1 }, { unique: true });
 ClassSchema.index({ courseId: 1, level: 1, status: 1 });
 ClassSchema.index({ teacherId: 1 });
+// GET /classes default sort -createdAt (NFR-02).
+ClassSchema.index({ createdAt: -1, _id: -1 });
 
 export type ClassDoc = HydratedDocument<Class>;

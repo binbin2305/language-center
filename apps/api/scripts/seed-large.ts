@@ -169,7 +169,7 @@ export async function runSeedLarge(conn: Connection, opts: SeedLargeOptions): Pr
       if (!taken) continue;
       for (const [k, e] of (roster.get(c) ?? []).entries()) {
         attendances.push({
-          sessionId, classId: cls._id, studentId: e.studentId, enrollmentId: e._id,
+          sessionId, classId: cls._id, startAt, studentId: e.studentId, enrollmentId: e._id,
           status: (k + sessions.length) % 17 === 0 ? AttendanceStatus.UNEXCUSED : AttendanceStatus.PRESENT, recordedBy: cls.teacherId,
         });
       }

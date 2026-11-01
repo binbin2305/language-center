@@ -1,18 +1,17 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { vnDay } from '@lc/shared';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { usePendingAssessments } from '@/features/grades/hooks';
 import { formatDate, formatTime } from '@/lib/format';
+import { useVnToday } from '@/lib/use-vn-today';
 import { HomeBlock } from '../components/home-block';
 import { useSessionsBetween, useUpcomingPlacementTests } from '../hooks';
 
 const Empty = ({ text }: { text: string }) => <p className="text-sm text-muted-foreground">{text}</p>;
 
 export default function TeacherHome() {
-  const [now] = useState(() => new Date());
-  const today = vnDay(now);
+  const today = useVnToday();
+  const now = new Date();
   const sessions = useSessionsBetween(today, today);
   const pending = usePendingAssessments();
   const placement = useUpcomingPlacementTests(now.toISOString());

@@ -25,7 +25,7 @@ export function toSessionDto(doc: SessionDoc): SessionDto {
   };
 }
 
-/** Read-model DTO (FR-SCH-06/08): adds display names and the derived `completed` flag. */
+/** Read-model DTO (FR-SCH-06 FR-SCH-08): adds display names and the derived `completed` flag. */
 export function toSessionViewDto(
   doc: SessionDoc,
   now: Date,

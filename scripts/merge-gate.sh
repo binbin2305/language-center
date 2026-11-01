@@ -71,4 +71,5 @@ pnpm typecheck
 pnpm test
 pnpm test:e2e
 pnpm test:security
+bash scripts/fr-coverage.sh --strict
 echo "merge gate: green"

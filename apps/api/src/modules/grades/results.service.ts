@@ -85,7 +85,7 @@ export class ResultsService {
     });
   }
 
-  /** FR-GRD-05/06: one row per (student, class), scoped by role. */
+  /** FR-GRD-05 FR-GRD-06: one row per (student, class), scoped by role. */
   async list(q: ListResultsQuery, user: AuthUser): Promise<Paginated<ResultDto>> {
     await this.assertFeesGate(user);
     const match: Record<string, unknown> = {};
@@ -109,6 +109,11 @@ export class ResultsService {
     } else if (classFilter) {
       classMatch.cid = { $in: classFilter };
     }
+
+    // NFR-02: a known class list is matched first through classId_1_status_1 / classHistory_1;
+    // the exact per-class $match after $unwind still applies.
+    const known = q.classId ? [classMatch.cid as Types.ObjectId] : classFilter;
+    if (known) match.$or = [{ classId: { $in: known } }, { classHistory: { $in: known } }];
 
     const [agg] = await this.enrollments.aggregate<{ rows: Pair[]; total: { n: number }[] }>([
       { $match: match },

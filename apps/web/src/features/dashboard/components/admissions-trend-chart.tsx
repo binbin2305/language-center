@@ -34,14 +34,14 @@ export function AdmissionsTrendChart({ trend }: { trend: DashboardDto['admission
               type="monotone"
               dataKey="leads"
               name="Lead mới"
-              stroke="#2563eb"
+              stroke="var(--chart-1)"
               isAnimationActive={false}
             />
             <Line
               type="monotone"
               dataKey="profiles"
               name="Hồ sơ mới"
-              stroke="#16a34a"
+              stroke="var(--chart-2)"
               isAnimationActive={false}
             />
           </LineChart>

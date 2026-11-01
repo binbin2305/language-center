@@ -6,7 +6,7 @@ import { loginAs } from '../helpers/auth';
 import { pdfText } from '../helpers/pdf-text';
 import { createTestApp, DEFAULT_NOW, TestApp } from '../helpers/test-app';
 
-describe('FR-FEE-06/07 Tra cứu hóa đơn, phụ thu, phiếu thu', () => {
+describe('FR-FEE-06 FR-FEE-07 Tra cứu hóa đơn, phụ thu, phiếu thu', () => {
   let t: TestApp;
   let manager: { token: string };
   let staff: { token: string; user: { _id: Types.ObjectId } };
@@ -70,6 +70,26 @@ describe('FR-FEE-06/07 Tra cứu hóa đơn, phụ thu, phiếu thu', () => {
       expect(row).toMatchObject({ id: String(inv._id), balance: 1_000_000 });
       for (const k of ['payments', 'amountPaid', 'discount', 'amountDue', 'finalAmount']) expect(row).not.toHaveProperty(k);
     }
+  });
+
+  it('FR-FEE-06 R9: HV chuyển A→B — GV lớp cũ A không thấy hóa đơn (404/rỗng), GV lớp B thấy (chỉ status/balance)', async () => {
+    const teacherA = await loginAs(t, Role.TEACHER);
+    const teacherB = await loginAs(t, Role.TEACHER);
+    const clsA = await makeClass(t.conn, { teacherId: teacherA.user._id });
+    const clsB = await makeClass(t.conn, { courseId: clsA.courseId, teacherId: teacherB.user._id });
+    const st = await makeStudent(t.conn);
+    const old = await makeEnrollment(t.conn, { studentId: st._id, courseId: clsA.courseId, classId: clsA._id, classHistory: [clsA._id], status: 'TRANSFERRED' });
+    await makeEnrollment(t.conn, { studentId: st._id, courseId: clsA.courseId, classId: clsB._id, classHistory: [clsB._id], status: 'ENROLLED', transferredFromId: old._id });
+    const inv = await makeInvoice(t.conn, { studentId: st._id, enrollmentId: old._id, classId: clsA._id, amountDue: 2_000_000 });
+
+    const listA = await get('/invoices', teacherA.token).expect(200);
+    expect(listA.body.data.map((x: { id: string }) => x.id)).not.toContain(String(inv._id));
+    await get(`/invoices/${inv._id}`, teacherA.token).expect(404);
+
+    const one = (await get(`/invoices/${inv._id}`, teacherB.token).expect(200)).body.data;
+    expect(one).toMatchObject({ id: String(inv._id), balance: 2_000_000 });
+    expect(one).toHaveProperty('status');
+    for (const k of ['payments', 'amountPaid', 'discount', 'amountDue', 'finalAmount']) expect(one).not.toHaveProperty(k);
   });
 
   it('FR-FEE-06: GV xem hóa đơn HV ngoài lớp -> 404', async () => {
@@ -153,7 +173,23 @@ describe('FR-FEE-06/07 Tra cứu hóa đơn, phụ thu, phiếu thu', () => {
     await get(`/payments/${p._id}/receipt.pdf`, admin.token).expect(403);
   });
 
-  it('FR-FEE-06/07: A mọi route -> 403; T/H không tạo phụ thu', async () => {
+  it('FR-FEE-07: receipt lỗi 403/404 -> Content-Type application/json, body là error envelope', async () => {
+    const a = await student();
+    const b = await student();
+    const inv = await makeInvoice(t.conn, { studentId: a.st._id });
+    const p = await makePayment(t.conn, { invoiceId: inv._id });
+    const notMine = await get(`/payments/${p._id}/receipt.pdf`, b.token).expect(404);
+    expect(notMine.headers['content-type']).toMatch(/^application\/json/);
+    expect(notMine.body.error.code).toBe('NOT_FOUND');
+    const missing = await get(`/payments/${new Types.ObjectId()}/receipt.pdf`, staff.token).expect(404);
+    expect(missing.headers['content-type']).toMatch(/^application\/json/);
+    expect(missing.body.error.code).toBe('NOT_FOUND');
+    const forbidden = await get(`/payments/${p._id}/receipt.pdf`, teacher.token).expect(403);
+    expect(forbidden.headers['content-type']).toMatch(/^application\/json/);
+    expect(forbidden.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('FR-FEE-06 FR-FEE-07: A mọi route -> 403; T/H không tạo phụ thu', async () => {
     const inv = await makeInvoice(t.conn);
     const body = { studentId: String(inv.studentId), description: 'x', amountDue: 1000, dueDate: '2026-01-20' };
     await get('/invoices', admin.token).expect(403);

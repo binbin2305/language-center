@@ -21,5 +21,13 @@ export default defineConfig({
     // Page tests wait up to 5s for a lazy route's first chunk; the default 5s test budget left no
     // room for the interactions after it when the whole monorepo suite runs in parallel.
     testTimeout: 15_000,
+    // NFR-07 / D34: feature code only; tests, generated and constant files are not measured.
+    coverage: {
+      provider: 'v8',
+      include: ['src/features/**'],
+      exclude: ['**/__tests__/**', '**/*.test.*'],
+      reporter: ['text', 'json-summary', 'lcov'],
+      thresholds: { lines: 75 },
+    },
   },
 });

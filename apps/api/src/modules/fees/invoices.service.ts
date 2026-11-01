@@ -223,7 +223,7 @@ export class InvoicesService {
 
   /** Student ids the user may see; null = unrestricted (M, S). */
   private async visibleStudents(user: AuthUser): Promise<Types.ObjectId[] | null> {
-    if (user.role === Role.TEACHER) return this.scope.teacherStudentIds(user.id);
+    if (user.role === Role.TEACHER) return this.scope.teacherCurrentStudentIds(user.id); // R9: current students only
     if (user.role === Role.STUDENT) return user.studentId ? [user.studentId] : [];
     return null;
   }

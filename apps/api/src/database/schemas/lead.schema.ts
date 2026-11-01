@@ -38,5 +38,7 @@ export const LeadSchema = new Schema<Lead>(
 LeadSchema.index({ phone: 1 });
 LeadSchema.index({ email: 1 });
 LeadSchema.index({ status: 1, createdAt: -1 });
+// GET /leads default page: { deletedAt: null } sorted -createdAt (NFR-02).
+LeadSchema.index({ deletedAt: 1, createdAt: -1, _id: -1 });
 
 export type LeadDoc = HydratedDocument<Lead>;
