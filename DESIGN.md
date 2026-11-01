@@ -14,15 +14,18 @@
 | Token | Light | Dark | Dùng cho |
 |---|---|---|---|
 | `--primary` | `#1D4ED8` (blue-700) | `#3B82F6` | nút chính, link, mục đang chọn |
+| `--primary-foreground` | `#FFFFFF` | `#0A111E` | chữ trên nút chính |
 | `--background` | `#F8FAFC` | `#0B1220` | nền trang |
 | `--card` | `#FFFFFF` | `#111827` | thẻ, bảng |
 | `--foreground` | `#0F172A` | `#E5E7EB` | chữ |
-| `--muted-foreground` | `#64748B` | `#94A3B8` | chữ phụ |
+| `--muted-foreground` | `#48566A` | `#94A3B8` | chữ phụ |
 | `--border` | `#E2E8F0` | `#1F2937` | viền |
-| `--destructive` | `#DC2626` | `#EF4444` | xóa, lỗi, vắng không phép |
-| `--success` | `#16A34A` | `#22C55E` | có mặt, đã thanh toán |
-| `--warning` | `#D97706` | `#F59E0B` | đi muộn, thanh toán một phần, cảnh báo |
-| `--info` | `#0891B2` | `#06B6D4` | vắng có phép, thông tin |
+| `--destructive` | `#AF1D1D` | `#F37272` | xóa, lỗi, vắng không phép |
+| `--success` | `#0F6C31` | `#22C55E` | có mặt, đã thanh toán |
+| `--warning` | `#8B4C04` | `#F59E0B` | đi muộn, thanh toán một phần, cảnh báo |
+| `--info` | `#06667F` | `#06B6D4` | vắng có phép, thông tin |
+| `--destructive-foreground` | `#FFFFFF` | `#0A111E` | chữ trên nền destructive |
+| `--chart-1` … `--chart-5` | `#2563EB` `#D97706` `#059669` `#7C3AED` `#E11D48` | `#60A5FA` `#FBBF24` `#34D399` `#A78BFA` `#FB7185` | màu chuỗi biểu đồ báo cáo (`var(--chart-N)`) |
 
 - Font: **Be Vietnam Pro** (Google Fonts) 400/500/600; số dùng `tabular-nums` trong bảng.
 - Cỡ chữ: body 14px (desktop), 16px (mobile); tiêu đề trang 24px/600.
