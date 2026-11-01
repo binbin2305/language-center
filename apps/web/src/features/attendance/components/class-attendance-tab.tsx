@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { useClass } from '@/features/classes/hooks';
+import { useClass, useClassRoster } from '@/features/classes/hooks';
 import { AttendanceMatrix } from './attendance-matrix';
 import { QueryFrame } from './summary-view';
 import { useAttendanceRecords, useClassSessions } from '../hooks';
@@ -11,12 +11,13 @@ export default function ClassAttendanceTab() {
   // Sessions are fetched in ≤92-day windows covering the whole class span.
   const sessions = useClassSessions(id, cls.data?.startDate, cls.data?.endDate);
   const records = useAttendanceRecords({ classId: id });
-  const all = [cls, sessions, records];
+  const roster = useClassRoster(id, 1, 100);
+  const all = [cls, sessions, records, roster];
   const query = all.find((q) => q.isError) ?? { ...records, isPending: all.some((q) => q.isPending) };
   return (
     <div className="space-y-2">
-      <QueryFrame query={query} isEmpty={sessions.data?.length === 0 || records.data?.length === 0}>
-        <AttendanceMatrix sessions={sessions.data ?? []} records={records.data ?? []} />
+      <QueryFrame query={query} isEmpty={sessions.data?.length === 0}>
+        <AttendanceMatrix sessions={sessions.data ?? []} records={records.data ?? []} roster={roster.data?.data ?? []} />
       </QueryFrame>
     </div>
   );

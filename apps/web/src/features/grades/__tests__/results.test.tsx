@@ -59,6 +59,27 @@ describe('/results', () => {
     await waitFor(() => expect(seen.some((s) => s.includes(`classId=${CLASS_ID}`))).toBe(true));
   });
 
+  it('lọc khóa → courseId, lọc HV (ô tìm) → studentId (FR-GRD-05)', async () => {
+    const seen: string[] = [];
+    server.use(
+      http.get('*/api/v1/classes', classesPage),
+      http.get('*/api/v1/courses', () => HttpResponse.json(page([{ id: COURSE_ID, code: 'IELTS', name: 'IELTS Foundation' }]))),
+      http.get('*/api/v1/students', () => HttpResponse.json(page([{ id: S2, code: 'HV0002', fullName: 'Trần Bình' }]))),
+      http.get('*/api/v1/results', ({ request }) => {
+        seen.push(new URL(request.url).search);
+        return HttpResponse.json(page([result(S1, 'Nguyễn An')]));
+      }),
+    );
+    renderApp({ route: '/results', user: makeUser('ACADEMIC_STAFF') });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('combobox', { name: 'Khóa học' }, WAIT));
+    await user.click(await screen.findByRole('option', { name: /IELTS Foundation/ }));
+    await waitFor(() => expect(seen.some((s) => s.includes(`courseId=${COURSE_ID}`))).toBe(true));
+    await user.click(screen.getByRole('combobox', { name: 'Học viên' }));
+    await user.click(await screen.findByRole('option', { name: /Trần Bình/ }));
+    await waitFor(() => expect(seen.some((s) => s.includes(`studentId=${S2}`) && s.includes(`courseId=${COURSE_ID}`))).toBe(true));
+  });
+
   it('cột "Lớp" phân biệt hai dòng cùng HV ở hai lớp (mã - tên lớp)', async () => {
     server.use(
       http.get('*/api/v1/classes', classesPage),

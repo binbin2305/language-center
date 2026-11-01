@@ -170,6 +170,7 @@ describe('FR-ATT-05 tab Điểm danh của lớp (ma trận)', () => {
   it('hàng HV × cột buổi, ô có data-status theo trạng thái, buổi chưa điểm danh ô trống; gọi /sessions với khoảng ≤ 92 ngày', async () => {
     let range: [string | null, string | null] = [null, null];
     server.use(
+      http.get('*/api/v1/classes/:id/students', () => page([])),
       http.get('*/api/v1/classes/:id', () => HttpResponse.json({ data: cls })),
       http.get('*/api/v1/sessions', ({ request }) => {
         const q = new URL(request.url).searchParams;
@@ -200,6 +201,64 @@ describe('FR-ATT-05 tab Điểm danh của lớp (ma trận)', () => {
   });
 });
 
+describe('FR-ATT-05 ma trận theo roster', () => {
+  const S3 = '6500000000000000000e0003';
+  const rosterRow = (studentId: string, fullName: string) => ({
+    studentId,
+    enrollmentId: '6500000000000000000f0001',
+    studentCode: `HV-${studentId.slice(-2)}`,
+    fullName,
+    absenceRate: 0,
+    warning: false,
+  });
+  const session = (id: string, startAt: string): SessionDto => ({
+    ...base,
+    id,
+    classId: CLASS_ID,
+    roomId: '65000000000000000000a001',
+    teacherId: '65000000000000000000b001',
+    startAt,
+    endAt: startAt,
+    status: 'SCHEDULED',
+    cancelReason: null,
+    seriesId: null,
+    attendanceTakenAt: null,
+  });
+
+  it('hàng = roster ∪ HV có bản ghi; HV chưa có bản ghi hiện hàng trống', async () => {
+    const d1 = '6500000000000000000d0021';
+    server.use(
+      http.get('*/api/v1/classes/:id/students', () =>
+        page([rosterRow(S1, 'Nguyễn Văn A'), rosterRow(S3, 'Lê Văn C')]),
+      ),
+      http.get('*/api/v1/classes/:id', () => HttpResponse.json({ data: cls })),
+      http.get('*/api/v1/sessions', () => HttpResponse.json({ data: [session(d1, '2026-01-13T11:00:00.000Z')] })),
+      // S2 left the roster but has a record; S3 is on the roster without any record.
+      http.get('*/api/v1/attendance', () => page([rec(d1, S1, 'PRESENT', '2026-01-13T11:00:00.000Z'), rec(d1, S2, 'LATE', '2026-01-13T11:00:00.000Z')])),
+    );
+    renderApp({ user: makeUser('ACADEMIC_STAFF'), route: `/classes/${CLASS_ID}?tab=attendance` });
+    const matrix = await screen.findByRole('table', { name: 'Ma trận điểm danh' }, FIRST);
+    const c = within(matrix).getByText('Lê Văn C').closest('tr')!;
+    expect(within(c).getAllByRole('cell')[1]).toHaveAttribute('data-status', 'NONE');
+    expect(within(matrix).getByText('Trần Thị B').closest('tr')).not.toBeNull();
+    expect(within(within(matrix).getByText('Nguyễn Văn A').closest('tr')!).getAllByRole('cell')[1]).toHaveAttribute('data-status', 'PRESENT');
+  });
+
+  it('lớp chưa có bản ghi vẫn hiện cột buổi và hàng roster', async () => {
+    const d1 = '6500000000000000000d0031';
+    server.use(
+      http.get('*/api/v1/classes/:id/students', () => page([rosterRow(S1, 'Nguyễn Văn A')])),
+      http.get('*/api/v1/classes/:id', () => HttpResponse.json({ data: cls })),
+      http.get('*/api/v1/sessions', () => HttpResponse.json({ data: [session(d1, '2026-01-13T11:00:00.000Z')] })),
+      http.get('*/api/v1/attendance', () => page([])),
+    );
+    renderApp({ user: makeUser('ACADEMIC_STAFF'), route: `/classes/${CLASS_ID}?tab=attendance` });
+    const matrix = await screen.findByRole('table', { name: 'Ma trận điểm danh' }, FIRST);
+    expect(within(matrix).getAllByRole('columnheader')).toHaveLength(2);
+    expect(within(matrix).getByText('Nguyễn Văn A')).toBeInTheDocument();
+  });
+});
+
 describe('FR-ATT-05 ma trận lớp dài hơn 92 ngày', () => {
   it('lớp 150 ngày → /sessions gọi theo các khoảng liên tiếp ≤ 92 ngày, đủ buổi, không còn ghi chú cắt bớt', async () => {
     const ranges: Array<[string, string]> = [];
@@ -219,6 +278,7 @@ describe('FR-ATT-05 ma trận lớp dài hơn 92 ngày', () => {
     const early = at('2026-01-13T11:00:00.000Z', '6500000000000000000d0011');
     const late = at('2026-05-20T11:00:00.000Z', '6500000000000000000d0012');
     server.use(
+      http.get('*/api/v1/classes/:id/students', () => page([])),
       http.get('*/api/v1/classes/:id', () => HttpResponse.json({ data: { ...cls, startDate: '2026-01-05', endDate: '2026-06-03' } })),
       http.get('*/api/v1/sessions', ({ request }) => {
         const q = new URL(request.url).searchParams;
