@@ -181,6 +181,24 @@ describe('danh sách hóa đơn', () => {
     expect(within(foot).getByText('1.500.000 ₫')).toBeInTheDocument();
   });
 
+  it('FR-RPT-06: /fees?overdue=true (link từ dashboard) lọc sẵn quá hạn; bỏ chọn thì bỏ lọc (CR L-REPORTS-1)', async () => {
+    const requested: (string | null)[] = [];
+    server.use(
+      http.get('*/api/v1/invoices', ({ request }) => {
+        requested.push(new URL(request.url).searchParams.get('overdue'));
+        return page([invoice()]);
+      }),
+    );
+    renderApp({ route: '/fees?overdue=true', user: makeUser('MANAGER') });
+    await screen.findByTestId('fees-total', {}, T);
+    expect(requested[0]).toBe('true');
+    const box = screen.getByRole('checkbox', { name: 'Quá hạn' });
+    expect(box).toBeChecked();
+    await userEvent.click(box);
+    expect(box).not.toBeChecked();
+    await waitFor(() => expect(requested.at(-1)).toBeNull());
+  });
+
   it('GV ở /fees: chỉ cột trạng thái + còn nợ', async () => {
     server.use(
       http.get('*/api/v1/invoices', () =>

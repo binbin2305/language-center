@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { can, ALL_INVOICE_STATUSES } from '@lc/shared';
 import { EntitySelect } from '@/components/common/entity-select';
 import { FilterBar } from '@/components/common/filter-bar';
@@ -21,7 +21,19 @@ export default function FeesPage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [classId, setClassId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
-  const [overdue, setOverdue] = useState(false);
+  // `?overdue=true` (dashboard card link) is the source of truth for the overdue filter.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const overdue = searchParams.get('overdue') === 'true';
+  const setOverdue = (on: boolean) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (on) next.set('overdue', 'true');
+        else next.delete('overdue');
+        return next;
+      },
+      { replace: true },
+    );
   const [range, setRange] = useState<DateRangeValue>({ from: null, to: null });
   const filters: InvoiceListParams = {
     studentId: studentId ?? undefined,
