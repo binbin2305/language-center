@@ -144,6 +144,14 @@ describe('seed:demo qua service thật + seed:large (W3-L3, D28)', () => {
     expect(await m().Session.countDocuments({ startAt: { $gte: today, $lt: startOfVnDay(addVnDays(DEMO_TODAY, 1)) } })).toBeGreaterThan(0);
   });
 
+  it('FR-GRD-01: có bài đánh giá chưa confirm đã tới hạn (heldOn ≤ demo today) ở lớp đang học → GV thấy "Bài cần nhập điểm"', async () => {
+    const ongoing = await m().Class.find({ status: ClassStatus.ONGOING }, { _id: 1 }).lean();
+    const due = await m()
+      .Assessment.find({ classId: { $in: ongoing.map((c) => c._id) }, confirmedAt: null, heldOn: { $lt: startOfVnDay(addVnDays(DEMO_TODAY, 1)) } })
+      .lean();
+    expect(due.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('FR-ADM-04: HV demo đăng nhập được (mã HV và Password1), nhân viên demo cũng vậy, không bị buộc đổi mật khẩu', async () => {
     for (const username of ['HV202600001', 'HV202600060', 'manager@center.local', 'staff1@center.local', 'teacher1@center.local']) {
       const res = await login(username);

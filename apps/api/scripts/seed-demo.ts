@@ -374,6 +374,8 @@ export async function runSeedDemo(app: INestApplicationContext, opts: SeedDemoOp
     assessment(cls, 'Kỹ năng nói', AssessmentType.SKILL, 20, '2026-10-28', true);
     assessment(cls, 'Giữa kỳ', AssessmentType.MIDTERM, 30, '2026-11-11', false, '2026-10-30');
   }
+  // Past-due, not yet confirmed: teacher1 sees it under "Bài cần nhập điểm" on demo today.
+  assessment(ongoing[0], 'Kiểm tra nhanh', AssessmentType.QUIZ, 10, '2026-10-31', false);
   // Planned class: seated, invoices not yet due and unpaid; sessions already scheduled.
   lifecycle(planned, { assignOn: '2026-10-20', scheduleOn: '2026-10-21', paidOn: '2026-10-22', payPlan: () => 'UNPAID', start: false });
 
