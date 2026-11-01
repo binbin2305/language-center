@@ -5,6 +5,7 @@ import { ErrorState } from '@/components/common/error-state';
 import { MoneyText } from '@/components/common/money-text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatVndCompact } from '../format';
 import { ReportChart } from './report-chart';
 import { StatCard } from './stat-card';
 
@@ -174,7 +175,7 @@ export function FinanceContent({ q }: { q: QueryLike<FinanceReportDto> }) {
               { key: 'revenue', name: 'Doanh thu', color: BLUE },
               { key: 'outstanding', name: 'Còn nợ', color: AMBER },
             ]}
-            format={(n) => `${Math.round(n / 1000).toLocaleString('vi-VN')}k`}
+            format={formatVndCompact}
           />
           <Grid
             heads={['Nhóm', 'Doanh thu', 'Tổng phải thu', 'Còn nợ', 'Quá hạn', 'Giảm giá']}
