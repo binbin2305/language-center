@@ -1,11 +1,11 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { addVnDays, attendanceRate, vnDay } from '@lc/shared';
+import { addVnDays, attendanceRate } from '@lc/shared';
 import { PageHeader } from '@/components/common/page-header';
 import { MoneyText } from '@/components/common/money-text';
 import { ConfirmClassBanner } from '@/features/enrollments';
 import { ApiError } from '@/lib/api';
 import { formatDate, formatTime } from '@/lib/format';
+import { useVnToday } from '@/lib/use-vn-today';
 import { errorMessage } from '@/lib/error-messages';
 import { HomeBlock } from '../components/home-block';
 import { useMyAttendanceSummary, useMyInvoices, useMyResults, useSessionsBetween } from '../hooks';
@@ -14,8 +14,8 @@ const Big = ({ children }: { children: React.ReactNode }) => <p className="text-
 const Muted = ({ children }: { children: React.ReactNode }) => <p className="text-sm text-muted-foreground">{children}</p>;
 
 export default function StudentHome() {
-  const [now] = useState(() => new Date());
-  const today = vnDay(now);
+  const today = useVnToday();
+  const now = new Date();
   const sessions = useSessionsBetween(today, addVnDays(today, 14));
   const attendance = useMyAttendanceSummary();
   const results = useMyResults();
