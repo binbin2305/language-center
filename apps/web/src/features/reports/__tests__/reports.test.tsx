@@ -1,9 +1,20 @@
+import { cloneElement, type ReactElement } from 'react';
 import { http, HttpResponse } from 'msw';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from '../../../../test/msw/server';
 import { renderApp } from '../../../../test/render';
 import { makeUser } from '../../../../test/users';
+
+// jsdom has no layout: give recharts a fixed-size container so it neither warns about 0x0 nor skips rendering.
+vi.mock('recharts', async (orig) => {
+  const actual = await orig<typeof import('recharts')>();
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }: { children: ReactElement }) =>
+      cloneElement(children, { width: 600, height: 240 } as object),
+  };
+});
 
 const T = { timeout: 10_000 };
 const COURSE = '65000000000000000000c001';
@@ -42,7 +53,7 @@ describe('báo cáo - bộ lọc (FR-RPT-01)', () => {
   it('tab Tuyển sinh mặc định gọi /reports/admissions?from=<đầu tháng>&to=<hôm nay>', async () => {
     const calls = spy('*/api/v1/reports/admissions', admissions);
     open();
-    await screen.findByText('IELTS Foundation', {}, T);
+    await screen.findByRole('cell', { name: 'IELTS Foundation' }, T);
     expect(calls[0].get('from')).toBe('2026-11-01');
     expect(calls[0].get('to')).toBe('2026-11-18');
   });
@@ -50,7 +61,7 @@ describe('báo cáo - bộ lọc (FR-RPT-01)', () => {
   it('đổi preset "Quý này" → from = ngày đầu quý', async () => {
     const calls = spy('*/api/v1/reports/admissions', admissions);
     open();
-    await screen.findByText('IELTS Foundation', {}, T);
+    await screen.findByRole('cell', { name: 'IELTS Foundation' }, T);
     await userEvent.click(screen.getByRole('button', { name: 'Quý này' }));
     await waitFor(() => expect(calls.at(-1)!.get('from')).toBe('2026-10-01'));
     expect(calls.at(-1)!.get('to')).toBe('2026-11-18');
@@ -61,7 +72,7 @@ describe('báo cáo - bộ lọc (FR-RPT-01)', () => {
   it('tùy chọn khoảng → gửi đúng from/to', async () => {
     const calls = spy('*/api/v1/reports/admissions', admissions);
     open();
-    await screen.findByText('IELTS Foundation', {}, T);
+    await screen.findByRole('cell', { name: 'IELTS Foundation' }, T);
     await userEvent.click(screen.getByRole('button', { name: 'Tùy chọn' }));
     fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-03-05' } });
     fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-04-10' } });
@@ -82,7 +93,7 @@ describe('báo cáo - bộ lọc (FR-RPT-01)', () => {
       ),
     );
     open();
-    await screen.findByText('IELTS Foundation', {}, T);
+    await screen.findByRole('cell', { name: 'IELTS Foundation' }, T);
     expect(calls[0].get('courseId')).toBeNull();
     await userEvent.click(screen.getByRole('combobox', { name: 'Lọc theo khóa học' }));
     await userEvent.click(await screen.findByRole('option', { name: /IELTS-F/ }, T));
@@ -119,7 +130,7 @@ describe('báo cáo - xuất file (FR-RPT-05)', () => {
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     open();
-    await screen.findByText('IELTS Foundation', {}, T);
+    await screen.findByRole('cell', { name: 'IELTS Foundation' }, T);
     await userEvent.click(screen.getByRole('button', { name: 'Xuất Excel' }));
     await waitFor(() => expect(hits).toHaveLength(1));
     expect([hits[0].get('format'), hits[0].get('from'), hits[0].get('to')]).toEqual(['xlsx', '2026-11-01', '2026-11-18']);
@@ -147,13 +158,13 @@ describe('báo cáo - các tab', () => {
     open();
     expect(await screen.findByRole('table', {}, T)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: 'Chuyên cần' }));
-    expect(await screen.findByText('LOP-A1', {}, T)).toBeInTheDocument();
+    expect(await screen.findByRole('cell', { name: 'LOP-A1' }, T)).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: 'Học tập' }));
-    expect(await screen.findByText('LOP-H1', {}, T)).toBeInTheDocument();
+    expect(await screen.findByRole('cell', { name: 'LOP-H1' }, T)).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: 'Tài chính' }));
-    expect(await screen.findByText('Tháng 11/2026', {}, T)).toBeInTheDocument();
+    expect(await screen.findByRole('cell', { name: 'Tháng 11/2026' }, T)).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 
