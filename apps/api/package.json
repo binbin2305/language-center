@@ -12,9 +12,13 @@
     "dev:mongo": "ts-node scripts/dev-mongo.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "seed:demo": "ts-node scripts/seed-demo.ts",
-    "seed:large": "ts-node scripts/seed-large.ts"
+    "seed:large": "ts-node scripts/seed-large.ts",
+    "test:security": "jest --config jest-security.config.ts --runInBand",
+    "test:coverage": "jest --coverage --passWithNoTests",
+    "perf": "ts-node test/perf/p95.ts"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "7.3.4",
     "@lc/shared": "workspace:^",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",

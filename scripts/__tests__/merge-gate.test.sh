@@ -149,5 +149,63 @@ run L-FEES --ownership-only
 assert "lane editing common/contracts rejected" 1 "$RC"
 assert_contains "contract offender listed" "$OUT" "apps/api/src/common/contracts/invoice-creator.ts"
 
+# 13. Wave 4 ownership (D32): e2e/a11y belongs to L-HARDENING, not L-E2E; docs/** no longer L-HARDENING
+git checkout -q main
+git checkout -q -b lane/L-E2E
+mkdir -p e2e/a11y e2e/flows
+echo a > e2e/a11y/x.spec.ts
+git add -A && git commit -qm "a11y from e2e lane"
+run L-E2E --ownership-only
+assert "L-E2E editing e2e/a11y/x.spec.ts rejected" 1 "$RC"
+assert_contains "a11y offender listed" "$OUT" "e2e/a11y/x.spec.ts"
+git checkout -q main
+git checkout -q -b lane/L-E2E-OK
+mkdir -p e2e/flows
+echo f > e2e/flows/x01-admissions.spec.ts
+git add -A && git commit -qm "flow"
+git branch -q -f lane/L-E2E lane/L-E2E-OK
+run L-E2E --ownership-only
+assert "L-E2E editing e2e/flows accepted" 0 "$RC"
+
+git checkout -q main
+git checkout -q -b lane/L-HARDENING
+mkdir -p e2e/a11y apps/api/src/openapi
+echo a > e2e/a11y/x.spec.ts
+echo r >> README.md
+echo o > apps/api/src/openapi/a.ts
+git add -A && git commit -qm "hardening files"
+run L-HARDENING --ownership-only
+assert "L-HARDENING editing e2e/a11y/x.spec.ts, README.md, apps/api/src/openapi/a.ts accepted" 0 "$RC"
+git checkout -q main
+git checkout -q -b lane/L-HARDENING-DOCS
+mkdir -p docs/superpowers
+echo d > docs/superpowers/x.md
+git add -A && git commit -qm "docs outside hardening"
+git branch -q -f lane/L-HARDENING lane/L-HARDENING-DOCS
+run L-HARDENING --ownership-only
+assert "L-HARDENING editing docs/superpowers/x.md rejected" 1 "$RC"
+assert_contains "docs offender listed" "$OUT" "docs/superpowers/x.md"
+
+# 14. L-LEAD may edit Lead files but not the two W4 lanes' files
+git checkout -q main
+git checkout -q -b lane/L-LEAD
+mkdir -p apps/api/src/common/scope
+echo s > apps/api/src/common/scope/scope.service.ts
+echo b >> packages/shared/src/enums.ts
+git add -A && git commit -qm "lead files"
+run L-LEAD --ownership-only
+assert "L-LEAD editing common/scope + shared accepted" 0 "$RC"
+mkdir -p e2e/flows
+echo f > e2e/flows/x01.spec.ts
+git add -A && git commit -qm "lead touches e2e"
+run L-LEAD --ownership-only
+assert "L-LEAD editing e2e/flows rejected" 1 "$RC"
+assert_contains "lead offender listed" "$OUT" "e2e/flows/x01.spec.ts"
+
+# 15. full gate runs the security suite after test:e2e
+GATE="$(cat "$SRC/merge-gate.sh")"
+assert_contains "gate runs pnpm test:security after pnpm test:e2e" "$GATE" "pnpm test:e2e
+pnpm test:security"
+
 if [ "$FAILS" -ne 0 ]; then echo "$FAILS assertion(s) failed"; exit 1; fi
 echo "all merge-gate assertions passed"

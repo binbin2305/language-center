@@ -30,13 +30,15 @@ import { DEMO_PASSWORD } from './seed-demo';
  * enrollments have classHistory and a class-stamped ENROLLED history entry, attendance carries
  * classId/enrollmentId, invoices satisfy the BACKEND_SCHEMA §2.16 invariants, currentSize = seats.
  * Each class gets its own teacher/room slot so the schedule has no conflicts.
- * Usage: SEED_STUDENTS=5000 SEED_CLASSES=200 pnpm --filter api seed:large
+ * Usage: SEED_STUDENTS=5000 SEED_CLASSES=200 [SEED_SESSIONS_PER_CLASS=16] pnpm --filter api seed:large
  */
 export interface SeedLargeOptions {
   students: number;
   classes: number;
   /** VN day the data is relative to (the CLI passes ClockService.now()). */
   today: string;
+  /** Sessions per class; default course.totalSessions (16). CLI: SEED_SESSIONS_PER_CLASS. */
+  sessionsPerClass?: number;
 }
 
 const SLOTS: { weekdays: number[]; time: [string, string] }[] = [];
@@ -85,12 +87,24 @@ export async function runSeedLarge(conn: Connection, opts: SeedLargeOptions): Pr
   await m('Room').insertMany(rooms);
 
   const start = addVnDays(today, -28);
-  const end = addVnDays(today, 27);
+  const perClass = opts.sessionsPerClass ?? course.totalSessions;
+  if (!Number.isInteger(perClass) || perClass < 1) throw new Error('sessionsPerClass must be a positive integer');
+  // A class takes the first `perClass` days of its slot from `start` and runs to today+27 or its last session.
+  const slotDays = SLOTS.map((slot) => {
+    const days: string[] = [];
+    for (let d = start; days.length < perClass; d = addVnDays(d, 1)) if (slot.weekdays.includes(weekdayOf(d))) days.push(d);
+    return days;
+  });
+  const minEnd = addVnDays(today, 27);
+  const endOf = (c: number) => {
+    const days = slotDays[c % SLOTS.length];
+    return days[days.length - 1] > minEnd ? days[days.length - 1] : minEnd;
+  };
   const capacity = Math.min(100, Math.max(20, Math.ceil(opts.students / opts.classes)));
   const classes = Array.from({ length: opts.classes }, (_, c) => ({
     _id: id(), code: `L-${pad(c + 1, 4)}`, name: `Lớp dữ liệu lớn ${c + 1}`, courseId: course._id, level: 'A1',
     teacherId: teachers[Math.floor(c / SLOTS.length)]._id, defaultRoomId: rooms[Math.floor(c / SLOTS.length)]._id,
-    maxCapacity: capacity, currentSize: 0, startDate: fromDateOnly(start), endDate: fromDateOnly(end), status: ClassStatus.ONGOING,
+    maxCapacity: capacity, currentSize: 0, startDate: fromDateOnly(start), endDate: fromDateOnly(endOf(c)), status: ClassStatus.ONGOING,
     createdBy: actor,
   }));
 
@@ -146,8 +160,7 @@ export async function runSeedLarge(conn: Connection, opts: SeedLargeOptions): Pr
   const attendances: Record<string, unknown>[] = [];
   classes.forEach((cls, c) => {
     const slot = SLOTS[c % SLOTS.length];
-    for (let d = start; d <= end; d = addVnDays(d, 1)) {
-      if (!slot.weekdays.includes(weekdayOf(d))) continue;
+    for (const d of slotDays[c % SLOTS.length]) {
       const startAt = vnDateTime(d, slot.time[0]);
       const endAt = vnDateTime(d, slot.time[1]);
       const taken = startAt < todayStart;
@@ -184,10 +197,11 @@ function envInt(name: string, fallback: number): number {
 async function main(): Promise<void> {
   const students = envInt('SEED_STUDENTS', 5000);
   const classes = envInt('SEED_CLASSES', 200);
+  const sessionsPerClass = process.env.SEED_SESSIONS_PER_CLASS ? envInt('SEED_SESSIONS_PER_CLASS', 16) : undefined;
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
   try {
     const today = vnDay(app.get(ClockService).now());
-    const res = await runSeedLarge(app.get<Connection>(getConnectionToken()), { students, classes, today });
+    const res = await runSeedLarge(app.get<Connection>(getConnectionToken()), { students, classes, sessionsPerClass, today });
     console.log(res.status === 'created' ? `Large data created: ${students} students, ${classes} classes.` : 'Large data already present (course LARGE / classes L-*). Use seed:demo --reset to clear it.');
   } finally {
     await app.close();

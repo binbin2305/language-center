@@ -2,9 +2,12 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-/** Persistent single-node replica set for local dev without Docker. Data lives in `.mongo-data/` at the repo root. */
+/**
+ * Persistent single-node replica set for local dev without Docker. Data lives in `.mongo-data/` at the repo root,
+ * or in MONGO_DATA_DIR (e2e/run.sh passes a fresh temp dir, D29). Port: MONGO_DEV_PORT (default 27017).
+ */
 async function main(): Promise<void> {
-  const dbPath = resolve(__dirname, '../../../.mongo-data');
+  const dbPath = process.env.MONGO_DATA_DIR ? resolve(process.env.MONGO_DATA_DIR) : resolve(__dirname, '../../../.mongo-data');
   mkdirSync(dbPath, { recursive: true });
   const rs = await MongoMemoryReplSet.create({
     replSet: { count: 1, storageEngine: 'wiredTiger', dbName: 'language-center' },

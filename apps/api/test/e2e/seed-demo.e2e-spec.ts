@@ -14,7 +14,7 @@ import { Connection } from 'mongoose';
 import { DEMO_PASSWORD, DEMO_TODAY, runSeedDemo } from '../../scripts/seed-demo';
 import { runSeedLarge } from '../../scripts/seed-large';
 import { overdueFilter } from '../../src/modules/fees/fees.mapper';
-import { models } from '../factories';
+import { makeUser, models } from '../factories';
 import { assertInvoiceInvariants } from '../factories/fees.extra';
 import { createTestApp, TestApp } from '../helpers/test-app';
 
@@ -194,5 +194,40 @@ describe('seed:demo qua service thật + seed:large (W3-L3, D28)', () => {
     expect(await runSeedLarge(t.conn, { students: 50, classes: 5, today: DEMO_TODAY })).toMatchObject({ status: 'exists' });
     await m().Class.deleteMany({ code: /^L-/ });
     expect(await runSeedLarge(t.conn, { students: 50, classes: 5, today: DEMO_TODAY })).toMatchObject({ status: 'exists' });
+  });
+});
+
+describe('seed:large sessionsPerClass (W4 D36)', () => {
+  let t: TestApp;
+
+  beforeAll(async () => {
+    t = await createTestApp();
+    await makeUser(t.conn, { role: Role.ADMIN });
+  });
+  afterAll(async () => {
+    await t.close();
+  });
+
+  it('NFR-02 runSeedLarge(…, { students: 20, classes: 2, sessionsPerClass: 3 }) → mỗi lớp L-* có đúng 3 session', async () => {
+    await runSeedLarge(t.conn, { students: 20, classes: 2, sessionsPerClass: 3, today: DEMO_TODAY });
+    const m = models(t.conn);
+    const large = await m.Class.find({ code: /^L-/ }).lean();
+    expect(large).toHaveLength(2);
+    for (const c of large) {
+      expect({ code: c.code, sessions: await m.Session.countDocuments({ classId: c._id }) }).toEqual({ code: c.code, sessions: 3 });
+    }
+  });
+
+  it('NFR-02 sessionsPerClass lớn hơn 16 → lớp kéo dài endDate để mọi buổi nằm trong [startDate, endDate]', async () => {
+    await t.conn.dropDatabase();
+    await makeUser(t.conn, { role: Role.ADMIN });
+    await runSeedLarge(t.conn, { students: 20, classes: 2, sessionsPerClass: 40, today: DEMO_TODAY });
+    const m = models(t.conn);
+    for (const c of await m.Class.find({ code: /^L-/ }).lean()) {
+      const sessions = await m.Session.find({ classId: c._id }).sort({ startAt: 1 }).lean();
+      expect(sessions.length).toBe(40);
+      expect(vnDay(sessions[0].startAt) >= vnDay(c.startDate)).toBe(true);
+      expect(vnDay(sessions[39].startAt)).toBe(vnDay(c.endDate));
+    }
   });
 });

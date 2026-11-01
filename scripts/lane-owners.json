@@ -1,5 +1,5 @@
 {
-  "_comment": "Lane -> owned path globs (TASK.md \"Sở hữu\" + RULES.md §2). \"!\" prefix = exclusion. Always-allowed paths live in merge-gate.sh.",
+  "_comment": "Lane -> owned path globs (TASK.md \"Sở hữu\" + RULES.md §2). \"!\" prefix = exclusion. Always-allowed paths live in merge-gate.sh. W4 (D32): L-LEAD = everything except the L-E2E / L-HARDENING paths.",
   "L-CATALOG": [
     "apps/api/src/modules/users/**",
     "apps/api/test/e2e/users*.e2e-spec.ts",
@@ -103,14 +103,31 @@
   ],
   "L-E2E": [
     "e2e/**",
+    "!e2e/a11y/**",
     "apps/api/test/factories/l-e2e.extra.ts",
     "apps/api/test/factories/e2e.extra.ts"
   ],
   "L-HARDENING": [
     "apps/api/test/security/**",
     "apps/api/test/perf/**",
-    "docs/**",
+    "apps/api/src/openapi/**",
+    "e2e/a11y/**",
+    "README.md",
+    "docs/hardening/**",
     "apps/api/test/factories/l-hardening.extra.ts",
     "apps/api/test/factories/hardening.extra.ts"
+  ],
+  "L-LEAD": [
+    "**",
+    "!e2e/**",
+    "!apps/api/test/security/**",
+    "!apps/api/test/perf/**",
+    "!apps/api/src/openapi/**",
+    "!README.md",
+    "!docs/hardening/**",
+    "!apps/api/test/factories/l-e2e.extra.ts",
+    "!apps/api/test/factories/e2e.extra.ts",
+    "!apps/api/test/factories/l-hardening.extra.ts",
+    "!apps/api/test/factories/hardening.extra.ts"
   ]
 }

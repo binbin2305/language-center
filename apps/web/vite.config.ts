@@ -12,7 +12,8 @@ export default defineConfig({
       { find: /^@lc\/shared$/, replacement: path.resolve(__dirname, '../../packages/shared/src/index.ts') },
     ],
   },
-  server: { port: 5173, proxy: { '/api': 'http://localhost:3000' } },
+  // API_PROXY_TARGET lets e2e (vite preview on :4173) reach the api on :3100 (D29); preview inherits server.proxy.
+  server: { port: 5173, proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:3000' } },
   test: {
     environment: 'jsdom',
     globals: true,

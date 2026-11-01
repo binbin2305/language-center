@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { HttpErrorFilter } from './common/filters/http-exception.filter';
 import { loadEnv } from './config/env';
+import { setupOpenApi } from './openapi/setup-openapi';
 
 export function setupApp(app: NestExpressApplication): void {
   // Behind a reverse proxy set TRUST_PROXY so req.ip (login rate limit) is the client, not the proxy.
@@ -15,4 +16,5 @@ export function setupApp(app: NestExpressApplication): void {
     origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
     credentials: true,
   });
+  setupOpenApi(app, loadEnv());
 }

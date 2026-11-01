@@ -13,9 +13,13 @@
     "lint": "eslint . --max-warnings 0",
     "typecheck": "pnpm -r typecheck",
     "test:scripts": "bash scripts/__tests__/merge-gate.test.sh",
-    "fr-coverage": "bash scripts/fr-coverage.sh"
+    "fr-coverage": "bash scripts/fr-coverage.sh",
+    "test:security": "pnpm -r --if-present test:security",
+    "coverage": "pnpm --filter api test:coverage && pnpm --filter web test:coverage",
+    "e2e": "bash e2e/run.sh"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
     "@eslint/js": "^9.17.0",
     "@playwright/test": "^1.64.1",
     "eslint": "^9.17.0",

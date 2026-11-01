@@ -70,4 +70,5 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm test:e2e
+pnpm test:security
 echo "merge gate: green"
