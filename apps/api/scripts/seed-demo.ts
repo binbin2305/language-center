@@ -1,79 +1,61 @@
 import '../src/config/load-dotenv';
 import 'reflect-metadata';
-import { connect, Connection, connection, disconnect, Model, Types } from 'mongoose';
+import { INestApplicationContext } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { getConnectionToken } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
 import {
   AssessmentType,
+  ClassDto,
+  CourseDto,
+  RoomDto,
   AttendanceStatus,
   ClassStatus,
   EnrollmentStatus,
-  InvoiceKind,
-  InvoiceStatus,
-  LeadStatus,
-  NotificationRefType,
-  NotificationType,
+  Gender,
   PaymentMethod,
   Role,
+  SessionStatus,
   addVnDays,
-  fromDateOnly,
-  toDateOnly,
+  startOfVnDay,
   vnDateTime,
 } from '@lc/shared';
-import { loadEnv } from '../src/config/env';
+import { AppModule } from '../src/app.module';
+import { AuthUser } from '../src/common/auth/auth-user';
+import { ClockService } from '../src/common/clock/clock.service';
 import { Models } from '../src/database/models';
-import { AssessmentSchema } from '../src/database/schemas/assessment.schema';
-import { AttendanceSchema } from '../src/database/schemas/attendance.schema';
-import { ClassSchema } from '../src/database/schemas/class.schema';
-import { CounterSchema } from '../src/database/schemas/counter.schema';
-import { CourseSchema } from '../src/database/schemas/course.schema';
-import { EnrollmentSchema } from '../src/database/schemas/enrollment.schema';
-import { GradeSchema } from '../src/database/schemas/grade.schema';
-import { InvoiceSchema } from '../src/database/schemas/invoice.schema';
-import { LeadSchema } from '../src/database/schemas/lead.schema';
-import { NotificationSchema } from '../src/database/schemas/notification.schema';
-import { PaymentSchema } from '../src/database/schemas/payment.schema';
-import { PlacementTestSchema } from '../src/database/schemas/placement-test.schema';
-import { RoomSchema } from '../src/database/schemas/room.schema';
-import { SessionSchema } from '../src/database/schemas/session.schema';
-import { StudentSchema } from '../src/database/schemas/student.schema';
-import { UserSchema } from '../src/database/schemas/user.schema';
 import { hashPassword } from '../src/modules/auth/password';
+import { ConvertService } from '../src/modules/admissions/convert.service';
+import { LeadsService } from '../src/modules/admissions/leads.service';
+import { AttendanceService } from '../src/modules/attendance/attendance.service';
+import { ClassesService } from '../src/modules/classes/classes.service';
+import { CoursesService } from '../src/modules/courses/courses.service';
+import { AssignmentService } from '../src/modules/enrollments/assignment.service';
+import { EnrollmentsService } from '../src/modules/enrollments/enrollments.service';
+import { PaymentsService } from '../src/modules/fees/payments.service';
+import { GradesService } from '../src/modules/grades/grades.service';
+import { PlacementService } from '../src/modules/placement/placement.service';
+import { RoomsService } from '../src/modules/rooms/rooms.service';
+import { ScheduleService } from '../src/modules/schedule/schedule.service';
+import { UsersService } from '../src/modules/users/users.service';
 
 /**
- * Dev-only demo data (BACKEND_SCHEMA §4). Inserts documents directly, so it does not
- * exercise business services — Wave 3 (W3-L3) replaces it with a service-driven seed.
+ * Demo data (BACKEND_SCHEMA §4, D28) built by calling the real services inside a Nest application
+ * context while a controlled clock walks from June 2026 to DEMO_TODAY: leads are converted, placed,
+ * assigned (classHistory + class-stamped history, InvoiceCreator), sessions are bulk-created,
+ * attendance and grades are taken after the fact, payments recorded, one class finished.
+ * Only the demo passwords are set directly (the services issue random temporary passwords).
  * Usage: pnpm --filter api seed:demo [--reset]
  */
 export const DEMO_PASSWORD = 'Password1';
-const TODAY = '2026-10-27';
+/** A Monday: four weeks of classes are in the past, sessions run today. */
+export const DEMO_TODAY = '2026-11-02';
+const ADMIN_EMAIL = 'admin@center.local';
 
-const SCHEMAS = {
-  User: UserSchema,
-  Course: CourseSchema,
-  Room: RoomSchema,
-  Lead: LeadSchema,
-  Student: StudentSchema,
-  Counter: CounterSchema,
-  Enrollment: EnrollmentSchema,
-  PlacementTest: PlacementTestSchema,
-  Class: ClassSchema,
-  Session: SessionSchema,
-  Attendance: AttendanceSchema,
-  Assessment: AssessmentSchema,
-  Grade: GradeSchema,
-  Invoice: InvoiceSchema,
-  Payment: PaymentSchema,
-  Notification: NotificationSchema,
-} as const;
-
-type ModelMap = { -readonly [K in keyof typeof SCHEMAS]: Model<Record<string, unknown>> };
-
-function modelsFor(conn: Connection): ModelMap {
-  const out = {} as ModelMap;
-  for (const [key, schema] of Object.entries(SCHEMAS)) {
-    const name = Models[key as keyof typeof Models];
-    out[key as keyof ModelMap] = conn.models[name] ?? conn.model(name, schema);
-  }
-  return out;
+export interface SeedDemoOptions {
+  reset?: boolean;
+  /** Clock to drive (tests pass their FakeClock); otherwise the app's ClockService is patched. */
+  clock?: { set(d: Date): void };
 }
 
 /** Deterministic PRNG so every run produces the same data. */
@@ -88,36 +70,101 @@ function rng(seed: number): () => number {
 const LAST = ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Huỳnh', 'Phan', 'Vũ', 'Võ', 'Đặng', 'Bùi', 'Đỗ'];
 const MIDDLE = ['Văn', 'Thị', 'Minh', 'Ngọc', 'Thanh', 'Đức', 'Thu', 'Quang', 'Hải', 'Bảo'];
 const FIRST = ['An', 'Bình', 'Châm', 'Dũng', 'Giang', 'Hà', 'Huy', 'Khánh', 'Linh', 'Mai', 'Nam', 'Phương', 'Quân', 'Sơn', 'Trang', 'Tuấn', 'Vy', 'Yến'];
+const ADDRESSES = ['Cầu Giấy, Hà Nội', 'Đống Đa, Hà Nội', 'Thanh Xuân, Hà Nội', 'Hai Bà Trưng, Hà Nội', 'Hoàng Mai, Hà Nội'];
 
-const id = () => new Types.ObjectId();
 const pad = (n: number, w: number) => String(n).padStart(w, '0');
-const day = (d: string) => fromDateOnly(d);
+const at = (d: string, hm: string) => vnDateTime(d, hm);
+const str = (x: Types.ObjectId | string) => String(x);
 
-async function reset(m: ModelMap): Promise<void> {
-  for (const [key, model] of Object.entries(m)) {
-    if (key === 'User') await model.deleteMany({ role: { $ne: Role.ADMIN } });
-    else await model.deleteMany({});
+/** Timed actions run in time order (ties in insertion order); an action may schedule later ones. */
+class Timeline {
+  private items: { at: Date; seq: number; run: () => Promise<void> }[] = [];
+  private seq = 0;
+  constructor(private readonly setNow: (d: Date) => void) {}
+  add(when: Date, run: () => Promise<void>): void {
+    this.items.push({ at: when, seq: this.seq++, run });
+  }
+  async drain(): Promise<void> {
+    while (this.items.length) {
+      this.items.sort((a, b) => a.at.getTime() - b.at.getTime() || a.seq - b.seq);
+      const next = this.items.shift()!;
+      this.setNow(next.at);
+      await next.run();
+    }
   }
 }
 
-export async function seedDemo(conn: Connection, opts: { reset?: boolean } = {}): Promise<'created' | 'exists'> {
-  const m = modelsFor(conn);
-  if (opts.reset) await reset(m);
-  if (await m.User.exists({ username: 'manager@center.local' })) return 'exists';
+function clockSetter(app: INestApplicationContext, given?: { set(d: Date): void }): (d: Date) => void {
+  if (given) return (d) => given.set(d);
+  const clock = app.get(ClockService);
+  let current = clock.now();
+  // The app's single ClockService instance also drives Mongoose timestamps (clockHolder).
+  clock.now = () => new Date(current.getTime());
+  return (d) => {
+    current = new Date(d.getTime());
+  };
+}
+
+async function resetDemo(conn: Connection): Promise<void> {
+  for (const [name, coll] of Object.entries(conn.collections)) {
+    if (name === 'settings') continue;
+    if (name === conn.models[Models.User].collection.collectionName) await coll.deleteMany({ role: { $ne: Role.ADMIN } });
+    else await coll.deleteMany({});
+  }
+}
+
+export async function runSeedDemo(app: INestApplicationContext, opts: SeedDemoOptions = {}): Promise<{ status: 'created' | 'exists' }> {
+  const conn = app.get<Connection>(getConnectionToken());
+  const setNow = clockSetter(app, opts.clock);
+  const today = at(DEMO_TODAY, '09:00');
+  if (opts.reset) await resetDemo(conn);
+  const User = conn.models[Models.User] as Model<{ role: string; username: string }>;
+  if (await User.exists({ username: 'manager@center.local' })) {
+    setNow(today);
+    return { status: 'exists' };
+  }
+
+  const svc = {
+    users: app.get(UsersService),
+    courses: app.get(CoursesService),
+    rooms: app.get(RoomsService),
+    leads: app.get(LeadsService),
+    convert: app.get(ConvertService),
+    placement: app.get(PlacementService),
+    classes: app.get(ClassesService),
+    enrollments: app.get(EnrollmentsService),
+    assignment: app.get(AssignmentService),
+    schedule: app.get(ScheduleService),
+    attendance: app.get(AttendanceService),
+    grades: app.get(GradesService),
+    payments: app.get(PaymentsService),
+  };
+  const Session = conn.models[Models.Session] as Model<{ _id: Types.ObjectId; classId: Types.ObjectId; teacherId: Types.ObjectId; startAt: Date; endAt: Date; status: string }>;
+  const Enrollment = conn.models[Models.Enrollment] as Model<{ _id: Types.ObjectId; studentId: Types.ObjectId; classId: Types.ObjectId | null; status: string; invoiceId: Types.ObjectId | null }>;
 
   const rand = rng(2026);
   const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)];
-  const hash = await hashPassword(DEMO_PASSWORD);
+  const tl = new Timeline(setNow);
+  const demoUserIds: Types.ObjectId[] = [];
 
-  // --- Staff accounts -------------------------------------------------------
-  const staff = (email: string, fullName: string, role: Role, extra: Record<string, unknown> = {}) => ({
-    _id: id(), username: email, email, fullName, role, passwordHash: hash, mustChangePassword: false, ...extra,
-  });
-  const manager = staff('manager@center.local', 'Trần Thu Hà', Role.MANAGER);
-  const staffs = [
-    staff('staff1@center.local', 'Lê Minh Anh', Role.ACADEMIC_STAFF),
-    staff('staff2@center.local', 'Phạm Quang Huy', Role.ACADEMIC_STAFF),
-  ];
+  // --- Accounts, catalog, classes (2026-06-01) ----------------------------------------
+  setNow(at('2026-06-01', '08:00'));
+  let admin = await User.findOne({ role: Role.ADMIN }).lean();
+  if (!admin) {
+    const [created] = await User.create([
+      { username: ADMIN_EMAIL, email: ADMIN_EMAIL, fullName: 'Quản trị hệ thống', role: Role.ADMIN, passwordHash: await hashPassword(DEMO_PASSWORD), mustChangePassword: false },
+    ]);
+    admin = created.toObject();
+  }
+  const adminUser: AuthUser = { id: admin!._id as Types.ObjectId, role: Role.ADMIN };
+  const staffAccount = async (email: string, fullName: string, role: Role, teacherProfile?: { languages: string[]; levels: string[] }): Promise<AuthUser> => {
+    const { user } = await svc.users.createStaff({ email, fullName, role, ...(teacherProfile ? { teacherProfile } : {}) }, adminUser);
+    demoUserIds.push(user._id);
+    return { id: user._id, role };
+  };
+  await staffAccount('manager@center.local', 'Trần Thu Hà', Role.MANAGER);
+  const staff1 = await staffAccount('staff1@center.local', 'Lê Minh Anh', Role.ACADEMIC_STAFF);
+  const staff2 = await staffAccount('staff2@center.local', 'Phạm Quang Huy', Role.ACADEMIC_STAFF);
   const teacherSpecs: [string, string[], string[]][] = [
     ['Nguyễn Thị Lan', ['Tiếng Anh'], ['A1', 'A2', 'B1', 'B2']],
     ['David Miller', ['Tiếng Anh'], ['4.0', '5.0', '6.0', '7.0']],
@@ -125,278 +172,236 @@ export async function seedDemo(conn: Connection, opts: { reset?: boolean } = {})
     ['Tanaka Yuki', ['Tiếng Nhật'], ['N5', 'N4', 'N3']],
     ['Vũ Đức Sơn', ['Tiếng Anh'], ['5.0', '6.0', '7.0']],
   ];
-  const teachers = teacherSpecs.map(([name, languages, levels], i) =>
-    staff(`teacher${i + 1}@center.local`, name, Role.TEACHER, { teacherProfile: { languages, levels } }),
-  );
-  await m.User.insertMany([manager, ...staffs, ...teachers]);
+  const teachers: AuthUser[] = [];
+  for (const [i, [name, languages, levels]] of teacherSpecs.entries()) {
+    teachers.push(await staffAccount(`teacher${i + 1}@center.local`, name, Role.TEACHER, { languages, levels }));
+  }
 
-  // --- Catalog ---------------------------------------------------------------
-  const courses = [
-    { _id: id(), code: 'ENG-GT', name: 'Tiếng Anh giao tiếp', language: 'Tiếng Anh', levels: ['A1', 'A2', 'B1', 'B2'], totalSessions: 24, baseFee: 3_600_000 },
-    { _id: id(), code: 'ENG-IELTS', name: 'Luyện thi IELTS', language: 'Tiếng Anh', levels: ['4.0', '5.0', '6.0', '7.0'], totalSessions: 30, baseFee: 6_500_000 },
-    { _id: id(), code: 'JPN', name: 'Tiếng Nhật', language: 'Tiếng Nhật', levels: ['N5', 'N4', 'N3'], totalSessions: 24, baseFee: 4_200_000 },
+  const courseSpecs = [
+    { code: 'ENG-GT', name: 'Tiếng Anh giao tiếp', language: 'Tiếng Anh', levels: ['A1', 'A2', 'B1', 'B2'], totalSessions: 24, baseFee: 3_600_000 },
+    { code: 'ENG-IELTS', name: 'Luyện thi IELTS', language: 'Tiếng Anh', levels: ['4.0', '5.0', '6.0', '7.0'], totalSessions: 30, baseFee: 6_500_000 },
+    { code: 'JPN', name: 'Tiếng Nhật', language: 'Tiếng Nhật', levels: ['N5', 'N4', 'N3'], totalSessions: 24, baseFee: 4_200_000 },
   ];
-  await m.Course.insertMany(courses);
-  const rooms = [1, 2, 3, 4, 5, 6].map((n) => ({
-    _id: id(), code: `P10${n}`, name: `Phòng 10${n}`, capacity: n <= 4 ? 20 : 30,
-  }));
-  await m.Room.insertMany(rooms);
+  const courses: CourseDto[] = [];
+  for (const c of courseSpecs) courses.push(await svc.courses.create(c));
+  const [GT, IELTS, JPN] = courses;
+  const rooms: RoomDto[] = [];
+  for (const n of [1, 2, 3, 4, 5, 6]) rooms.push(await svc.rooms.create({ code: `P10${n}`, name: `Phòng 10${n}`, capacity: n <= 4 ? 20 : 30 }));
 
-  // --- Students (with STUDENT accounts) --------------------------------------
-  const students = Array.from({ length: 60 }, (_, i) => {
-    const n = i + 1;
-    const gender = rand() < 0.5 ? 'MALE' : 'FEMALE';
-    const middle = gender === 'MALE' ? pick(MIDDLE.filter((x) => x !== 'Thị')) : pick(MIDDLE.filter((x) => x !== 'Văn'));
+  type ClassSpec = { code: string; course: typeof GT; level: string; teacher: number; room: number; start: string; end: string; weekdays: number[]; time: [string, string]; sessionsTo?: string };
+  const ONGOING_FROM = '2026-10-05';
+  const ONGOING_TO = '2026-11-29'; // eight teaching weeks
+  const classSpecs: ClassSpec[] = [
+    { code: 'GT-A1-01', course: GT, level: 'A1', teacher: 0, room: 0, start: ONGOING_FROM, end: '2026-12-20', weekdays: [1, 3], time: ['18:00', '19:30'], sessionsTo: ONGOING_TO },
+    { code: 'IELTS-5.0-01', course: IELTS, level: '5.0', teacher: 1, room: 1, start: ONGOING_FROM, end: '2026-12-20', weekdays: [2, 4], time: ['18:00', '19:30'], sessionsTo: ONGOING_TO },
+    { code: 'GT-A2-01', course: GT, level: 'A2', teacher: 2, room: 2, start: ONGOING_FROM, end: '2026-12-20', weekdays: [1, 3], time: ['18:00', '19:30'], sessionsTo: ONGOING_TO },
+    { code: 'JPN-N5-01', course: JPN, level: 'N5', teacher: 3, room: 3, start: ONGOING_FROM, end: '2026-12-20', weekdays: [2, 4], time: ['18:00', '19:30'], sessionsTo: ONGOING_TO },
+    { code: 'IELTS-6.0-01', course: IELTS, level: '6.0', teacher: 4, room: 4, start: ONGOING_FROM, end: '2026-12-20', weekdays: [1, 3], time: ['19:45', '21:15'], sessionsTo: ONGOING_TO },
+    { code: 'GT-B1-01', course: GT, level: 'B1', teacher: 0, room: 5, start: '2026-11-16', end: '2027-02-10', weekdays: [1, 3], time: ['19:45', '21:15'], sessionsTo: '2026-12-13' },
+    { code: 'JPN-N4-01', course: JPN, level: 'N4', teacher: 3, room: 5, start: '2026-11-17', end: '2027-02-11', weekdays: [2, 4], time: ['19:45', '21:15'] },
+    { code: 'GT-A1-00', course: GT, level: 'A1', teacher: 0, room: 0, start: '2026-07-06', end: '2026-09-23', weekdays: [1, 3], time: ['18:00', '19:30'], sessionsTo: '2026-09-23' },
+  ];
+  const classes: ClassDto[] = [];
+  for (const c of classSpecs) {
+    classes.push(
+      await svc.classes.create(
+        { code: c.code, name: `${c.course.name} ${c.level} — lớp ${c.code.slice(-2)}`, courseId: c.course.id, level: c.level, teacherId: str(teachers[c.teacher].id), defaultRoomId: rooms[c.room].id, maxCapacity: 20, startDate: c.start, endDate: c.end },
+        staff1,
+      ),
+    );
+  }
+  const [, , , , , planned, inactive, finished] = classes;
+  const ongoing = classes.slice(0, 5);
+  const specOf = (classId: string) => classSpecs[classes.findIndex((c) => c.id === classId)];
+  await svc.classes.deactivate(inactive.id, staff1);
+
+  // --- Students: lead -> convert (60) ------------------------------------------------------
+  type Plan = { n: number; course: typeof GT; target?: ClassDto; level?: string; createdOn: string };
+  const plans: Plan[] = [];
+  for (let n = 1; n <= 60; n++) {
+    if (n <= 8) plans.push({ n, course: GT, target: finished, level: 'A1', createdOn: '2026-06-15' });
+    else if (n <= 48) {
+      const cls = ongoing[(n - 9) % 5];
+      plans.push({ n, course: courses.find((c) => c.id === cls.courseId)!, target: cls, level: cls.level, createdOn: '2026-09-14' });
+    } else if (n <= 52) plans.push({ n, course: GT, target: planned, level: 'B1', createdOn: '2026-09-14' });
+    else if (n <= 56) plans.push({ n, course: n % 2 ? GT : IELTS, level: n % 2 ? 'B1' : '6.0', createdOn: '2026-10-12' });
+    else plans.push({ n, course: GT, createdOn: addVnDays('2026-10-26', n - 57) });
+  }
+  const enrollmentOf = new Map<number, string>();
+  const accountOf = new Map<number, AuthUser>();
+  const newLead = (i: number) => {
+    const gender = rand() < 0.5 ? Gender.MALE : Gender.FEMALE;
+    const middle = gender === Gender.MALE ? pick(MIDDLE.filter((x) => x !== 'Thị')) : pick(MIDDLE.filter((x) => x !== 'Văn'));
     return {
-      _id: id(),
-      userId: id(),
-      code: `HV2026${pad(n, 5)}`,
       fullName: `${pick(LAST)} ${middle} ${pick(FIRST)}`,
-      dob: day(`${2000 + Math.floor(rand() * 12)}-${pad(1 + Math.floor(rand() * 12), 2)}-${pad(1 + Math.floor(rand() * 28), 2)}`),
+      dob: `${2000 + Math.floor(rand() * 12)}-${pad(1 + Math.floor(rand() * 12), 2)}-${pad(1 + Math.floor(rand() * 28), 2)}`,
       gender,
-      phone: `09${pad(10_000_000 + n * 7919, 8).slice(-8)}`,
-      email: `hocvien${n}@example.com`,
-      address: pick(['Cầu Giấy, Hà Nội', 'Đống Đa, Hà Nội', 'Thanh Xuân, Hà Nội', 'Hai Bà Trưng, Hà Nội', 'Hoàng Mai, Hà Nội']),
-      createdBy: staffs[0]._id,
+      address: pick(ADDRESSES),
+      i,
     };
-  });
-  await m.Student.create(students); // create(), not insertMany: runs fullNameSearch hooks
-  await m.User.insertMany(
-    students.map((s) => ({
-      _id: s.userId, username: s.code, fullName: s.fullName, role: Role.STUDENT, studentId: s._id,
-      passwordHash: hash, mustChangePassword: false,
-    })),
-  );
-
-  // --- Leads -------------------------------------------------------------------
-  await m.Lead.create(
-    Array.from({ length: 15 }, (_, i) => ({
-      fullName: `${pick(LAST)} ${pick(MIDDLE)} ${pick(FIRST)}`,
-      dob: day(`200${i % 10}-05-1${i % 9}`),
-      gender: i % 2 ? 'MALE' : 'FEMALE',
-      phone: `08${pad(20_000_000 + i * 104_729, 8).slice(-8)}`,
-      interestedCourseId: courses[i % 3]._id,
-      status: i < 12 ? LeadStatus.NEW : LeadStatus.CANCELLED,
-      note: i < 12 ? 'Quan tâm lớp buổi tối' : 'Không liên lạc được',
-      createdBy: staffs[i % 2]._id,
-    })),
-  );
-
-  // --- Classes (no room/teacher overlaps: see slot table) -----------------------
-  const classSpecs = [
-    // code, course, level, status, start, end
-    ['GT-A1-01', 0, 'A1', ClassStatus.ONGOING, '2026-10-05', '2026-12-30'],
-    ['IELTS-5.0-01', 1, '5.0', ClassStatus.ONGOING, '2026-10-06', '2026-12-31'],
-    ['GT-A2-01', 0, 'A2', ClassStatus.ONGOING, '2026-10-05', '2026-12-30'],
-    ['JPN-N5-01', 2, 'N5', ClassStatus.ONGOING, '2026-10-06', '2026-12-31'],
-    ['IELTS-6.0-01', 1, '6.0', ClassStatus.ONGOING, '2026-10-05', '2026-12-30'],
-    ['GT-B1-01', 0, 'B1', ClassStatus.PLANNED, '2026-11-17', '2027-02-11'],
-    ['JPN-N4-01', 2, 'N4', ClassStatus.PLANNED, '2026-11-16', '2027-02-10'],
-    ['GT-A1-00', 0, 'A1', ClassStatus.FINISHED, '2026-07-07', '2026-09-24'],
-  ] as const;
-  const classes = classSpecs.map(([code, ci, level, status, start, end], i) => ({
-    _id: id(),
-    code,
-    name: `${courses[ci].name} ${level} — lớp ${code.slice(-2)}`,
-    courseId: courses[ci]._id,
-    level,
-    teacherId: teachers[i % 5]._id,
-    defaultRoomId: rooms[i % 6]._id,
-    maxCapacity: 20,
-    currentSize: 0,
-    startDate: day(start),
-    endDate: day(end),
-    status,
-    // slot: Mon/Wed (1,3) for even i, Tue/Thu (2,4) for odd i; 18:00 for i<4, 19:45 otherwise
-    weekdays: i % 2 === 0 ? [1, 3] : [2, 4],
-    time: i < 4 ? ['18:00', '19:30'] : ['19:45', '21:15'],
-  }));
-
-  // --- Enrollments ---------------------------------------------------------------
-  const enrollments: Record<string, unknown>[] = [];
-  const roster = new Map<string, typeof students>();
-  const enrollIn = [0, 1, 2, 3, 4, 7]; // classes that get students
-  students.slice(0, 48).forEach((s, i) => {
-    const cls = classes[enrollIn[i % enrollIn.length]];
-    const finished = cls.status === ClassStatus.FINISHED;
-    const status = finished ? EnrollmentStatus.COMPLETED : EnrollmentStatus.ENROLLED;
-    const enrolledAt = addDaysDate(cls.startDate, -3);
-    enrollments.push({
-      _id: id(), studentId: s._id, courseId: cls.courseId, classId: cls._id, status,
-      placementLevel: cls.level, waitingSince: addDaysDate(cls.startDate, -10), enrolledAt,
-      confirmedAt: i % 4 === 0 ? null : enrolledAt,
-      history: [
-        { from: null, to: EnrollmentStatus.PENDING_PLACEMENT, at: addDaysDate(cls.startDate, -14), by: staffs[0]._id },
-        { from: EnrollmentStatus.PENDING_PLACEMENT, to: EnrollmentStatus.WAITING_CLASS, at: addDaysDate(cls.startDate, -10), by: teachers[0]._id },
-        { from: EnrollmentStatus.WAITING_CLASS, to: EnrollmentStatus.ENROLLED, at: enrolledAt, by: staffs[0]._id },
-        ...(finished ? [{ from: EnrollmentStatus.ENROLLED, to: EnrollmentStatus.COMPLETED, at: cls.endDate, by: staffs[0]._id }] : []),
-      ],
+  };
+  for (const p of plans) {
+    const person = newLead(p.n);
+    tl.add(at(p.createdOn, '10:00'), async () => {
+      const lead = await svc.leads.create(
+        staff1,
+        { fullName: person.fullName, dob: person.dob, gender: person.gender, phone: `09${pad(10_000_000 + p.n * 7919, 8).slice(-8)}`, email: `hocvien${p.n}@example.com`, address: person.address, interestedCourseId: p.course.id, note: 'Đăng ký qua tư vấn trực tiếp' },
+        false,
+      );
+      const res = await svc.convert.convert(staff1, lead.id, false);
+      enrollmentOf.set(p.n, res.enrollmentId!);
+      const student = await conn.models[Models.Student].findById(res.student.id, { userId: 1 }).lean<{ userId: Types.ObjectId }>();
+      demoUserIds.push(student!.userId);
+      accountOf.set(p.n, { id: student!.userId, role: Role.STUDENT, studentId: new Types.ObjectId(res.student.id) });
     });
-    if (!finished) cls.currentSize += 1;
-    roster.set(String(cls._id), [...(roster.get(String(cls._id)) ?? []), s]);
-  });
-  const waiting = students.slice(48, 54).map((s, i) => ({
-    _id: id(), studentId: s._id, courseId: courses[i % 2]._id, status: EnrollmentStatus.WAITING_CLASS,
-    placementLevel: i % 2 ? '6.0' : 'B1', waitingSince: day(addVnDays(TODAY, -(3 + i * 4))),
-    history: [{ from: null, to: EnrollmentStatus.PENDING_PLACEMENT, at: day(addVnDays(TODAY, -(10 + i * 4))), by: staffs[1]._id }],
-  }));
-  const pending = students.slice(54, 60).map((s, i) => ({
-    _id: id(), studentId: s._id, courseId: courses[i % 3]._id, status: EnrollmentStatus.PENDING_PLACEMENT,
-    history: [{ from: null, to: EnrollmentStatus.PENDING_PLACEMENT, at: day(addVnDays(TODAY, -i)), by: staffs[1]._id }],
-  }));
-  await m.Enrollment.insertMany([...enrollments, ...waiting, ...pending]);
-  // weekdays/time are seed-only slot hints; strict schema drops unknown fields.
-  await m.Class.insertMany(classes);
+  }
+  // Leads still in the funnel: 12 NEW, 3 cancelled.
+  for (let i = 0; i < 15; i++) {
+    const person = newLead(100 + i);
+    tl.add(at(addVnDays('2026-10-15', i), '14:00'), async () => {
+      const lead = await svc.leads.create(
+        i % 2 ? staff2 : staff1,
+        { fullName: person.fullName, dob: person.dob, gender: person.gender, phone: `08${pad(20_000_000 + i * 104_729, 8).slice(-8)}`, interestedCourseId: courses[i % 3].id, note: i < 12 ? 'Quan tâm lớp buổi tối' : 'Không liên lạc được' },
+        false,
+      );
+      if (i >= 12) await svc.leads.cancel(staff1, lead.id, { reason: 'Không liên lạc được sau 3 lần gọi' });
+    });
+  }
 
-  // --- Placement test for the pending candidates ------------------------------------
-  await m.PlacementTest.create({
-    courseId: courses[0]._id, roomId: rooms[5]._id, teacherId: teachers[2]._id,
-    startAt: vnDateTime('2026-10-31', '09:00'), endAt: vnDateTime('2026-10-31', '10:30'),
-    candidates: pending.map((e) => ({ enrollmentId: e._id, studentId: e.studentId })),
-  });
-
-  // --- Sessions + attendance --------------------------------------------------------
-  const sessions: Record<string, unknown>[] = [];
-  const attendances: Record<string, unknown>[] = [];
-  for (const cls of classes) {
-    const start = isoDay(cls.startDate);
-    const end = isoDay(cls.endDate);
-    for (let d = start; d <= end; d = addVnDays(d, 1)) {
-      const wd = isoWeekday(d);
-      if (!cls.weekdays.includes(wd)) continue;
-      const startAt = vnDateTime(d, cls.time[0]);
-      const endAt = vnDateTime(d, cls.time[1]);
-      const past = d < TODAY;
-      const cancelled = cls.code === 'GT-A1-01' && d === '2026-10-14';
-      const session = {
-        _id: id(), classId: cls._id, roomId: cls.defaultRoomId, teacherId: cls.teacherId, startAt, endAt,
-        status: cancelled ? 'CANCELLED' : 'SCHEDULED',
-        cancelReason: cancelled ? 'Giáo viên ốm, học bù sau' : null,
-        attendanceTakenAt: past && !cancelled && cls.status !== ClassStatus.PLANNED ? endAt : null,
-        createdBy: staffs[0]._id,
-      };
-      sessions.push(session);
-      if (!session.attendanceTakenAt) continue;
-      for (const s of roster.get(String(cls._id)) ?? []) {
-        const r = rand();
-        const status = r < 0.82 ? AttendanceStatus.PRESENT : r < 0.9 ? AttendanceStatus.LATE : r < 0.95 ? AttendanceStatus.EXCUSED : AttendanceStatus.UNEXCUSED;
-        const enrollment = enrollments.find((e) => e.studentId === s._id && e.classId === cls._id);
-        attendances.push({
-          sessionId: session._id, classId: cls._id, studentId: s._id, enrollmentId: enrollment?._id,
-          status, recordedBy: cls.teacherId,
+  // --- Placement tests (completed) and skip-placement -------------------------------------
+  const placementRound = (day: string, groups: { course: typeof GT; room: number; teacher: number; members: Plan[] }[]) => {
+    tl.add(at(addVnDays(day, -3), '09:00'), async () => {
+      for (const g of groups) {
+        const test = await svc.placement.create(staff1, { courseId: g.course.id, startAt: at(day, '09:00').toISOString(), endAt: at(day, '10:30').toISOString(), roomId: rooms[g.room].id, teacherId: str(teachers[g.teacher].id) });
+        await svc.placement.addCandidates(staff1, test.id, { enrollmentIds: g.members.map((m) => enrollmentOf.get(m.n)!) });
+        tl.add(at(day, '11:00'), async () => {
+          await svc.placement.putResults(
+            teachers[g.teacher],
+            test.id,
+            g.members.map((m) => ({ enrollmentId: enrollmentOf.get(m.n)!, score: Math.round((5 + rand() * 5) * 4) / 4, level: m.level!, comment: 'Phù hợp trình độ' })),
+          );
         });
       }
-    }
-  }
-  await m.Session.insertMany(sessions);
-  await m.Attendance.insertMany(attendances);
-
-  // --- Assessments + grades -----------------------------------------------------------
-  const assessments: Record<string, unknown>[] = [];
-  const grades: Record<string, unknown>[] = [];
-  const score = () => Math.round((5 + rand() * 5) * 4) / 4; // 5.00–10.00, step 0.25
-  for (const cls of classes) {
-    if (cls.status === ClassStatus.PLANNED) continue;
-    const finished = cls.status === ClassStatus.FINISHED;
-    const plan: [string, AssessmentType, number, string, boolean][] = finished
-      ? [
-          ['Kiểm tra 15 phút', AssessmentType.QUIZ, 20, '2026-07-28', true],
-          ['Giữa kỳ', AssessmentType.MIDTERM, 30, '2026-08-18', true],
-          ['Cuối kỳ', AssessmentType.FINAL, 50, '2026-09-22', true],
-        ]
-      : [
-          ['Kiểm tra 15 phút', AssessmentType.QUIZ, 20, '2026-10-19', true],
-          ['Giữa kỳ', AssessmentType.MIDTERM, 30, '2026-11-09', false],
-        ];
-    for (const [name, type, weight, heldOn, graded] of plan) {
-      const a = { _id: id(), classId: cls._id, name, type, weight, heldOn: day(heldOn), confirmedAt: graded ? day(addVnDays(heldOn, 2)) : null, createdBy: cls.teacherId };
-      assessments.push(a);
-      if (!graded) continue;
-      for (const s of roster.get(String(cls._id)) ?? []) {
-        const enrollment = enrollments.find((e) => e.studentId === s._id && e.classId === cls._id);
-        grades.push({ assessmentId: a._id, classId: cls._id, studentId: s._id, enrollmentId: enrollment?._id, score: score(), comment: rand() < 0.3 ? 'Cần luyện thêm kỹ năng nghe' : '', isDraft: false });
-      }
-    }
-  }
-  await m.Assessment.insertMany(assessments);
-  await m.Grade.insertMany(grades);
-
-  // --- Invoices + payments (UNPAID / PARTIAL / PAID, some overdue) ----------------------
-  const invoices: Record<string, unknown>[] = [];
-  const payments: Record<string, unknown>[] = [];
-  let invSeq = 0;
-  let paySeq = 0;
-  for (const e of enrollments) {
-    const cls = classes.find((c) => c._id === e.classId)!;
-    const course = courses.find((c) => c._id === e.courseId)!;
-    const dueDay = addVnDays(isoDay(cls.startDate), 7);
-    const period = dueDay.slice(0, 7).replace('-', '');
-    const r = rand();
-    const paid = cls.status === ClassStatus.FINISHED || r < 0.55 ? course.baseFee : r < 0.8 ? Math.round(course.baseFee / 2) : 0;
-    const invoice = {
-      _id: id(), code: `HD${period}${pad(++invSeq, 4)}`, kind: InvoiceKind.TUITION,
-      studentId: e.studentId, enrollmentId: e._id, courseId: course._id, classId: cls._id,
-      amountDue: course.baseFee, finalAmount: course.baseFee, amountPaid: paid, balance: course.baseFee - paid,
-      dueDate: day(dueDay),
-      status: paid === course.baseFee ? InvoiceStatus.PAID : paid > 0 ? InvoiceStatus.PARTIAL : InvoiceStatus.UNPAID,
-    };
-    invoices.push(invoice);
-    e.invoiceId = invoice._id;
-    if (paid > 0) {
-      payments.push({
-        code: `PT${period}${pad(++paySeq, 4)}`, invoiceId: invoice._id, studentId: e.studentId, amount: paid,
-        method: pick([PaymentMethod.CASH, PaymentMethod.BANK_TRANSFER, PaymentMethod.CARD]),
-        paidAt: vnDateTime(addVnDays(dueDay, -Math.floor(rand() * 6)), '10:00'), recordedBy: staffs[0]._id,
-      });
-    }
-  }
-  await m.Invoice.insertMany(invoices);
-  await m.Payment.insertMany(payments);
-  for (const e of enrollments) await m.Enrollment.updateOne({ _id: e._id }, { invoiceId: e.invoiceId });
-
-  // --- Counters so services continue after the demo codes ---------------------------------
-  const counterMax: Record<string, number> = { 'student:2026': 60 };
-  for (const inv of invoices) counterMax[`invoice:${String(inv.code).slice(2, 8)}`] = Math.max(counterMax[`invoice:${String(inv.code).slice(2, 8)}`] ?? 0, Number(String(inv.code).slice(8)));
-  for (const p of payments) counterMax[`payment:${String(p.code).slice(2, 8)}`] = Math.max(counterMax[`payment:${String(p.code).slice(2, 8)}`] ?? 0, Number(String(p.code).slice(8)));
-  for (const [key, seq] of Object.entries(counterMax)) {
-    await m.Counter.updateOne({ _id: key }, { $max: { seq } }, { upsert: true });
-  }
-
-  // --- Notifications ------------------------------------------------------------------------
-  const firstStudentUser = students[0].userId;
-  const firstClass = classes[0];
-  await m.Notification.insertMany([
-    { userId: firstStudentUser, type: NotificationType.CLASS_ASSIGNED, title: 'Bạn đã được xếp lớp', body: `Bạn được xếp vào lớp ${firstClass.code}. Hãy xác nhận lớp học.`, refType: NotificationRefType.CLASS, refId: firstClass._id },
-    { userId: firstStudentUser, type: NotificationType.SESSION_CANCELLED, title: 'Buổi học bị hủy', body: 'Buổi học ngày 14/10 của lớp GT-A1-01 bị hủy: Giáo viên ốm, học bù sau.', refType: NotificationRefType.CLASS, refId: firstClass._id },
-    { userId: firstClass.teacherId, type: NotificationType.SESSION_CANCELLED, title: 'Buổi dạy bị hủy', body: 'Buổi dạy ngày 14/10 lớp GT-A1-01 đã được hủy.', refType: NotificationRefType.CLASS, refId: firstClass._id },
-    { userId: staffs[0]._id, type: NotificationType.ATTENDANCE_WARNING, title: 'Học viên vắng nhiều', body: `${students[1].fullName} vắng vượt ngưỡng 20% ở lớp ${classes[enrollIn[1]].code}.`, refType: NotificationRefType.STUDENT, refId: students[1]._id },
-    { userId: manager._id, type: NotificationType.DISCOUNT_DECIDED, title: 'Có đề xuất giảm giá chờ duyệt', body: 'Nhân viên học vụ đề xuất giảm 10% học phí cho một học viên.', refType: NotificationRefType.INVOICE, refId: invoices[0]._id },
+    });
+  };
+  const seated = plans.filter((p) => p.target);
+  placementRound('2026-06-20', [{ course: GT, room: 5, teacher: 2, members: seated.filter((p) => p.target === finished) }]);
+  placementRound('2026-09-19', [
+    { course: GT, room: 0, teacher: 2, members: seated.filter((p) => p.n > 8 && p.course === GT) },
+    { course: IELTS, room: 1, teacher: 1, members: seated.filter((p) => p.n > 8 && p.course === IELTS) },
+    { course: JPN, room: 2, teacher: 3, members: seated.filter((p) => p.course === JPN) },
   ]);
+  for (const p of plans.filter((x) => !x.target && x.level)) {
+    tl.add(at('2026-10-19', '15:00'), async () => {
+      await svc.enrollments.skipPlacement(enrollmentOf.get(p.n)!, { level: p.level!, reason: 'Đã có chứng chỉ quốc tế còn hạn' }, staff1);
+    });
+  }
+  // The upcoming placement test for the PENDING_PLACEMENT candidates.
+  tl.add(at('2026-10-30', '10:00'), async () => {
+    const test = await svc.placement.create(staff1, { courseId: GT.id, startAt: at('2026-11-07', '09:00').toISOString(), endAt: at('2026-11-07', '10:30').toISOString(), roomId: rooms[5].id, teacherId: str(teachers[2].id) });
+    await svc.placement.addCandidates(staff1, test.id, { enrollmentIds: plans.filter((p) => !p.level).map((p) => enrollmentOf.get(p.n)!) });
+  });
 
-  return 'created';
-}
+  // --- Class lifecycle: assign, schedule, start, attend, grade, pay, finish -------------------
+  const todayStart = startOfVnDay(DEMO_TODAY);
+  const takeAttendance = (sessionId: Types.ObjectId, endAt: Date) => {
+    tl.add(new Date(endAt.getTime() + 5 * 60_000), async () => {
+      const session = await Session.findById(sessionId).lean();
+      if (!session || session.status !== SessionStatus.SCHEDULED) return;
+      const roster = await svc.attendance.roster(session);
+      const records = roster.map((e) => {
+        const r = rand();
+        const status = r < 0.82 ? AttendanceStatus.PRESENT : r < 0.9 ? AttendanceStatus.LATE : r < 0.95 ? AttendanceStatus.EXCUSED : AttendanceStatus.UNEXCUSED;
+        return { studentId: str(e.studentId), status, ...(status === AttendanceStatus.EXCUSED ? { note: 'Có xin phép' } : {}) };
+      });
+      await svc.attendance.take(str(session._id), { records }, { id: session.teacherId, role: Role.TEACHER });
+    });
+  };
+  const assessment = (cls: ClassDto, name: string, type: AssessmentType, weight: number, heldOn: string, confirm: boolean, createOn = addVnDays(heldOn, -3)) => {
+    const teacher = teachers[specOf(cls.id).teacher];
+    tl.add(at(createOn, '08:00'), async () => {
+      const a = await svc.grades.create(cls.id, { name, type, weight, heldOn }, teacher);
+      if (!confirm) return;
+      tl.add(at(addVnDays(heldOn, 1), '10:00'), async () => {
+        const roster = await Enrollment.find({ classId: new Types.ObjectId(cls.id), status: EnrollmentStatus.ENROLLED }).sort({ _id: 1 }).lean();
+        const grades = roster.map((e) => ({ studentId: str(e.studentId), score: Math.round((5 + rand() * 5) * 4) / 4, ...(rand() < 0.3 ? { comment: 'Cần luyện thêm kỹ năng nghe' } : {}) }));
+        await svc.grades.upsertGrades(a.id, { grades, confirm: true }, teacher);
+      });
+    });
+  };
+  const lifecycle = (cls: ClassDto, o: { assignOn: string; scheduleOn: string; paidOn: string; payPlan: (k: number) => 'PAID' | 'PARTIAL' | 'UNPAID'; start: boolean }) => {
+    const spec = specOf(cls.id);
+    const members = seated.filter((p) => p.target === cls);
+    tl.add(at(o.assignOn, '09:00'), async () => {
+      for (const [k, p] of members.entries()) {
+        const e = await svc.assignment.assign(enrollmentOf.get(p.n)!, { classId: cls.id }, staff1);
+        if (k % 4 !== 3) tl.add(at(addVnDays(o.assignOn, 1), '20:00'), async () => void (await svc.enrollments.confirm(accountOf.get(p.n)!, e.id)));
+        const plan = o.payPlan(k);
+        if (plan === 'UNPAID') continue;
+        tl.add(at(addVnDays(o.paidOn, k % 6), '10:00'), async () => {
+          const fresh = await Enrollment.findById(e.id).lean();
+          const invoice = await conn.models[Models.Invoice].findById(fresh!.invoiceId).lean<{ _id: Types.ObjectId; finalAmount: number }>();
+          const fee = invoice!.finalAmount;
+          await svc.payments.record(str(invoice!._id), { amount: plan === 'PAID' ? fee : Math.round(fee / 2), method: [PaymentMethod.CASH, PaymentMethod.BANK_TRANSFER, PaymentMethod.CARD][k % 3] }, staff1);
+        });
+      }
+    });
+    tl.add(at(o.scheduleOn, '09:00'), async () => {
+      const res = await svc.schedule.createBulk(
+        { classId: cls.id, roomId: rooms[spec.room].id, teacherId: str(teachers[spec.teacher].id), weekdays: spec.weekdays, startTime: spec.time[0], endTime: spec.time[1], fromDate: spec.start, toDate: spec.sessionsTo! },
+        staff1,
+      );
+      for (const s of res.sessions) {
+        const endAt = new Date(s.endAt);
+        if (new Date(s.startAt) < todayStart) takeAttendance(new Types.ObjectId(s.id), endAt);
+      }
+    });
+    if (o.start) tl.add(at(spec.start, '07:00'), async () => void (await svc.classes.update(cls.id, { status: ClassStatus.ONGOING }, staff1)));
+  };
 
-function addDaysDate(d: Date, n: number): Date {
-  return day(addVnDays(isoDay(d), n));
-}
-function isoDay(d: Date): string {
-  return toDateOnly(d);
-}
-function isoWeekday(d: string): number {
-  const wd = new Date(`${d}T00:00:00Z`).getUTCDay();
-  return wd === 0 ? 7 : wd;
+  // Finished summer class: everyone paid, three confirmed assessments, finished on 2026-09-24.
+  lifecycle(finished, { assignOn: '2026-06-29', scheduleOn: '2026-06-30', paidOn: '2026-07-01', payPlan: () => 'PAID', start: true });
+  assessment(finished, 'Kiểm tra 15 phút', AssessmentType.QUIZ, 20, '2026-07-27', true);
+  assessment(finished, 'Giữa kỳ', AssessmentType.MIDTERM, 30, '2026-08-17', true);
+  assessment(finished, 'Cuối kỳ', AssessmentType.FINAL, 50, '2026-09-21', true);
+  tl.add(at('2026-09-24', '10:00'), async () => void (await svc.classes.update(finished.id, { status: ClassStatus.FINISHED }, staff1)));
+
+  // Ongoing classes: PAID / PAID / PAID / PARTIAL / UNPAID (overdue: due 2026-10-12).
+  const ongoingPlan = (k: number) => (['PAID', 'PAID', 'PAID', 'PARTIAL', 'UNPAID'] as const)[k % 5];
+  for (const cls of ongoing) {
+    lifecycle(cls, { assignOn: '2026-09-28', scheduleOn: '2026-09-29', paidOn: '2026-10-01', payPlan: ongoingPlan, start: true });
+    assessment(cls, 'Kiểm tra 15 phút', AssessmentType.QUIZ, 20, '2026-10-14', true);
+    assessment(cls, 'Kỹ năng nói', AssessmentType.SKILL, 20, '2026-10-28', true);
+    assessment(cls, 'Giữa kỳ', AssessmentType.MIDTERM, 30, '2026-11-11', false, '2026-10-30');
+  }
+  // Planned class: seated, invoices not yet due and unpaid; sessions already scheduled.
+  lifecycle(planned, { assignOn: '2026-10-20', scheduleOn: '2026-10-21', paidOn: '2026-10-22', payPlan: () => 'UNPAID', start: false });
+
+  // A cancelled session (teacher ill) cancelled the day before.
+  tl.add(at('2026-10-13', '12:00'), async () => {
+    const s = await Session.findOne({ classId: new Types.ObjectId(ongoing[0].id), startAt: at('2026-10-14', '18:00') }).lean();
+    await svc.schedule.cancel(str(s!._id), 'Giáo viên ốm, học bù sau', staff1);
+  });
+
+  await tl.drain();
+
+  // --- Demo credentials ------------------------------------------------------------------------
+  await User.updateMany({ _id: { $in: demoUserIds } }, { $set: { passwordHash: await hashPassword(DEMO_PASSWORD), mustChangePassword: false } });
+  setNow(today);
+  return { status: 'created' };
 }
 
 async function main(): Promise<void> {
-  const env = loadEnv();
-  await connect(env.MONGODB_URI);
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
   try {
-    const result = await seedDemo(connection, { reset: process.argv.includes('--reset') });
-    console.log(result === 'created'
-      ? `Demo data created. All demo accounts use password: ${DEMO_PASSWORD}`
-      : 'Demo data already present (manager@center.local exists). Use --reset to recreate.');
+    const { status } = await runSeedDemo(app, { reset: process.argv.includes('--reset') });
+    console.log(
+      status === 'created'
+        ? `Demo data created (demo today ${DEMO_TODAY}). All demo accounts use password: ${DEMO_PASSWORD}`
+        : 'Demo data already present (manager@center.local exists). Use --reset to recreate.',
+    );
   } finally {
-    await disconnect();
+    await app.close();
   }
 }
 
