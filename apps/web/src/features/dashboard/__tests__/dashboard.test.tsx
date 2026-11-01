@@ -1,9 +1,20 @@
+import { cloneElement, type ReactElement } from 'react';
 import { http, HttpResponse } from 'msw';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from '../../../../test/msw/server';
 import { renderApp } from '../../../../test/render';
 import { makeUser } from '../../../../test/users';
+
+// jsdom has no layout: give recharts a fixed-size container so it neither warns about 0x0 nor skips rendering.
+vi.mock('recharts', async (orig) => {
+  const actual = await orig<typeof import('recharts')>();
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }: { children: ReactElement }) =>
+      cloneElement(children, { width: 600, height: 240 } as object),
+  };
+});
 
 const T = { timeout: 10_000 };
 const ID = (n: number) => `65000000000000000000a${String(n).padStart(3, '0')}`;
