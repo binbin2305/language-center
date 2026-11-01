@@ -20,7 +20,8 @@ import { makeAssessment, makeClass, makeCourse, makeRoom, makeSession, makeStude
  * TASK W3-L2 — cross-module flows, driven over HTTP (factories only for users/courses/rooms/classes/sessions).
  * Cases already covered elsewhere (not duplicated here):
  *   (2) assign with failing InvoiceCreator -> rollback ........ test/e2e/enrollments-assign-rollback.e2e-spec.ts
- *   (3) transfer -> no new invoice; old-class attendance kept .. flows/w2-wiring (3) + flows/w2-history-scope (chuyển lớp, /attendance)
+ *   (3) transfer -> no new invoice ............................ flows/w2-wiring (3) (invoice only; it does not touch attendance)
+ *       transfer -> old-class /attendance still readable ...... flows/w2-history-scope (first case; not part of w2-wiring)
  *   (5) absence over threshold -> flag in class list ........... flows/w2-wiring (6)
  *   (6) resultViewRequiresPaidFees blocks then pays ............ flows/w2-wiring (5)
  *   (7) reserve -> resume -> reassign = 1 TUITION invoice; withdraw unpaid -> VOID .. flows/w2-wiring (2), (4)
@@ -154,6 +155,9 @@ describe('W3 flow xuyên module (W3-L2)', () => {
       waitingSince: t.clock.now(),
     });
     await act(e._id, 'assign', { classId: cls._id.toString() }).expect(201);
+    // Control: a student whose enrollment in this class is not ENROLLED (CANCELLED) must not be notified.
+    const other = await makeStudent(t.conn, { withUser: true });
+    await makeEnrollment(t.conn, { studentId: other._id, courseId: course._id, classId: cls._id, status: EnrollmentStatus.CANCELLED });
     const startAt = new Date(t.clock.now().getTime() + 24 * 60 * 60_000);
     const session = await makeSession(t.conn, { classId: cls._id, teacherId: teacher.id, startAt, endAt: new Date(startAt.getTime() + 90 * 60_000) });
 
@@ -169,7 +173,13 @@ describe('W3 flow xuyên module (W3-L2)', () => {
 
     const me = await login(st.code, DEFAULT_PASSWORD);
     const notes = await t.http().get(api('/notifications')).set(auth(me)).expect(200);
-    expect((notes.body.data as Array<{ type: string }>).map((n) => n.type)).toContain(NotificationType.SESSION_CANCELLED);
+    const cancelled = (notes.body.data as Array<{ type: string; refId?: string | null }>).filter((n) => n.type === NotificationType.SESSION_CANCELLED);
+    expect(cancelled).toHaveLength(1);
+    expect(cancelled[0]?.refId).toBe(session._id.toString());
+
+    const otherToken = await login(other.code, DEFAULT_PASSWORD);
+    const otherNotes = await t.http().get(api('/notifications')).set(auth(otherToken)).expect(200);
+    expect((otherNotes.body.data as Array<{ type: string }>).map((n) => n.type)).not.toContain(NotificationType.SESSION_CANCELLED);
   });
 
   it('(8) FR-CLS-10 + FR-ATT-04 + FR-GRD: kết thúc lớp → enrollment COMPLETED; HV vẫn xem /attendance, /results, assessments, transcript lớp đó', async () => {
@@ -208,11 +218,14 @@ describe('W3 flow xuyên module (W3-L2)', () => {
 
     const me = await login(st.code, DEFAULT_PASSWORD);
     const att = await t.http().get(api('/attendance')).set(auth(me)).expect(200);
-    expect((att.body.data as Array<{ classId: string }>).map((r) => r.classId)).toContain(cls._id.toString());
+    const attRow = (att.body.data as Array<{ classId: string; status: string }>).find((r) => r.classId === cls._id.toString());
+    expect(attRow).toMatchObject({ status: AttendanceStatus.PRESENT });
     const res = await t.http().get(api('/results')).set(auth(me)).expect(200);
     const row = (res.body.data as Array<{ classId: string; average: number | null }>).find((r) => r.classId === cls._id.toString());
     expect(row).toMatchObject({ average: 9 });
-    await t.http().get(api(`/classes/${cls._id}/assessments`)).set(auth(me)).expect(200);
-    await t.http().get(api(`/results/transcript.pdf?studentId=${st._id}&classId=${cls._id}`)).set(auth(me)).expect(200);
+    const list = await t.http().get(api(`/classes/${cls._id}/assessments`)).set(auth(me)).expect(200);
+    expect((list.body.data as Array<{ id: string }>).map((x) => x.id)).toContain(a._id.toString());
+    const pdf = await t.http().get(api(`/results/transcript.pdf?studentId=${st._id}&classId=${cls._id}`)).set(auth(me)).expect(200);
+    expect(pdf.headers['content-type']).toMatch(/application\/pdf/);
   });
 });
