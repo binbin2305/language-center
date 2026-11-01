@@ -27,3 +27,9 @@ The CR files live on `lane/L-HARDENING`. Their "Fixed in" lines are recorded her
 - Flip the two `it.failing` tests `CR L-HARDENING-1 …` in `apps/api/test/security/headers.security-spec.ts` to `it`.
 - `apps/api/test/perf/explain.ts`: treat `estimatedDocumentCount` (R11) as an explained read with no COLLSCAN. Otherwise `p95.ts` reports it as NOT EXPLAINABLE.
 - With that single change, a copy of `p95.ts` run on lane/L-LEAD 418b2d6 gives NFR-02 PASS at D36 volume. All 10 endpoints are below 43ms p95 with 0 COLLSCAN (`/attendance` 42.5ms, was 2112ms; `/sessions` 18.9; `/students?q` 12.0; others ≤ 7ms).
+
+## Batch 2: accessibility CRs (L-HARDENING-4..7)
+- L-HARDENING-4 (dark mode): Fixed in lane/L-LEAD 3aee0dd. Task M: set `CR4_OPEN = false` in `e2e/a11y/a11y.spec.ts`.
+- L-HARDENING-5 (light contrast): Fixed in lane/L-LEAD 3aee0dd. Task M: drop `test.fail` / known-CR entries for CR-5.
+- L-HARDENING-6 (dark contrast): Fixed in lane/L-LEAD 3aee0dd. Task M: drop known-CR entries for CR-6.
+- L-HARDENING-7 (reports tabs aria-controls): Fixed in lane/L-LEAD 3aee0dd. Task M: drop the `aria-valid-attr-value` entries for `/reports`.
