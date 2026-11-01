@@ -1,6 +1,6 @@
 import { cloneElement, type ReactElement } from 'react';
 import { http, HttpResponse } from 'msw';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from '../../../../test/msw/server';
 import { renderApp } from '../../../../test/render';
@@ -166,6 +166,45 @@ describe('báo cáo - các tab', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Tài chính' }));
     expect(await screen.findByRole('cell', { name: 'Tháng 11/2026' }, T)).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
+  });
+
+  it('FR-RPT-02: tab Chuyên cần có bảng "Theo học viên" (Mã HV, Họ tên, Lớp, Số buổi, Vắng, Tỷ lệ chuyên cần)', async () => {
+    spy('*/api/v1/reports/admissions', admissions);
+    spy('*/api/v1/reports/attendance', {
+      byClass: [{ classId: 'a', classCode: 'LOP-A1', sessions: 4, records: 40, attendanceRate: 0.9 }],
+      byStudent: [
+        { studentId: 's1', studentCode: 'HV202600001', fullName: 'Nguyễn Văn An', classId: 'a', records: 4, absences: 1, attendanceRate: 0.75 },
+      ],
+      overThreshold: [],
+    });
+    open();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Chuyên cần' }, T));
+    const section = await screen.findByRole('region', { name: 'Theo học viên' }, T);
+    const table = within(section).getByRole('table');
+    expect(table.closest('.overflow-x-auto')).not.toBeNull();
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'Mã HV', 'Họ tên', 'Lớp', 'Số buổi', 'Vắng', 'Tỷ lệ chuyên cần',
+    ]);
+    expect(within(table).getAllByRole('cell').map((c) => c.textContent)).toEqual([
+      'HV202600001', 'Nguyễn Văn An', 'LOP-A1', '4', '1', '75.0%',
+    ]);
+  });
+
+  it('FR-RPT-03: tab Học tập — mọi lớp 0 HV có điểm trong khoảng → thông báo không có dữ liệu', async () => {
+    spy('*/api/v1/reports/admissions', admissions);
+    spy('*/api/v1/reports/academic', {
+      rows: [
+        { classId: 'a', courseId: COURSE, teacherId: 't', classCode: 'LOP-H1', teacherName: 'Cô Lan', students: 0, averageScore: null, passRate: null },
+        { classId: 'b', courseId: COURSE, teacherId: 't', classCode: 'LOP-H2', teacherName: 'Cô Lan', students: 0, averageScore: null, passRate: null },
+      ],
+      distribution: {},
+      passRate: 0,
+      failRate: 0,
+    });
+    open();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Học tập' }, T));
+    expect(await screen.findByText(EMPTY, {}, T)).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: 'LOP-H1' })).toBeNull();
   });
 
   it('tab Tài chính hiển thị 5 thẻ + biểu đồ', async () => {

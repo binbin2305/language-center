@@ -89,6 +89,22 @@ export function AttendanceContent({ q }: { q: QueryLike<AttendanceReportDto> }) 
             heads={['Lớp', 'Buổi học', 'Lượt điểm danh', 'Tỷ lệ chuyên cần']}
             rows={d.byClass.map((r) => [r.classCode, r.sessions, r.records, pct(r.attendanceRate)])}
           />
+          {d.byStudent.length > 0 ? (
+            <section aria-label="Theo học viên">
+              <h2 className="mb-2 text-base font-semibold">Theo học viên</h2>
+              <Grid
+                heads={['Mã HV', 'Họ tên', 'Lớp', 'Số buổi', 'Vắng', 'Tỷ lệ chuyên cần']}
+                rows={d.byStudent.map((r) => [
+                  r.studentCode,
+                  r.fullName,
+                  d.byClass.find((c) => c.classId === r.classId)?.classCode ?? '—',
+                  r.records,
+                  r.absences,
+                  pct(r.attendanceRate),
+                ])}
+              />
+            </section>
+          ) : null}
           {d.overThreshold.length > 0 ? (
             <section aria-label="Học viên vượt ngưỡng vắng">
               <h2 className="mb-2 text-base font-semibold">Học viên vượt ngưỡng vắng</h2>
@@ -108,9 +124,12 @@ const GRADE_LABEL: Record<string, string> = {
   EXCELLENT: 'Xuất sắc', GOOD: 'Giỏi', FAIR: 'Khá', AVERAGE: 'Trung bình', FAIL: 'Yếu',
 };
 
+/** Nothing graded in range: the API still lists every matching class, each with 0 students. */
+const isAcademicEmpty = (d: AcademicReportDto) => d.rows.every((r) => r.students === 0);
+
 export function AcademicContent({ q }: { q: QueryLike<AcademicReportDto> }) {
   return (
-    <Wrap q={q} isEmpty={(d) => d.rows.length === 0}>
+    <Wrap q={q} isEmpty={isAcademicEmpty}>
       {(d) => (
         <>
           <div className="grid grid-cols-2 gap-3">
