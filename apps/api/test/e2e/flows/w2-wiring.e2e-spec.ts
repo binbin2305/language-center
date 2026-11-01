@@ -14,7 +14,7 @@ import {
 } from '../../factories';
 
 /** Task M (W2): real FeesModule / AttendanceModule wired into enrollments, grades and classes — no fakes. */
-describe('W2 nối dây: enrollments ↔ fees ↔ grades ↔ attendance (FR-CLS-07 FR-CLS-08 FR-CLS-09 FR-CLS-10 FR-CLS-11 FR-CLS-12, FR-FEE-01, FR-GRD-07, FR-ATT-05)', () => {
+describe('W2 nối dây: enrollments ↔ fees ↔ grades ↔ attendance (FR-CLS-08 FR-CLS-09 FR-CLS-10, FR-FEE-01, FR-GRD-07, FR-ATT-05)', () => {
   let t: TestApp;
   let manager: string;
   let staff: string;

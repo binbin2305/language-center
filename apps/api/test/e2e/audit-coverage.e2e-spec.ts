@@ -122,9 +122,11 @@ describe('FR-AUD-01 Audit log cho mọi thao tác ghi', () => {
     const logs = await t.conn.model(Models.AuditLog).find({ actorId: c.actor.user._id }).lean<Array<Record<string, unknown>>>();
     const hit = logs.filter((l) => l.entity === c.entity);
     expect(hit.length).toBeGreaterThanOrEqual(1);
-    expect(hit[hit.length - 1]).toMatchObject({ actorRole: c.role });
-    expect(hit.every((l) => l.after != null && l.action && l.entityId)).toBe(true);
-    // entityId of the target (payment logs the new payment id, discount logs the invoice)
-    if (c.entity !== 'payment') expect(hit.some((l) => String(l.entityId) === String(c.entityId))).toBe(true);
+    expect(hit.every((l) => l.actorRole === c.role && l.after != null && l.entityId)).toBe(true);
+    expect(hit.some((l) => l.action === c.action)).toBe(true);
+    // payment logs the new payment id; every other case logs the target itself
+    const expectedId = c.entity === 'payment' ? (await t.conn.model(Models.Payment).findOne({ invoiceId: c.entityId }).lean<{ _id: Types.ObjectId }>())?._id : c.entityId;
+    expect(expectedId).toBeDefined();
+    expect(hit.some((l) => String(l.entityId) === String(expectedId))).toBe(true);
   });
 });
