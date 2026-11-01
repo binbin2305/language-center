@@ -26,6 +26,11 @@ cp apps/api/.env.example apps/api/.env   # đổi JWT_ACCESS_SECRET (>= 32 ký t
 | `pnpm test` | unit test (Jest, Vitest) |
 | `pnpm test:e2e` | e2e API (supertest + mongodb-memory-server, không cần Docker) |
 | `pnpm test:scripts` | test script swarm (`scripts/__tests__`) |
+| `pnpm test:security` | sweep bảo mật API (`apps/api/test/security`: phân quyền theo route, IDOR HV, header, rate limit, OpenAPI) |
+| `pnpm coverage` | coverage dòng: api `src/modules/**` >= 85%, web `src/features/**` >= 75% (NFR-07); báo cáo ở `coverage/` (git-ignored) |
+| `pnpm e2e` | Playwright E2E trên bản build thật (xem "E2E" bên dưới) |
+| `pnpm --filter api perf` | đo p95 các endpoint chính trên dữ liệu lớn (NFR-02, xem "Hiệu năng") |
+| `pnpm --filter api migrate:class-history` | điền `classHistory` cho ghi danh cũ (chạy một lần sau khi nâng cấp từ bản trước W2) |
 | `scripts/fr-coverage.sh [--strict]` | FR trong PRD chưa có test nào nhắc tới |
 
 ## Chạy dev không cần Docker
@@ -49,6 +54,35 @@ pnpm --filter api seed
 ```
 
 Tạo ADMIN nếu chưa tồn tại; đăng nhập lần đầu bắt buộc đổi mật khẩu. Chạy lại an toàn (idempotent).
+
+## Đồng hồ demo (`APP_CLOCK_START`)
+
+Dữ liệu demo kết thúc ở ngày **2026-11-02** (thứ Hai). Để API coi "hôm nay" là ngày đó, đặt `APP_CLOCK_START` (ISO-8601 có offset, vd. `2026-11-02T13:00:00Z` = 20:00 giờ VN) trong `apps/api/.env`: thời gian vẫn chạy tiếp từ mốc này. Chỉ dành cho dev/e2e: khi `NODE_ENV=production` biến này bị bỏ qua (dùng giờ hệ thống, có cảnh báo log).
+
+## E2E (Playwright)
+
+```bash
+caffeinate -i pnpm e2e
+```
+
+`e2e/run.sh` tự dựng mọi thứ, không cần Docker: Mongo tạm (MongoMemoryReplSet, cổng 27027, thư mục dữ liệu mới mỗi lần chạy và xóa khi xong) -> `seed:demo --reset` -> xóa `apps/api/dist` và `apps/web/dist` -> build thật -> api (cổng 3100) + `vite preview` (cổng 4173) -> Playwright dùng Chrome cài sẵn trên máy (`channel: 'chrome'`, không tải browser). Không chạy hai lần `pnpm e2e` cùng lúc (cổng cố định). Spec nằm ở `e2e/flows/`; kiểm tra truy cập (axe) ở `e2e/a11y/`.
+
+## Tài liệu API (OpenAPI)
+
+Khi chạy ngoài production, API phục vụ Swagger UI tại `http://localhost:3000/api/docs` và JSON tại `/api/docs-json` (không cần token). Tài liệu được sinh tự động từ danh sách route Nest và schema zod của `@lc/shared` (body, query, path param), mỗi route ghi `x-roles` và yêu cầu bearer token trừ route public (login, refresh, health). Khi `NODE_ENV=production` cả hai đường dẫn trả 404.
+
+## Hiệu năng (NFR-02)
+
+```bash
+caffeinate -i pnpm --filter api perf
+```
+
+Dựng DB riêng, seed demo cộng `seed:large` (10.000 HV, 500 lớp, 50.000 buổi), đo p95 của các endpoint chính (mục tiêu < 300 ms) và kiểm tra query không COLLSCAN; kết quả ghi ở `docs/hardening/perf-report.md`.
+
+## Ghi chú vận hành
+
+- macOS tự ngủ khi rảnh và làm test/build dài treo giữa chừng (jest đứng 0% CPU): bọc lệnh dài (`pnpm test`, `pnpm test:e2e`, `pnpm e2e`, `pnpm coverage`, `pnpm build`, perf) bằng `caffeinate -i`.
+- Trước khi build thật để chạy: `rm -rf apps/api/dist apps/web/dist` (tsbuildinfo cũ có thể làm bản build lỗi 500).
 
 ## Quy trình swarm
 
@@ -74,7 +108,7 @@ Mật khẩu chung `Password1`: `manager@center.local`, `staff1@center.local`, `
 Dữ liệu lớn (NFR-02, chèn thô nhưng đủ field W2):
 
 ```bash
-SEED_STUDENTS=5000 SEED_CLASSES=200 pnpm --filter api seed:large   # mặc định 5000 / 200; lớp mã L-xxxx, HV mã HVLxxxxxx
+SEED_STUDENTS=5000 SEED_CLASSES=200 pnpm --filter api seed:large   # mặc định 5000 / 200; lớp mã L-xxxx, HV mã HVLxxxxxx; thêm SEED_SESSIONS_PER_CLASS=N để sinh N buổi mỗi lớp
 ```
 
 Học viên đăng nhập bằng mã HV hoặc bằng email hồ sơ (không phân biệt hoa/thường). Nếu nhiều HV dùng chung một email (vd. email phụ huynh), đăng nhập bằng email bị từ chối (401) — dùng mã HV. Nhân viên đăng nhập bằng email như cũ.
