@@ -87,6 +87,8 @@ InvoiceSchema.index({ code: 1 }, { unique: true });
 InvoiceSchema.index({ studentId: 1, status: 1 });
 InvoiceSchema.index({ dueDate: 1, status: 1 });
 InvoiceSchema.index({ classId: 1 });
+// GET /invoices default sort -createdAt (NFR-02).
+InvoiceSchema.index({ createdAt: -1, _id: -1 });
 InvoiceSchema.index(
   { enrollmentId: 1 },
   { unique: true, partialFilterExpression: { kind: InvoiceKind.TUITION } },

@@ -79,5 +79,7 @@ StudentSchema.index({ leadId: 1 }, { unique: true, partialFilterExpression: { le
 StudentSchema.index({ phone: 1 });
 StudentSchema.index({ fullNameSearch: 1 });
 StudentSchema.index({ email: 1 });
+// GET /students default page: { deletedAt: null } sorted -createdAt (NFR-02).
+StudentSchema.index({ deletedAt: 1, createdAt: -1, _id: -1 });
 
 export type StudentDoc = HydratedDocument<Student>;
