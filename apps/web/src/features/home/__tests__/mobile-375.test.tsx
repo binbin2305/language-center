@@ -248,8 +248,8 @@ describe('P-02 mobile 375px — giáo viên', () => {
     expectNoOverflowRisk();
   });
 
-  // CR L-STUDENT-PORTAL-2 (#2): session-detail-sheet.tsx "Điểm danh" link uses default Button (h-9).
-  it.fails('FR-ATT-02: /schedule (GV) nút Điểm danh trong chi tiết buổi cao >= 44px (CR L-STUDENT-PORTAL-2)', async () => {
+  // Regression for CR L-STUDENT-PORTAL-2 (fixed in Task M).
+  it('FR-ATT-02: /schedule (GV) nút Điểm danh trong chi tiết buổi cao >= 44px (CR L-STUDENT-PORTAL-2)', async () => {
     renderApp({ route: '/schedule', user: teacher() });
     const items = await screen.findAllByText(/A2-TOI/, {}, T);
     fireEvent.click(items[0]!);
@@ -269,8 +269,8 @@ describe('P-02 mobile 375px — học viên', () => {
       expectTouchTarget(screen.getByRole('link', { name }));
   });
 
-  // CR L-STUDENT-PORTAL-2 (#1): confirm-class-banner.tsx "Xác nhận lớp" button is size="sm" (h-8).
-  it.fails('FR-CLS-11: / (HV) nút Xác nhận lớp cao >= 44px (CR L-STUDENT-PORTAL-2)', async () => {
+  // Regression for CR L-STUDENT-PORTAL-2 (fixed in Task M).
+  it('FR-CLS-11: / (HV) nút Xác nhận lớp cao >= 44px (CR L-STUDENT-PORTAL-2)', async () => {
     server.use(http.get('*/api/v1/enrollments/me', () => HttpResponse.json({ data: [unconfirmed] })));
     renderApp({ route: '/', user: student() });
     expectTouchTarget(await screen.findByRole('button', { name: 'Xác nhận lớp' }, T));
@@ -282,15 +282,15 @@ describe('P-02 mobile 375px — học viên', () => {
     expectNoOverflowRisk();
   });
 
-  // CR L-STUDENT-PORTAL-1: result-cards.tsx renders <table class="w-full text-sm"> without an overflow-x-auto wrapper.
-  it.fails('FR-GRD-06: /me/results bảng điểm bọc overflow-x-auto (CR L-STUDENT-PORTAL-1)', async () => {
+  // Regression for CR L-STUDENT-PORTAL-1 (fixed in Task M).
+  it('FR-GRD-06: /me/results bảng điểm bọc overflow-x-auto (CR L-STUDENT-PORTAL-1)', async () => {
     renderApp({ route: '/me/results', user: student() });
     expect((await screen.findAllByText('Giữa kỳ', {}, T)).length).toBeGreaterThan(0);
     expectTablesScroll();
   });
 
-  // CR L-STUDENT-PORTAL-1: the "Tải phiếu điểm PDF" button uses size="sm" (h-8 = 32px) without min-h-11.
-  it.fails('FR-GRD-06: /me/results nút Tải phiếu điểm PDF cao >= 44px (CR L-STUDENT-PORTAL-1)', async () => {
+  // Regression for CR L-STUDENT-PORTAL-1 (fixed in Task M).
+  it('FR-GRD-06: /me/results nút Tải phiếu điểm PDF cao >= 44px (CR L-STUDENT-PORTAL-1)', async () => {
     renderApp({ route: '/me/results', user: student() });
     expect((await screen.findAllByText('Giữa kỳ', {}, T)).length).toBeGreaterThan(0);
     expectTouchTarget(screen.getByRole('button', { name: 'Tải phiếu điểm PDF' }));

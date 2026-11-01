@@ -36,30 +36,32 @@ function ResultCard({ result }: { result: ResultDto }) {
     <section className="space-y-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">{cls.data?.name ?? 'Lớp học'}</h2>
-        <Button variant="outline" size="sm" disabled={busy} onClick={download}>
+        <Button variant="outline" className="min-h-11" disabled={busy} onClick={download}>
           Tải phiếu điểm PDF
         </Button>
       </div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b text-left text-muted-foreground">
-            <th className="py-1 font-medium">Bài đánh giá</th>
-            <th className="py-1 font-medium">Loại</th>
-            <th className="py-1 font-medium">Trọng số</th>
-            <th className="py-1 text-right font-medium">Điểm</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.items.map((i) => (
-            <tr key={i.assessmentId} className="border-b last:border-0">
-              <td className="py-1">{i.name}</td>
-              <td className="py-1">{ASSESSMENT_TYPE_LABELS[i.type] ?? i.type}</td>
-              <td className="py-1">{i.weight}%</td>
-              <td className="py-1 text-right">{formatScore(i.score)}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-muted-foreground">
+              <th className="py-1 font-medium">Bài đánh giá</th>
+              <th className="py-1 font-medium">Loại</th>
+              <th className="py-1 font-medium">Trọng số</th>
+              <th className="py-1 text-right font-medium">Điểm</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {result.items.map((i) => (
+              <tr key={i.assessmentId} className="border-b last:border-0">
+                <td className="py-1">{i.name}</td>
+                <td className="py-1">{ASSESSMENT_TYPE_LABELS[i.type] ?? i.type}</td>
+                <td className="py-1">{i.weight}%</td>
+                <td className="py-1 text-right">{formatScore(i.score)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div className="flex items-center justify-end gap-2 text-sm">
         <span className="text-muted-foreground">Trung bình</span>
         <strong>{formatScore(result.average)}</strong>

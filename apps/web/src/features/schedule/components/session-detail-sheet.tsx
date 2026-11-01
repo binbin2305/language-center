@@ -53,7 +53,7 @@ export function SessionDetailSheet({ session, onClose }: SessionDetailSheetProps
               </dl>
               <SheetFooter className="mt-6 gap-2 sm:gap-0">
                 {scheduled && can(user, 'attendance.take') ? (
-                  <Button asChild>
+                  <Button asChild className="min-h-11">
                     <Link to={`/sessions/${session.id}/attendance`}>Điểm danh</Link>
                   </Button>
                 ) : null}

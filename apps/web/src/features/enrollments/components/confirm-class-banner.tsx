@@ -23,7 +23,7 @@ export function ConfirmClassBanner() {
             Bạn đã được xếp vào lớp <strong>{e.className ?? 'mới'}</strong>. Vui lòng xác nhận để hoàn tất.
           </p>
           <Button
-            size="sm"
+            className="min-h-11"
             disabled={confirm.isPending}
             onClick={() =>
               confirm.mutate(e.id, {
