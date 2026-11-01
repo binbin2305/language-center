@@ -45,13 +45,13 @@ describe('NFR-01 FR-AUTH-01 Header bảo mật, CORS và giới hạn đăng nh�
     expect(res.headers['access-control-allow-origin']).not.toBe('*');
   });
 
-  // CR L-HARDENING-1: enableCors({ origin: <string> }) echoes WEB_ORIGIN to every Origin.
-  it.failing('CR L-HARDENING-1 CORS: Origin http://evil.test → không có header access-control-allow-origin', async () => {
+  // CR L-HARDENING-1 (fixed in lane/L-LEAD 0060773): only WEB_ORIGIN is reflected.
+  it('CR L-HARDENING-1 CORS: Origin http://evil.test → không có header access-control-allow-origin', async () => {
     const res = await t.http().get('/api/v1/health').set('Origin', 'http://evil.test');
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it.failing('CR L-HARDENING-1 CORS preflight: OPTIONS từ http://evil.test → không có header access-control-allow-origin', async () => {
+  it('CR L-HARDENING-1 CORS preflight: OPTIONS từ http://evil.test → không có header access-control-allow-origin', async () => {
     const res = await t
       .http()
       .options('/api/v1/auth/login')

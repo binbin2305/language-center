@@ -29,7 +29,7 @@ async function save(type: ReportTypeParam, format: 'xlsx' | 'pdf', p: ReportPara
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `bao-cao-${type}-${p.from}_${p.to}.${format}`;
+    a.download = `bao-cao-${type}-${p.from}-${p.to}.${format}`; // = API Content-Disposition (R14)
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch (e) {

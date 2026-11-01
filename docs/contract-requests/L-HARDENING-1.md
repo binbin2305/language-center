@@ -19,3 +19,5 @@ app.enableCors({ origin: [loadEnv().WEB_ORIGIN], credentials: true });
 ```
 
 After the fix, change the two `it.failing` in `apps/api/test/security/headers.security-spec.ts` back to `it` (Task M).
+
+**Status:** Fixed in lane/L-LEAD 0060773 (`enableCors({ origin: [env.WEB_ORIGIN], credentials: true })`; test `apps/api/test/e2e/cors.e2e-spec.ts`). Task M: the two `it.failing` in `headers.security-spec.ts` flipped to `it`. (from `docs/contract-requests/L-07-status.md`)

@@ -31,6 +31,7 @@ cp apps/api/.env.example apps/api/.env   # đổi JWT_ACCESS_SECRET (>= 32 ký t
 | `pnpm e2e` | Playwright E2E trên bản build thật (xem "E2E" bên dưới) |
 | `pnpm --filter api perf` | đo p95 các endpoint chính trên dữ liệu lớn (NFR-02, xem "Hiệu năng") |
 | `pnpm --filter api migrate:class-history` | điền `classHistory` cho ghi danh cũ (chạy một lần sau khi nâng cấp từ bản trước W2) |
+| `pnpm --filter api migrate:attendance-start-at` | điền `attendance.startAt` cho điểm danh cũ (R12): **bước trước khi mở traffic** khi nâng cấp lên W4, chạy ngay sau deploy lúc ít truy cập (quét mỗi dòng điểm danh một lần, theo lô, chạy lại an toàn). Chưa chạy thì điểm danh cũ không xuất hiện trong `GET /attendance?from/to` và `/attendance/summary?from/to` |
 | `scripts/fr-coverage.sh [--strict]` | FR trong PRD chưa có test nào nhắc tới |
 
 ## Chạy dev không cần Docker

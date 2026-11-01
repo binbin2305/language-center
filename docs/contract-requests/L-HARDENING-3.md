@@ -30,3 +30,5 @@ Both need `SessionSchema.index({ startAt: 1, _id: 1 })` (CR L-HARDENING-2). `sum
 Explain (ad hoc): `SUBPLAN>PROJECTION_SIMPLE>FETCH>OR>IXSCAN(classId_1_status_1)|IXSCAN(classHistory_1)` — existing indexes, no schema change. Unfiltered `/results` (no classId) stays a full scan; whitelisting it or requiring a filter is Lead's call.
 
 After the fix, re-run `pnpm --filter api perf` (Task M).
+
+**Status:** Fixed in lane/L-LEAD 418b2d6 + 47eed21 (review fixes) (R12 `attendance.startAt` + `/results` prefilter; tests `indexes.e2e-spec.ts`, `attendance-take`, `attendance-update`, `schedule-update`, `seed-demo`, `attendance-startat-migration` e2e specs). (from `docs/contract-requests/L-07-status.md`)

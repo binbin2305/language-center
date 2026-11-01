@@ -7,8 +7,11 @@ export interface CapturedQuery {
   args: unknown[];
 }
 
-/** Read methods whose plan we can explain; writes and metadata calls are reported, not explained. */
-const EXPLAINABLE = new Set(['find', 'findOne', 'aggregate', 'countDocuments', 'distinct']);
+/**
+ * Read methods we check; writes and other calls are reported, not explained. `estimatedDocumentCount` (Ruling R11:
+ * `paginate` uses it when the filter is empty) reads collection metadata, has no query plan and never scans.
+ */
+const EXPLAINABLE = new Set(['find', 'findOne', 'aggregate', 'countDocuments', 'distinct', 'estimatedDocumentCount']);
 
 export function isExplainable(q: CapturedQuery): boolean {
   return EXPLAINABLE.has(q.method);
@@ -113,6 +116,7 @@ async function foreignScans(conn: Connection, pipeline: Doc[]): Promise<boolean>
 
 /** Explains the captured read (queryPlanner), walks the winning plan, then the foreign sides of an aggregate. */
 export async function hasCollscan(conn: Connection, q: CapturedQuery): Promise<boolean> {
+  if (q.method === 'estimatedDocumentCount') return false; // metadata count (R11): no plan, no COLLSCAN
   if (planHasCollscan(await explainQuery(conn, q))) return true;
   return q.method === 'aggregate' ? foreignScans(conn, q.args[0] as Doc[]) : false;
 }

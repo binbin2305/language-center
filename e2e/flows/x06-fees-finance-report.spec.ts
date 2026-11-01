@@ -4,9 +4,7 @@ import { apiAs } from '../fixtures/api';
 import { loginAs } from '../fixtures/auth';
 import { expect, newClockedContext, test } from '../fixtures/clock';
 import { runId, uniquePhone } from '../fixtures/ids';
-
-/** Same output as formatVnd from @lc/shared (e2e has no workspace dependency on it): "1.350.000 ₫". */
-const formatVnd = (n: number): string => `${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} ₫`;
+import { formatVnd } from '../fixtures/money';
 
 interface Invoice {
   id: string;
@@ -128,7 +126,7 @@ test('FR-FEE-03 FR-FEE-04 FR-RPT-04 FR-RPT-05 đề xuất giảm giá → quả
 
     // --- Excel export: real click, real download.
     const [download] = await Promise.all([mpage.waitForEvent('download'), mpage.getByRole('button', { name: 'Xuất Excel' }).click()]);
-    expect(download.suggestedFilename()).toBe(`bao-cao-finance-${DEMO_TODAY}_${DEMO_TODAY}.xlsx`);
+    expect(download.suggestedFilename()).toBe(`bao-cao-finance-${DEMO_TODAY}-${DEMO_TODAY}.xlsx`);
     const buf = await readFile(await download.path());
     expect(buf.subarray(0, 2).toString()).toBe('PK');
     expect(buf.length).toBeGreaterThan(1024);

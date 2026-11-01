@@ -130,7 +130,10 @@ describe('báo cáo - xuất file (FR-RPT-05)', () => {
     );
     URL.createObjectURL = vi.fn(() => 'blob:x');
     URL.revokeObjectURL = vi.fn();
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const names: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      names.push(this.download);
+    });
     open();
     await screen.findByRole('cell', { name: 'IELTS Foundation' }, T);
     await userEvent.click(screen.getByRole('button', { name: 'Xuất Excel' }));
@@ -139,6 +142,8 @@ describe('báo cáo - xuất file (FR-RPT-05)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Xuất PDF' }));
     await waitFor(() => expect(hits).toHaveLength(2));
     expect(hits[1].get('format')).toBe('pdf');
+    // Ruling R14: same name as the API's Content-Disposition (bao-cao-<type>-<from>-<to>.<ext>)
+    await waitFor(() => expect(names).toEqual(['bao-cao-admissions-2026-11-01-2026-11-18.xlsx', 'bao-cao-admissions-2026-11-01-2026-11-18.pdf']));
   });
 });
 

@@ -35,3 +35,5 @@ SessionSchema.index({ startAt: 1, _id: 1 });                    // find: FETCH>I
 **Suggestion (2) unfiltered totals** — `countDocuments({})` (`/classes`, `/invoices` with no filter) stays `COLLSCAN` with any index (the driver runs `$match {}` + `$group`). When the list filter is empty, use `estimatedDocumentCount()` (collection metadata, plan `RECORD_STORE_FAST_COUNT`, 0.1ms; matched the exact count 508/10052 here). Alternatively Lead may accept unfiltered totals as a documented exception and the perf check can whitelist `countDocuments {}`; tell L-HARDENING which.
 
 After the fix, re-run `pnpm --filter api perf` (Task M).
+
+**Status:** Fixed in lane/L-LEAD 4048479 (list indexes + R11 `estimatedDocumentCount` for empty filters; tests `apps/api/test/e2e/indexes.e2e-spec.ts`, `apps/api/src/common/pagination.spec.ts`). (from `docs/contract-requests/L-07-status.md`)

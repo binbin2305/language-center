@@ -1,5 +1,5 @@
 import { PipelineStage, Types } from 'mongoose';
-import { captureQueries, hasCollscan, p95, planHasCollscan } from '../perf/explain';
+import { captureQueries, hasCollscan, isExplainable, p95, planHasCollscan } from '../perf/explain';
 import { models } from '../factories';
 import { createTestApp, TestApp } from '../helpers/test-app';
 
@@ -100,6 +100,14 @@ describe('NFR-02 perf helpers', () => {
       it('$lookup không index nằm trong $facet → true', async () => {
         expect(await agg([local, { $facet: { rows: [{ $lookup: { from: 'rooms', localField: 'name', foreignField: 'name', as: 'x' } }] } }])).toBe(true);
       });
+    });
+
+    it('estimatedDocumentCount (R11, đếm theo metadata) → bắt được, isExplainable = true, hasCollscan = false', async () => {
+      const qs = await captureQueries(() => models(t.conn).Room.estimatedDocumentCount().exec());
+      const count = qs.find((q) => q.collection === 'rooms' && q.method === 'estimatedDocumentCount');
+      expect(count).toBeDefined();
+      expect(isExplainable(count!)).toBe(true);
+      expect(await hasCollscan(t.conn, count!)).toBe(false);
     });
 
     it('countDocuments trên field không index → true; sau captureQueries debug được tắt (không bắt thêm)', async () => {
