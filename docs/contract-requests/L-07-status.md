@@ -7,7 +7,7 @@ The CR files live on `lane/L-HARDENING`. Their "Fixed in" lines are recorded her
 | L-HARDENING-1 (CORS echoes WEB_ORIGIN) | Fixed in lane/L-LEAD 0060773 | `apps/api/test/e2e/cors.e2e-spec.ts` |
 | H-01B note (receipt.pdf 403/404 served as application/pdf) | Fixed in lane/L-LEAD c596295 | `apps/api/test/e2e/fees-lookup.e2e-spec.ts` "receipt lỗi 403/404 -> Content-Type application/json" |
 | L-HARDENING-2 (list indexes, unfiltered totals) | Fixed in lane/L-LEAD 4048479 | `apps/api/test/e2e/indexes.e2e-spec.ts` (index exists + every read explained, no COLLSCAN), `apps/api/src/common/pagination.spec.ts` |
-| L-HARDENING-3 (attendance join-before-filter, results classId) | Fixed in lane/L-LEAD 418b2d6 | `indexes.e2e-spec.ts`, `attendance-take`, `attendance-update`, `schedule-update`, `seed-demo`, `attendance-startat-migration` e2e specs |
+| L-HARDENING-3 (attendance join-before-filter, results classId) | Fixed in lane/L-LEAD 418b2d6 + 47eed21 (review fixes) | `indexes.e2e-spec.ts`, `attendance-take`, `attendance-update`, `schedule-update`, `seed-demo`, `attendance-startat-migration` e2e specs |
 
 ## What changed
 - **CORS:** `enableCors({ origin: [env.WEB_ORIGIN], credentials: true })`. Any other origin gets no `Access-Control-Allow-Origin`, on simple requests and on preflight.
