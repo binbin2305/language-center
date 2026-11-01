@@ -167,8 +167,8 @@ Sở hữu: `modules/fees`, `features/fees`.
 ## Wave 3
 
 ### Lead — Tích hợp chéo
-- [ ] **W3-L1 Nối dây** implementation thật cho các interface; xóa stub.
-- [ ] **W3-L2 Integration test xuyên module** (`apps/api/test/e2e/flows/*.e2e-spec.ts`). Test trước:
+- [x] **W3-L1 Nối dây** implementation thật cho các interface; xóa stub.
+- [x] **W3-L2 Integration test xuyên module** (`apps/api/test/e2e/flows/*.e2e-spec.ts`). Test trước:
   1. Lead → convert → placement → xếp lớp → invoice được tạo đúng.
   2. Xếp lớp khi InvoiceCreator lỗi → không có enrollment ENROLLED, sĩ số không đổi.
   3. Chuyển lớp → không có invoice mới; điểm danh lớp cũ vẫn xem được.
@@ -177,22 +177,22 @@ Sở hữu: `modules/fees`, `features/fees`.
   6. `resultViewRequiresPaidFees` chặn rồi thanh toán đủ → xem được.
   7. Bảo lưu → học lại → xếp lớp mới → vẫn đúng 1 hóa đơn TUITION; rút khi chưa đóng → hóa đơn VOID.
   8. Kết thúc lớp → enrollment COMPLETED; HV vẫn xem điểm danh/kết quả/phiếu điểm lớp đó.
-- [ ] **W3-L3 Seed đầy đủ** (BACKEND_SCHEMA §4) dùng service thật (không insert thô) + `seed:large`.
+- [x] **W3-L3 Seed đầy đủ** (BACKEND_SCHEMA §4) dùng service thật (không insert thô) + `seed:large`.
 
 ### L-REPORTS — Báo cáo & Dashboard
 Sở hữu: `modules/reports`, `features/{reports,dashboard}` (dashboard chỉ cho M/S).
-- [ ] **R-01 Dashboard** (FR-RPT-06). Test trước: số liệu đúng trên dữ liệu factory xác định; T/H → 403.
-- [ ] **R-02 Tuyển sinh** (FR-RPT-01). Test trước: đếm lead/hồ sơ/xếp lớp theo khoảng ngày VN (biên đầu/cuối ngày); tỷ lệ chuyển đổi khi 0 lead → 0 (không NaN).
-- [ ] **R-03 Chuyên cần** (FR-RPT-02). Test trước: tỷ lệ theo lớp khớp `/attendance/summary`.
-- [ ] **R-04 Học tập** (FR-RPT-03). Test trước: phân bố xếp loại, tỷ lệ đạt, theo GV; chỉ dùng điểm confirmed.
-- [ ] **R-05 Tài chính** (FR-RPT-04). Test trước: doanh thu theo ngày thanh toán, loại payment VOIDED; công nợ = Σ balance hóa đơn không VOID; groupBy month đúng múi giờ VN (payment 31/01 23:30 giờ VN thuộc tháng 1).
-- [ ] **R-06 Export** (FR-RPT-05). Test trước: xlsx mở được bằng exceljs và có header + số dòng đúng; pdf content-type đúng; không dữ liệu → file vẫn hợp lệ với dòng "Không có dữ liệu".
-- [ ] **R-07 FE Báo cáo + Dashboard** (DESIGN §4.2, 4.10). Test trước: đổi preset thời gian gọi lại API với from/to đúng; rỗng → thông điệp; nút xuất tải file; dashboard GV/HV hiển thị đúng khối.
+- [x] **R-01 Dashboard** (FR-RPT-06). Test trước: số liệu đúng trên dữ liệu factory xác định; T/H → 403.
+- [x] **R-02 Tuyển sinh** (FR-RPT-01). Test trước: đếm lead/hồ sơ/xếp lớp theo khoảng ngày VN (biên đầu/cuối ngày); tỷ lệ chuyển đổi khi 0 lead → 0 (không NaN).
+- [x] **R-03 Chuyên cần** (FR-RPT-02). Test trước: tỷ lệ theo lớp khớp `/attendance/summary`.
+- [x] **R-04 Học tập** (FR-RPT-03). Test trước: phân bố xếp loại, tỷ lệ đạt, theo GV; chỉ dùng điểm confirmed.
+- [x] **R-05 Tài chính** (FR-RPT-04). Test trước: doanh thu theo ngày thanh toán, loại payment VOIDED; công nợ = Σ balance hóa đơn không VOID; groupBy month đúng múi giờ VN (payment 31/01 23:30 giờ VN thuộc tháng 1).
+- [x] **R-06 Export** (FR-RPT-05). Test trước: xlsx mở được bằng exceljs và có header + số dòng đúng; pdf content-type đúng; không dữ liệu → file vẫn hợp lệ với dòng "Không có dữ liệu".
+- [x] **R-07 FE Báo cáo + Dashboard** (DESIGN §4.2, 4.10). Test trước: đổi preset thời gian gọi lại API với from/to đúng; rỗng → thông điệp; nút xuất tải file; dashboard GV/HV hiển thị đúng khối.
 
 ### L-STUDENT-PORTAL — Trải nghiệm GV & HV trên điện thoại
 Sở hữu: `features/home` (trang chủ GV & HV). Các trang `/me/*` thuộc lane dữ liệu tương ứng (ARCHITECTURE §5); lane này chỉ đọc qua hook export của các feature đó.
-- [ ] **P-01** Trang chủ GV (buổi hôm nay + nút Điểm danh, bài cần nhập điểm, kiểm tra sắp tới) và HV (buổi tiếp theo, chuyên cần, TB, còn nợ, banner xác nhận lớp). Test trước: mỗi khối có trạng thái rỗng; banner xác nhận gọi `/enrollments/:id/confirm` và biến mất.
-- [ ] **P-02** Kiểm tra (chỉ test, sửa lỗi bằng contract request tới lane sở hữu) toàn bộ luồng T/H ở 375px (Playwright component/visual hoặc RTL + viewport): không cuộn ngang, nút ≥ 44px.
+- [x] **P-01** Trang chủ GV (buổi hôm nay + nút Điểm danh, bài cần nhập điểm, kiểm tra sắp tới) và HV (buổi tiếp theo, chuyên cần, TB, còn nợ, banner xác nhận lớp). Test trước: mỗi khối có trạng thái rỗng; banner xác nhận gọi `/enrollments/:id/confirm` và biến mất.
+- [x] **P-02** Kiểm tra (chỉ test, sửa lỗi bằng contract request tới lane sở hữu) toàn bộ luồng T/H ở 375px (Playwright component/visual hoặc RTL + viewport): không cuộn ngang, nút ≥ 44px.
 
 **Merge gate W3:** như trên + seed chạy thành công trên DB sạch.
 

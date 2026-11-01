@@ -70,3 +70,40 @@ Task R-04: implemented (7504666..59d5c60); review dispatched; R-05 impl dispatch
 Task R-04: complete (commits 7504666..59d5c60, review clean)
 Task R-04: minor (deferred): pdf money not formatted (formatVnd); per-type header/empty tests thin; empty pdf table shows only first header
 STOPPED by user request 2026-11-01: R-05 impl and L-04 impl killed mid-work (uncommitted WIP in lc-L-REPORTS and lc-L-LEAD). Handoff: docs/superpowers/handoff-wave3-midway.md
+RESUMED 2026-11-01 new session.
+Task R-05: impl re-dispatched (sonnet, BASE 59d5c60, continue-or-discard WIP, raw RED required)
+Task L-04: impl re-dispatched (opus, BASE 4ddaee0, continue WIP, raw RED required)
+Both R-05 and L-04 impls hit 5h limit; resumed via SendMessage after reset
+Task R-05: implemented (59d5c60..0df6bf7), kept coherent WIP, raw RED 8 failed; review dispatched
+Task R-06: impl dispatched (sonnet, BASE 0df6bf7) concurrently with R-05 read-only review (FE files disjoint)
+Task R-05: complete (commits 59d5c60..0df6bf7, review clean)
+Task R-05: minor (deferred): tests miss classId filter, finance groupBy selector, non-admissions export, error/retry, role redirect, to<from guard; chart colours hardcoded hex (no dark tokens); attendance byStudent not rendered; presetRange per render
+Task R-06: implemented (0df6bf7..3d4a7e9) concerns: recharts 0x0 warnings in jsdom, sessionsToday card not link; review dispatched
+Task R-06: review Needs fixes (/fees?overdue=true not read by fees-page → CR L-REPORTS-1 for Task M; recharts 0x0 noise); fix round 1 dispatched (HEAD seen: 3d4a7e9). Checked ⚠️: home-router sends MANAGER+ACADEMIC_STAFF to StaffDashboard — ok.
+Task R-06: minor (deferred): trend line colours hardcoded hex; "6 điểm" test asserts sr-only table only
+Task R-06: fix round 1/5 (2 addressed, 0 open — CR L-REPORTS-1 filed, recharts mock; commits 3d4a7e9..df6c4f7)
+Task R-06: complete (commits 0df6bf7..df6c4f7, review clean). Task M note: apply CR L-REPORTS-1 (fees-page overdue from search param + test)
+Task R-05: minor (deferred, from R-06 re-review): reports tests still emit recharts width(0)/height(0) warnings — apply same ResponsiveContainer mock
+Lane L-REPORTS: all tasks complete (HEAD df6c4f7)
+Task L-04: implemented (4ddaee0..7ffb68b) concerns: DEMO_TODAY→2026-11-02, admin created only if none, seed:large own course LARGE, --reset keeps settings+ADMIN; review dispatched
+Task L-05: impl dispatched (sonnet, BASE 7ffb68b) concurrently with L-04 review; carries L-03 minors (3),(8),(4)
+Task L-04: review Needs fixes (RED block pasted from dashboard vitest, not seed spec; minors seed-large wall clock / fake actor / non-idempotent partial rerun); fix round 1 dispatched (HEAD seen: 7ffb68b)
+Task L-04: minor (deferred): demo today fixed 2026-11-02 vs real clock (README note); duplicated weekday helper; Timeline.drain re-sorts O(n² log n)
+Task L-05: implemented (7ffb68b..4deac17: 99e7ecb feat, 4deac17 L-03 minors); review dispatched
+Task L-05: complete (commits 7ffb68b..4deac17, review clean)
+Task L-05: minor (deferred): results-page wrapper not prettier-formatted; roster fetch capped at 100 (no paging); roster error blocks matrix; studentId clear not tested
+Task L-04: fix round 1 done (4deac17..dd269bf, real RED via scratch worktree, 3 minors fixed; missing-actor error untested); re-review dispatched
+Task L-04: fix round 1/5 (4 addressed, 0 open — real RED, ClockService, actor error, LARGE idempotence; commits 4deac17..dd269bf)
+Task L-04: complete (commits 4ddaee0..dd269bf, review clean)
+Task L-04: minor (deferred): missing-actor error untested; partial run after teacher.l1 before LARGE not caught (theoretical)
+Lane L-LEAD: all tasks complete (HEAD dd269bf)
+Task M: Steps 1-5 dispatched (opus, main 3a1cbd0; CRs PORTAL-1/-2, REPORTS-1 + reports recharts mock). Step 6 controller-run.
+Task M: Steps 1-5 done (3a1cbd0..c46da6a: merges 5514fa0/3722221/11e1e8a, CRs e7b4e0a/ba9c4af, recharts mock c46da6a). Full chain green: shared 102, api unit 44, web 492, e2e 871, merge-gate ok, fr-coverage 63/68 (W3 FRs covered). Smoke 16/17 PASS, T2a FAIL (attendance save bar under bottom nav at 375px, pre-existing W2).
+Ruling R3: T2a (save bar hidden under mobile bottom nav) goes into the final fix wave, not deferred — Review Focus 4 (mobile 375 primary actions) binds W3 — cost if wrong: one small extra fix in W3.
+Final review dispatched (opus, 0f9951b..c46da6a)
+Final review: 3 Important (T2a save bar, FR-RPT-02 byStudent, academic empty state) + 7 minor/docs; deferred-minor triage: rest → W4. ONE fix wave dispatched (findings in final-findings.md, FIX_BASE c46da6a)
+Final fix wave done (c46da6a..05ff5fc, 7 commits, full chain green: web 496, e2e 874; T2a smoke PASS real click); scoped re-review dispatched
+Final fix wave: re-review all 10 addressed, no new breakage. Controller full-chain verification started.
+Final fix wave: complete (commits c46da6a..05ff5fc, re-review clean). Controller full chain on 05ff5fc: EXIT 0 — shared 102, api unit 44, web 496 (37 files), api e2e 874 (60 suites), merge-gate ok, fr-coverage 63/68. Smoke 17/17 PASS (T2a fixed).
+Remaining deferred minors → W4 per final-review triage (see handoff-wave4.md).
+Wave 3 done: TASK.md W3 ticked, tag w3, pushed.
