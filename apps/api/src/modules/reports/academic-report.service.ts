@@ -30,7 +30,8 @@ export class AcademicReportService {
 
   async get(q: AcademicReportQuery): Promise<AcademicReportDto> {
     const { start, end } = vnRange(q.from, q.to);
-    const match: Record<string, unknown> = {};
+    // D39: only classes whose [startDate, endDate] overlaps the range.
+    const match: Record<string, unknown> = { startDate: { $lt: end }, endDate: { $gte: start } };
     if (q.classId) match._id = new Types.ObjectId(q.classId);
     if (q.courseId) match.courseId = new Types.ObjectId(q.courseId);
     if (q.teacherId) match.teacherId = new Types.ObjectId(q.teacherId);

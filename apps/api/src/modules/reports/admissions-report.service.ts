@@ -10,6 +10,7 @@ import type { Student } from '../../database/schemas/student.schema';
 import { rate } from './report-math';
 import { vnRange } from './report-range';
 
+const NONE = 'none';
 type Row = AdmissionsReportDto['rows'][number];
 
 /** FR-RPT-01 (D26). Read-only aggregation over leads, students and enrollments. */
@@ -70,18 +71,18 @@ export class AdmissionsReportService {
     for (const c of profileCourses) {
       if (course && c !== q.courseId) continue;
       profilesTotal++;
-      if (c) at(c).newProfiles++;
+      at(c ?? NONE).newProfiles++;
     }
     for (const e of enrolledAgg) at(e._id.toString()).enrolled = e.n;
     for (const w of waitingAgg) at(w._id.toString()).waiting = w.n;
 
     const names = new Map(
-      (await this.courses.find({ _id: { $in: [...acc.keys()].map((k) => new Types.ObjectId(k)) } }, { name: 1 }).lean()).map((c) => [c._id.toString(), c.name]),
+      (await this.courses.find({ _id: { $in: [...acc.keys()].filter((k) => k !== NONE).map((k) => new Types.ObjectId(k)) } }, { name: 1 }).lean()).map((c) => [c._id.toString(), c.name]),
     );
     const rows: Row[] = [...acc.entries()]
       .map(([courseId, r]) => ({
         courseId,
-        courseName: names.get(courseId) ?? '',
+        courseName: names.get(courseId) ?? (courseId === NONE ? 'Khác' : ''),
         leads: r.leads,
         newProfiles: r.newProfiles,
         conversionRate: rate(r.converted, r.leads),

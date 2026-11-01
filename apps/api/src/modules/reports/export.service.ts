@@ -108,7 +108,13 @@ export class ExportService {
             body: [t.headers.map((h) => ({ text: h, bold: true })), ...t.rows.map((r) => r.map((c, i) => (typeof c === 'number' && t.money?.includes(i) ? formatVnd(c) : String(c))))],
           },
         }
-      : { table: { headerRows: 1, widths: ['*'], body: [[{ text: t.headers[0], bold: true }], [EMPTY]] } };
+      : {
+          table: {
+            headerRows: 1,
+            widths: t.headers.map(() => '*'),
+            body: [t.headers.map((h) => ({ text: h, bold: true })), [{ text: EMPTY, colSpan: t.headers.length }, ...t.headers.slice(1).map(() => ({ text: '' }))]],
+          },
+        };
     const def: TDocumentDefinitions = {
       pageOrientation: 'landscape',
       content: [
