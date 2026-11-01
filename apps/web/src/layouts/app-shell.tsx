@@ -7,12 +7,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { setThemePreference, useThemePreference, type ThemePreference } from '@/lib/theme';
 import { useAuth } from '@/auth/use-auth';
 import { NotificationBell } from '@/features/notifications/components/notification-bell';
 import { BOTTOM_NAV_ROLES, mobileNavItemsFor, navItemsFor } from './nav-config';
@@ -84,6 +87,7 @@ function BottomNav({ onMore }: { onMore: () => void }) {
 
 function AccountMenu() {
   const { user, logout } = useAuth();
+  const theme = useThemePreference();
   if (!user) return null;
   return (
     <DropdownMenu>
@@ -97,6 +101,13 @@ function AccountMenu() {
           <div className="truncate">{user.fullName}</div>
           <div className="truncate text-xs font-normal text-muted-foreground">{user.username}</div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Giao diện</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setThemePreference(v as ThemePreference)}>
+          <DropdownMenuRadioItem value="system">Hệ thống</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="light">Sáng</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Tối</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/change-password">

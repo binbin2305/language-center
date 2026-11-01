@@ -9,7 +9,7 @@ import { OptionSelect } from '@/components/common/option-select';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { errorMessage } from '@/lib/error-messages';
 import { reportsApi, type ReportParams } from '../api';
 import { AcademicContent, AdmissionsContent, AttendanceContent, FinanceContent } from '../components/tabs-content';
@@ -84,7 +84,6 @@ export default function ReportsPage() {
         <TabsList className="h-auto flex-wrap">
           {TABS.map((t) => <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>)}
         </TabsList>
-      </Tabs>
       <FilterBar>
         <div role="group" aria-label="Khoảng thời gian" className="flex flex-wrap gap-1">
           {PRESETS.map((p) => (
@@ -117,13 +116,14 @@ export default function ReportsPage() {
           />
         ) : null}
       </FilterBar>
-      <div className="mt-4">
+      <TabsContent value={tab} className="mt-4">
         {!ready && !rangeInvalid ? <p className="text-sm text-muted-foreground">Chọn khoảng thời gian hợp lệ.</p> : null}
         {ready && tab === 'admissions' ? <AdmissionsContent q={admissions} /> : null}
         {ready && tab === 'attendance' ? <AttendanceContent q={attendance} /> : null}
         {ready && tab === 'academic' ? <AcademicContent q={academic} /> : null}
         {ready && tab === 'finance' ? <FinanceContent q={finance} /> : null}
-      </div>
+      </TabsContent>
+      </Tabs>
     </div>
   );
 }
