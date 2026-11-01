@@ -84,7 +84,7 @@ describe('FR-RPT-05 Xuất báo cáo (GET /reports/:type/export)', () => {
     expect(await pdfText(p.body as Buffer)).toContain('Không có dữ liệu');
   });
 
-  it('FR-RPT-03/05 học tập: lớp không có điểm trong khoảng (students 0) → xuất "Không có dữ liệu"', async () => {
+  it('FR-RPT-03 FR-RPT-05 học tập: lớp không có điểm trong khoảng (students 0) → xuất "Không có dữ liệu"', async () => {
     const json = await t.http().get(`/api/v1/reports/academic?from=${FROM}&to=${TO}`).set(auth(manager));
     expect(json.body.data.rows.length).toBeGreaterThan(0);
     expect(json.body.data.rows.every((r: { students: number }) => r.students === 0)).toBe(true);
@@ -95,7 +95,7 @@ describe('FR-RPT-05 Xuất báo cáo (GET /reports/:type/export)', () => {
     expect(await pdfText(p.body as Buffer)).toContain('Không có dữ liệu');
   });
 
-  it('FR-RPT-04/05 tài chính: pdf định dạng tiền VND, xlsx giữ số', async () => {
+  it('FR-RPT-04 FR-RPT-05 tài chính: pdf định dạng tiền VND, xlsx giữ số', async () => {
     const p = await exp(manager, 'finance', `format=pdf&from=${FROM}&to=${TO}`);
     const text = await pdfText(p.body as Buffer);
     expect(text).toContain('1.234.500');

@@ -8,7 +8,7 @@ import { loginAs } from '../helpers/auth';
 import { pdfText } from '../helpers/pdf-text';
 import { createTestApp, TestApp } from '../helpers/test-app';
 
-describe('FR-GRD-05/06/08 Kết quả & phiếu điểm', () => {
+describe('FR-GRD-05 FR-GRD-06 FR-GRD-08 Kết quả & phiếu điểm', () => {
   let t: TestApp;
   beforeAll(async () => {
     t = await createTestApp();

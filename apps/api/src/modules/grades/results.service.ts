@@ -85,7 +85,7 @@ export class ResultsService {
     });
   }
 
-  /** FR-GRD-05/06: one row per (student, class), scoped by role. */
+  /** FR-GRD-05 FR-GRD-06: one row per (student, class), scoped by role. */
   async list(q: ListResultsQuery, user: AuthUser): Promise<Paginated<ResultDto>> {
     await this.assertFeesGate(user);
     const match: Record<string, unknown> = {};

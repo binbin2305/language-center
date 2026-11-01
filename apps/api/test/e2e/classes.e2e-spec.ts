@@ -7,7 +7,7 @@ import { makeClass, makeCourse, makeRoom, makeSession, makeTeacher, makeUser } f
 import { Models } from '../../src/database/models';
 import { AuditLog } from '../../src/database/schemas/audit-log.schema';
 
-describe('FR-CLS-01..03 Lớp học', () => {
+describe('FR-CLS-01 FR-CLS-02 FR-CLS-03 Lớp học', () => {
   let t: TestApp;
   let manager: { token: string };
   let staff: { token: string };

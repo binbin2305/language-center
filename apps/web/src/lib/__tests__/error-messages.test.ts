@@ -12,7 +12,7 @@ describe('error messages', () => {
     for (const m of Object.values(ERROR_MESSAGES))
       expect(m).not.toMatch(/\b(4\d\d|5\d\d)\b|ObjectId/);
   });
-  it('CLASS_FULL đọc đúng cho cả xếp lớp lẫn chuyển lớp (FR-CLS-07/08)', () => {
+  it('CLASS_FULL đọc đúng cho cả xếp lớp lẫn chuyển lớp (FR-CLS-07 FR-CLS-08)', () => {
     expect(ERROR_MESSAGES.CLASS_FULL).toMatch(/^Lớp đã đủ sĩ số\./);
     expect(ERROR_MESSAGES.CLASS_FULL).not.toMatch(/tăng sĩ số/);
   });

@@ -8,7 +8,7 @@ import { createTestApp, TestApp } from '../helpers/test-app';
 const START = new Date('2026-01-06T02:00:00Z');
 const END = new Date('2026-01-06T04:00:00Z');
 
-describe('FR-ATT-01/02 Điểm danh', () => {
+describe('FR-ATT-01 FR-ATT-02 Điểm danh', () => {
   let t: TestApp;
   beforeAll(async () => {
     t = await createTestApp();

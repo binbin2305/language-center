@@ -117,7 +117,7 @@ describe('danh sách học viên (FR-ADM-05)', () => {
   });
 });
 
-describe('hồ sơ học viên (FR-ADM-05/06)', () => {
+describe('hồ sơ học viên (FR-ADM-05 FR-ADM-06)', () => {
   const mockDetail = (body: unknown = student()) =>
     server.use(http.get(`*/api/v1/students/${SID}`, () => HttpResponse.json({ data: body })));
 

@@ -6,7 +6,7 @@ import { makeStudent } from '../factories/student.factory';
 import { loginAs } from '../helpers/auth';
 import { createTestApp, TestApp } from '../helpers/test-app';
 
-describe('FR-GRD-02/03 Nhập điểm', () => {
+describe('FR-GRD-02 FR-GRD-03 Nhập điểm', () => {
   let t: TestApp;
   beforeAll(async () => {
     t = await createTestApp();

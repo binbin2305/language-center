@@ -14,7 +14,7 @@ import {
   models,
 } from '../factories';
 
-describe('FR-PLT-01..04 Kiểm tra đầu vào', () => {
+describe('FR-PLT-01 FR-PLT-02 FR-PLT-03 FR-PLT-04 Kiểm tra đầu vào', () => {
   let t: TestApp;
   let manager: string;
   let staff: string;

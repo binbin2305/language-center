@@ -6,7 +6,7 @@ import { loginAs } from '../helpers/auth';
 import { isOverdue } from '../../src/modules/fees/fees.mapper';
 import { createTestApp, DEFAULT_NOW, TestApp } from '../helpers/test-app';
 
-describe('FR-FEE-04/05 Thanh toán, hủy phiếu thu, quá hạn', () => {
+describe('FR-FEE-04 FR-FEE-05 Thanh toán, hủy phiếu thu, quá hạn', () => {
   let t: TestApp;
   let manager: { token: string };
   let staff: { token: string };

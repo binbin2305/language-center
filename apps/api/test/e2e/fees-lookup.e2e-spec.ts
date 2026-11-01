@@ -6,7 +6,7 @@ import { loginAs } from '../helpers/auth';
 import { pdfText } from '../helpers/pdf-text';
 import { createTestApp, DEFAULT_NOW, TestApp } from '../helpers/test-app';
 
-describe('FR-FEE-06/07 Tra cứu hóa đơn, phụ thu, phiếu thu', () => {
+describe('FR-FEE-06 FR-FEE-07 Tra cứu hóa đơn, phụ thu, phiếu thu', () => {
   let t: TestApp;
   let manager: { token: string };
   let staff: { token: string; user: { _id: Types.ObjectId } };
@@ -173,7 +173,7 @@ describe('FR-FEE-06/07 Tra cứu hóa đơn, phụ thu, phiếu thu', () => {
     await get(`/payments/${p._id}/receipt.pdf`, admin.token).expect(403);
   });
 
-  it('FR-FEE-06/07: A mọi route -> 403; T/H không tạo phụ thu', async () => {
+  it('FR-FEE-06 FR-FEE-07: A mọi route -> 403; T/H không tạo phụ thu', async () => {
     const inv = await makeInvoice(t.conn);
     const body = { studentId: String(inv.studentId), description: 'x', amountDue: 1000, dueDate: '2026-01-20' };
     await get('/invoices', admin.token).expect(403);
