@@ -20,6 +20,7 @@ import {
   vnDay,
 } from '@lc/shared';
 import { AppModule } from '../src/app.module';
+import { ClockService } from '../src/common/clock/clock.service';
 import { Models } from '../src/database/models';
 import { hashPassword } from '../src/modules/auth/password';
 import { DEMO_PASSWORD } from './seed-demo';
@@ -34,8 +35,8 @@ import { DEMO_PASSWORD } from './seed-demo';
 export interface SeedLargeOptions {
   students: number;
   classes: number;
-  /** VN day the data is relative to (default: today). */
-  today?: string;
+  /** VN day the data is relative to (the CLI passes ClockService.now()). */
+  today: string;
 }
 
 const SLOTS: { weekdays: number[]; time: [string, string] }[] = [];
@@ -60,13 +61,16 @@ async function insertChunked(model: Model<unknown>, docs: Record<string, unknown
 
 export async function runSeedLarge(conn: Connection, opts: SeedLargeOptions): Promise<{ status: 'created' | 'exists'; students: number; classes: number }> {
   const m = (name: keyof typeof Models) => conn.models[Models[name]] as Model<unknown>;
-  if (await m('Class').exists({ code: /^L-/ })) return { status: 'exists', students: 0, classes: 0 };
-  const today = opts.today ?? vnDay(new Date());
+  // Course LARGE is the first insert, so it also marks a partial earlier run (clear it with seed:demo --reset).
+  if ((await m('Course').exists({ code: 'LARGE' })) || (await m('Class').exists({ code: /^L-/ }))) return { status: 'exists', students: 0, classes: 0 };
+  const actorDoc = await conn.models[Models.User].findOne({ role: { $in: [Role.ADMIN, Role.ACADEMIC_STAFF] } }, { _id: 1 }).lean<{ _id: Types.ObjectId }>();
+  if (!actorDoc) throw new Error('Chưa có tài khoản ADMIN/ACADEMIC_STAFF: chạy pnpm --filter api seed:demo trước.');
+  const actor = actorDoc._id;
+  const today = opts.today;
   const todayStart = startOfVnDay(today);
   const hash = await hashPassword(DEMO_PASSWORD);
   const id = () => new Types.ObjectId();
 
-  const actor = (await conn.models[Models.User].findOne({ role: { $in: [Role.ADMIN, Role.ACADEMIC_STAFF] } }, { _id: 1 }).lean<{ _id: Types.ObjectId }>())?._id ?? id();
   const course = { _id: id(), code: 'LARGE', name: 'Khóa dữ liệu lớn', language: 'Tiếng Anh', levels: ['A1'], totalSessions: 16, baseFee: 3_000_000 };
   await m('Course').insertMany([course]);
 
@@ -182,8 +186,9 @@ async function main(): Promise<void> {
   const classes = envInt('SEED_CLASSES', 200);
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
   try {
-    const res = await runSeedLarge(app.get<Connection>(getConnectionToken()), { students, classes });
-    console.log(res.status === 'created' ? `Large data created: ${students} students, ${classes} classes.` : 'Large data already present (classes L-*).');
+    const today = vnDay(app.get(ClockService).now());
+    const res = await runSeedLarge(app.get<Connection>(getConnectionToken()), { students, classes, today });
+    console.log(res.status === 'created' ? `Large data created: ${students} students, ${classes} classes.` : 'Large data already present (course LARGE / classes L-*). Use seed:demo --reset to clear it.');
   } finally {
     await app.close();
   }

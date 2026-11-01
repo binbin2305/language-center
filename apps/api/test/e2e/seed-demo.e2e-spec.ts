@@ -182,5 +182,9 @@ describe('seed:demo qua service thật + seed:large (W3-L3, D28)', () => {
     for (const c of large) {
       expect(await m().Enrollment.countDocuments({ classId: c._id, status: EnrollmentStatus.ENROLLED })).toBe(c.currentSize);
     }
+    // Rerun is a no-op, also after a partial run that left only course LARGE behind (no duplicate key).
+    expect(await runSeedLarge(t.conn, { students: 50, classes: 5, today: DEMO_TODAY })).toMatchObject({ status: 'exists' });
+    await m().Class.deleteMany({ code: /^L-/ });
+    expect(await runSeedLarge(t.conn, { students: 50, classes: 5, today: DEMO_TODAY })).toMatchObject({ status: 'exists' });
   });
 });
