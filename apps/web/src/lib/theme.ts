@@ -44,6 +44,7 @@ export function initTheme(): () => void {
   apply();
   if (typeof window.matchMedia !== 'function') return () => undefined;
   const mq = window.matchMedia(QUERY);
+  // Always attached on purpose: apply() ignores the OS unless the preference is 'system'.
   const onChange = () => apply();
   mq.addEventListener('change', onChange);
   return () => mq.removeEventListener('change', onChange);

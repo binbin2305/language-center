@@ -8,6 +8,7 @@ import { makeUser } from '../../../../test/users';
 const T = { timeout: 10_000 };
 
 describe('NFR-06 báo cáo - tab aria-controls trỏ tới panel có thật (CR L-HARDENING-7)', () => {
+  // Radix unmounts inactive panels, so only the selected tab's aria-controls must resolve (axe allows it for aria-selected=false).
   it('tab đang chọn luôn có panel tương ứng trong DOM, kể cả khi đang tải và sau khi đổi tab', async () => {
     server.use(
       http.get('*/api/v1/reports/admissions', () => HttpResponse.json({ data: { totals: { leads: 0, newProfiles: 0, conversionRate: null, enrolled: 0, waiting: 0 }, rows: [] } })),
