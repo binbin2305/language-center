@@ -10,12 +10,11 @@ import { expect, mobile, newClockedContext, test } from '../fixtures/clock';
 /** H-03 NFR-06: axe wcag2a + wcag2aa on 10 main screens, light and dark; 0 serious/critical violations except the known CRs. */
 
 /**
- * CR L-HARDENING-4 is open: the production CSS has no `.dark` block and the app never sets `html.dark`
- * (Ruling R15: Lead will follow `prefers-color-scheme` live + a user-menu toggle Hệ thống/Sáng/Tối and keep the block).
- * While true: dark scans apply a workaround (class + source tokens) and the two CR-4 tests below expect the app NOT to work.
- * When Lead's fix lands set this to false (one line): the CR-4 tests then require the real behaviour and dark scans get no help.
+ * CR L-HARDENING-4 is fixed (lane/L-LEAD 3aee0dd, Ruling R15: the app follows `prefers-color-scheme` live + a user-menu
+ * toggle Hệ thống/Sáng/Tối, and the built CSS keeps the `.dark` block). Dark scans get no help; the two CR-4 tests below
+ * require the real behaviour. Set back to true only with a Lead ruling.
  */
-const CR4_OPEN = true;
+const CR4_OPEN = false;
 
 type Mode = 'light' | 'dark';
 const MODES: Mode[] = ['light', 'dark'];
@@ -25,39 +24,32 @@ const MODES: Mode[] = ['light', 'dark'];
  * rule ids at serious/critical (non-empty and no others), so it fails loudly both on a new violation and when a CR is fixed
  * (then delete the entry). Unlisted screens must be clean.
  */
-const KNOWN: Record<string, Record<string, string>> = {
-  '/login (dark)': { 'color-contrast': 'L-HARDENING-6' },
-  '/admissions/leads (light)': { 'color-contrast': 'L-HARDENING-5' },
-  '/admissions/leads (dark)': { 'color-contrast': 'L-HARDENING-6' },
-  '/admissions/leads/new (light)': { 'color-contrast': 'L-HARDENING-5' },
-  '/admissions/leads/new (dark)': { 'color-contrast': 'L-HARDENING-6' },
-  '/students/:id (light)': { 'color-contrast': 'L-HARDENING-5' },
-  '/students/:id (dark)': { 'color-contrast': 'L-HARDENING-6' },
-  '/classes/:id (light)': { 'color-contrast': 'L-HARDENING-5' },
-  '/classes/:id (dark)': { 'color-contrast': 'L-HARDENING-6' },
-  '/fees/invoices/:id (light)': { 'color-contrast': 'L-HARDENING-5' },
-  '/fees/invoices/:id (dark)': { 'color-contrast': 'L-HARDENING-6' },
-  '/reports (light)': { 'color-contrast': 'L-HARDENING-5', 'aria-valid-attr-value': 'L-HARDENING-7' },
-  '/reports (dark)': { 'color-contrast': 'L-HARDENING-6', 'aria-valid-attr-value': 'L-HARDENING-7' },
-  '/sessions/:id/attendance (light)': { 'color-contrast': 'L-HARDENING-5' },
-  '/sessions/:id/attendance (dark)': { 'color-contrast': 'L-HARDENING-6' },
-};
+const KNOWN: Record<string, Record<string, string>> = {};
 
 const DARK_TOKENS = /\.dark\s*\{([^}]*)\}/.exec(readFileSync(resolve(__dirname, '../../apps/web/src/index.css'), 'utf8'))?.[1] ?? '';
 
 const hasDarkClass = (page: Page): Promise<boolean> => page.evaluate(() => document.documentElement.classList.contains('dark'));
 
-/** True if some served same-origin stylesheet has a `.dark` token rule (html.dark / :root.dark / .dark). */
+/**
+ * True if some served same-origin stylesheet has a `.dark` rule (html.dark / :root.dark / .dark) that declares a real
+ * design token (`--background`), so an empty or unrelated `.dark` selector does not count.
+ */
 const darkRuleServed = (page: Page): Promise<boolean> =>
-  page.evaluate(() =>
-    Array.from(document.styleSheets).some((s) => {
+  page.evaluate(() => {
+    const declaresToken = (rules: CSSRuleList): boolean =>
+      Array.from(rules).some((r) => {
+        if ('cssRules' in r && !('selectorText' in r)) return declaresToken((r as CSSGroupingRule).cssRules); // @layer / @media
+        const rule = r as CSSStyleRule;
+        return /(^|[\s,])(html|:root)?\.dark([\s,{:]|$)/.test(rule.selectorText ?? '') && (rule.style?.getPropertyValue('--background') ?? '').trim() !== '';
+      });
+    return Array.from(document.styleSheets).some((s) => {
       try {
-        return Array.from(s.cssRules).some((r) => /(^|[\s,])(html|:root)?\.dark([\s,{:]|$)/.test((r as CSSStyleRule).selectorText ?? ''));
+        return declaresToken(s.cssRules);
       } catch {
         return false; // cross-origin font sheet
       }
-    }),
-  );
+    });
+  });
 
 /** Applies the mode: the app does it itself (prefers-color-scheme); with CR 4 open a workaround stands in for it. */
 async function ensureTheme(page: Page, mode: Mode): Promise<void> {

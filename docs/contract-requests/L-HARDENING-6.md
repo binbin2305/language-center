@@ -10,3 +10,5 @@
 - `text-destructive` on the tinted error bg (`#2c1924`, invoice detail `.px-2\.5`): **4.36**.
 
 **Suggestion:** in `.dark`: `--primary-foreground: 220 49% 8%` (dark text on bright primary) or darken `--primary` to about `217 91% 45%`; same for `--destructive` (e.g. `0 72% 45%` with white, or dark foreground), and lighten destructive text on tints (`0 90% 70%`).
+
+**Status:** Fixed in lane/L-LEAD 3aee0dd (+ 2c68f76 dark hover contrast). Task M: KNOWN entries for CR-6 removed from `e2e/a11y/a11y.spec.ts`. (from `docs/contract-requests/L-07-status.md`)

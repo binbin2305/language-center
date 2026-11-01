@@ -7,3 +7,5 @@
 **Rule:** `aria-valid-attr-value` (critical): the first tab trigger has `aria-controls="radix-...-content-admissions"` but that panel is not in the DOM (Radix unmounts inactive `TabsContent`; the first panel is not rendered yet / lazy).
 
 **Suggestion:** render the active `TabsContent` unconditionally (no early return while loading: show a skeleton inside it) or `forceMount` all panels with `hidden`; ensure the default tab's panel exists on first paint.
+
+**Status:** Fixed in lane/L-LEAD 3aee0dd (`/reports` panels are real `TabsContent`). Task M: the `aria-valid-attr-value` KNOWN entries removed. (from `docs/contract-requests/L-07-status.md`)

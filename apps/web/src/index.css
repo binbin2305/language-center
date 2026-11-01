@@ -19,16 +19,16 @@
     --muted-foreground: 215 19% 35%;
     --accent: 214 32% 91%;
     --accent-foreground: 222 47% 11%;
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 40%;
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
     --input: 214 32% 91%;
     --ring: 224 76% 48%;
     --success: 142 76% 24%;
     --success-foreground: 0 0% 100%;
-    --warning: 32 95% 44%;
+    --warning: 32 95% 28%;
     --warning-foreground: 0 0% 100%;
-    --info: 192 91% 36%;
+    --info: 192 91% 26%;
     --info-foreground: 0 0% 100%;
     --radius: 0.5rem;
     /* Chart series: full colours (used as var(--chart-N) in SVG fill/stroke). */

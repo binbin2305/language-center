@@ -9,3 +9,5 @@
 - Success badge on student detail (`.px-2\.5.py-0\.5`): `#16a249` on `#d6ede1` = **2.7**.
 
 **Suggestion:** darken `--muted-foreground` to about `215 19% 35%` (>= 6:1 on all surfaces) or at least `215 16% 40%` (4.28 -> >= 5); use a darker text token for the success badge (e.g. `142 76% 22%` on the tint) instead of `text-success`.
+
+**Status:** Fixed in lane/L-LEAD 3aee0dd. Task M: KNOWN entries for CR-5 removed from `e2e/a11y/a11y.spec.ts`. (from `docs/contract-requests/L-07-status.md`)
