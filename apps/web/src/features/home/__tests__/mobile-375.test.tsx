@@ -241,6 +241,19 @@ describe('P-02 mobile 375px — giáo viên', () => {
     }
   });
 
+  // Regression for final review item 1 (smoke T2a): the fixed save bar sat under the bottom nav.
+  it('FR-ATT-02: /sessions/:id/attendance (GV) thanh "Lưu điểm danh" nằm trên menu dưới (--bottom-nav-h)', async () => {
+    renderApp({ route: `/sessions/${id(0xc01)}/attendance`, user: teacher() });
+    const save = await screen.findByRole('button', { name: 'Lưu điểm danh' }, T);
+    const nav = screen.getByRole('navigation', { name: 'Menu dưới' });
+    const shell = nav.parentElement!;
+    expect(shell.className.split(/\s+/)).toContain('[--bottom-nav-h:3.5rem]');
+    const bar = save.parentElement!;
+    expect(bar.className.split(/\s+/)).toContain('bottom-[calc(var(--bottom-nav-h,0px)+env(safe-area-inset-bottom))]');
+    expect(bar.className.split(/\s+/)).not.toContain('bottom-0');
+    expect(shell.contains(bar)).toBe(true);
+  });
+
   it('FR-SCH-05: /schedule (GV) hiện danh sách tuần trên 375px không tràn ngang', async () => {
     const { container } = renderApp({ route: '/schedule', user: teacher() });
     expect((await screen.findAllByText(/A2-TOI/, {}, T)).length).toBeGreaterThan(0);

@@ -126,7 +126,7 @@ export function AppShell() {
   useEffect(() => setDrawerOpen(false), [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={cn('min-h-screen bg-background text-foreground', bottomNav && '[--bottom-nav-h:3.5rem]')}>
       <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card px-3 md:px-4">
         {drawer && (
           <Button variant="ghost" size="icon" aria-label="Mở menu" onClick={() => setDrawerOpen(true)}>

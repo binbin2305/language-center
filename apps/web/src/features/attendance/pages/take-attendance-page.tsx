@@ -224,7 +224,7 @@ function AttendanceForm({ sessionId, data, session, threshold }: FormProps) {
         />
       </div>
       {readOnly ? null : (
-        <div className="fixed inset-x-0 bottom-0 z-10 border-t bg-background p-3">
+        <div className="fixed inset-x-0 bottom-[calc(var(--bottom-nav-h,0px)+env(safe-area-inset-bottom))] z-10 border-t bg-background p-3">
           <Button
             type="button"
             className="min-h-11 w-full"
