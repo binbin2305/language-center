@@ -51,6 +51,19 @@ describe('FR-SCH-04 FR-SCH-05 Sửa và hủy buổi học', () => {
       expect(await t.conn.model('AuditLog').countDocuments({ entity: 'Session', entityId: s.session._id, action: AuditAction.UPDATE })).toBe(1);
     });
 
+    it('FR-SCH-04 R12 đổi giờ buổi đã có bản ghi điểm danh -> attendance.startAt cập nhật cùng transaction', async () => {
+      const s = await seed();
+      const base = { sessionId: s.session._id, classId: s.cls._id, enrollmentId: new Types.ObjectId(), status: 'PRESENT', history: [] };
+      await t.conn.collection('attendances').insertMany([
+        { ...base, studentId: new Types.ObjectId(), startAt: s.session.startAt },
+        { ...base, studentId: new Types.ObjectId(), startAt: s.session.startAt },
+      ]);
+      const res = await patch(s.id, manager, { startAt: '2026-01-06T11:30:00.000Z', endAt: '2026-01-06T13:00:00.000Z' });
+      expect(res.status).toBe(200);
+      const rows = await t.conn.collection('attendances').find({ sessionId: s.session._id }).toArray();
+      expect(rows.map((r) => (r.startAt as Date).toISOString())).toEqual(['2026-01-06T11:30:00.000Z', '2026-01-06T11:30:00.000Z']);
+    });
+
     it('FR-SCH-04 đổi phòng gây xung đột -> 409 SCHEDULE_CONFLICT', async () => {
       const s = await seed();
       const otherRoom = await makeRoom(t.conn);

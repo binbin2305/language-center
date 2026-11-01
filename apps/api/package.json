@@ -14,6 +14,7 @@
     "seed:demo": "ts-node scripts/seed-demo.ts",
     "seed:large": "ts-node scripts/seed-large.ts",
     "migrate:class-history": "ts-node scripts/migrate-class-history.ts",
+    "migrate:attendance-start-at": "ts-node scripts/migrate-attendance-start-at.ts",
     "test:security": "jest --config jest-security.config.ts --runInBand",
     "test:coverage": "jest --coverage --passWithNoTests",
     "perf": "ts-node test/perf/p95.ts"

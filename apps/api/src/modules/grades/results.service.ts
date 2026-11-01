@@ -110,6 +110,11 @@ export class ResultsService {
       classMatch.cid = { $in: classFilter };
     }
 
+    // NFR-02: a known class list is matched first through classId_1_status_1 / classHistory_1;
+    // the exact per-class $match after $unwind still applies.
+    const known = q.classId ? [classMatch.cid as Types.ObjectId] : classFilter;
+    if (known) match.$or = [{ classId: { $in: known } }, { classHistory: { $in: known } }];
+
     const [agg] = await this.enrollments.aggregate<{ rows: Pair[]; total: { n: number }[] }>([
       { $match: match },
       {

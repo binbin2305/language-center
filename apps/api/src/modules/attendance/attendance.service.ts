@@ -28,6 +28,7 @@ import { ClockService } from '../../common/clock/clock.service';
 import { CounterService } from '../../common/db/counter.service';
 import { withTransaction } from '../../common/db/transaction';
 import { AppError } from '../../common/errors/app-error';
+import { countFor } from '../../common/pagination';
 import { ScopeService } from '../../common/scope/scope.service';
 import { SettingsService } from '../../common/settings/settings.service';
 import { Models } from '../../database/models';
@@ -143,6 +144,7 @@ export class AttendanceService {
                 $setOnInsert: {
                   sessionId: session._id,
                   classId: session.classId,
+                  startAt: session.startAt,
                   studentId: e.studentId,
                   enrollmentId: e._id,
                   status: r.status,
@@ -220,6 +222,7 @@ export class AttendanceService {
               $setOnInsert: {
                 sessionId: session._id,
                 classId: session.classId,
+                startAt: session.startAt,
                 studentId,
                 enrollmentId: enrollmentByStudent.get(r.studentId),
                 status: r.status,
@@ -343,45 +346,34 @@ export class AttendanceService {
     return match;
   }
 
-  /** Attendance joined with its session; cancelled sessions and out-of-range VN days are dropped. */
-  private joinSession(match: Record<string, unknown>, q: { from?: string; to?: string }) {
+  /**
+   * R12: the history filter runs on attendance itself (denormalized startAt; classId/studentId scope), so it is
+   * index-backed and no session is joined before paging. Records of cancelled sessions (taken in the early
+   * window, then cancelled) are excluded by id, read from the covering index status_1_startAt_1__id_1.
+   */
+  private async rangeMatch(match: Record<string, unknown>, q: { from?: string; to?: string }): Promise<Record<string, unknown>> {
     const startAt: Record<string, Date> = {};
     if (q.from) startAt.$gte = startOfVnDay(q.from);
     if (q.to) startAt.$lt = startOfVnDay(addVnDays(q.to, 1));
-    return [
-      { $match: match },
-      { $lookup: { from: this.sessions.collection.name, localField: 'sessionId', foreignField: '_id', as: 'session' } },
-      { $unwind: '$session' },
-      {
-        $match: {
-          'session.status': { $ne: SessionStatus.CANCELLED },
-          ...(Object.keys(startAt).length ? { 'session.startAt': startAt } : {}),
-        },
-      },
-    ];
+    const ranged = Object.keys(startAt).length ? { startAt } : {};
+    const cancelled = await this.sessions.distinct('_id', { status: SessionStatus.CANCELLED, ...ranged });
+    return { ...match, ...ranged, ...(cancelled.length ? { sessionId: { $nin: cancelled } } : {}) };
   }
 
   async list(q: ListAttendanceQuery, user: AuthUser): Promise<Paginated<AttendanceDto>> {
     const empty = { data: [], meta: { page: q.page, limit: q.limit, total: 0 } };
-    const match = await this.historyMatch(q, user);
-    if (!match) return empty;
-    const [res] = await this.attendances.aggregate<{
-      rows: (Attendance & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date; session: Session })[];
-      count: { n: number }[];
-    }>([
-      ...this.joinSession(match, q),
-      {
-        $facet: {
-          rows: [
-            { $sort: { 'session.startAt': -1, _id: -1 } },
-            { $skip: (q.page - 1) * q.limit },
-            { $limit: q.limit },
-          ],
-          count: [{ $count: 'n' }],
-        },
-      },
+    const scoped = await this.historyMatch(q, user);
+    if (!scoped) return empty;
+    const match = await this.rangeMatch(scoped, q);
+    const [rows, total] = await Promise.all([
+      this.attendances
+        .find(match)
+        .sort({ startAt: -1, _id: -1 })
+        .skip((q.page - 1) * q.limit)
+        .limit(q.limit)
+        .lean<(Attendance & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date })[]>(),
+      countFor(this.attendances, match),
     ]);
-    const rows = res?.rows ?? [];
     const [studentDocs, classDocs] = await Promise.all([
       this.students.find({ _id: { $in: rows.map((r) => r.studentId) } }, { fullName: 1 }).lean(),
       this.classes.find({ _id: { $in: rows.map((r) => r.classId) } }, { code: 1 }).lean(),
@@ -389,17 +381,18 @@ export class AttendanceService {
     const names = new Map(studentDocs.map((x) => [String(x._id), x.fullName]));
     const codes = new Map(classDocs.map((x) => [String(x._id), x.code]));
     return {
-      data: rows.map((r) => toAttendanceDto(r, r.session.startAt, names.get(String(r.studentId)), codes.get(String(r.classId)))),
-      meta: { page: q.page, limit: q.limit, total: res?.count[0]?.n ?? 0 },
+      data: rows.map((r) => toAttendanceDto(r, r.startAt, names.get(String(r.studentId)), codes.get(String(r.classId)))),
+      meta: { page: q.page, limit: q.limit, total },
     };
   }
 
   async summary(q: AttendanceSummaryQuery, user: AuthUser): Promise<{ data: AttendanceSummaryRowDto[] }> {
-    const match = await this.historyMatch(q, user);
-    if (!match) return { data: [] };
+    const scoped = await this.historyMatch(q, user);
+    if (!scoped) return { data: [] };
+    const match = await this.rangeMatch(scoped, q);
     const field = q.groupBy === 'student' ? 'studentId' : 'classId';
     const groups = await this.attendances.aggregate<{ _id: Types.ObjectId; counts: { s: AttendanceStatus; n: number }[] }>([
-      ...this.joinSession(match, q),
+      { $match: match },
       { $group: { _id: { k: `$${field}`, s: '$status' }, n: { $sum: 1 } } },
       { $group: { _id: '$_id.k', counts: { $push: { s: '$_id.s', n: '$n' } } } },
     ]);

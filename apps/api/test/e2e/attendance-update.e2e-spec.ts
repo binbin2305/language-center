@@ -158,6 +158,22 @@ describe('FR-ATT-03 Cập nhật điểm danh', () => {
     expect(row.history[0]).toMatchObject({ from: null, to: AttendanceStatus.LATE });
   });
 
+  it('FR-ATT-03 R12 bản ghi tạo mới qua PATCH mang startAt của buổi', async () => {
+    const s = await seed();
+    const st = await makeStudent(t.conn);
+    const se = await t.conn.model('Session').findById(s.id).lean<{ classId: Types.ObjectId }>();
+    await makeEnrollment(t.conn, {
+      studentId: st._id,
+      courseId: new Types.ObjectId(),
+      classId: se!.classId,
+      status: EnrollmentStatus.ENROLLED,
+      history: [{ from: EnrollmentStatus.WAITING_CLASS, to: EnrollmentStatus.ENROLLED, at: new Date('2026-01-02T00:00:00Z') }],
+    });
+    expect((await patch(s.id, s.teacher.token, { records: [{ studentId: String(st._id), status: AttendanceStatus.LATE }] })).status).toBe(200);
+    const rec = await t.conn.model('Attendance').findOne({ sessionId: s.id, studentId: st._id }).lean<{ startAt?: Date }>();
+    expect(rec?.startAt).toEqual(START);
+  });
+
   it('FR-ATT-03 audit_logs có entity attendance', async () => {
     const s = await seed();
     await patch(s.id, s.teacher.token, { records: [{ studentId: s.sid(0), status: AttendanceStatus.LATE }] });

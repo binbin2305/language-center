@@ -45,6 +45,16 @@ async function snapshot(conn: Connection) {
   };
 }
 
+/** R12: every attendance record carries its session's startAt. */
+async function assertAttendanceStartAt(conn: Connection): Promise<number> {
+  const rows = await models(conn).Attendance.find({}, { sessionId: 1, startAt: 1 }).lean();
+  const sessions = await models(conn).Session.find({ _id: { $in: rows.map((r) => r.sessionId) } }, { startAt: 1 }).lean();
+  const at = new Map(sessions.map((x) => [String(x._id), x.startAt.toISOString()]));
+  const bad = rows.filter((r) => !r.startAt || r.startAt.toISOString() !== at.get(String(r.sessionId)));
+  expect(bad.map((r) => String(r._id))).toEqual([]);
+  return rows.length;
+}
+
 /** R22: every seated enrollment lists its class in classHistory and has a class-stamped ENROLLED entry. */
 async function assertSeatedHistory(conn: Connection): Promise<number> {
   const seated = await models(conn).Enrollment.find({ classId: { $ne: null } }).lean();
@@ -170,6 +180,7 @@ describe('seed:demo qua service thật + seed:large (W3-L3, D28)', () => {
     expect((await login('HV202600001')).status).toBe(200);
     await assertSeatedHistory(t.conn);
     await assertInvoiceInvariants(t.conn);
+    expect(await assertAttendanceStartAt(t.conn)).toBeGreaterThan(0);
   });
 
   it('NFR-02 seed:large (SEED_STUDENTS=50, SEED_CLASSES=5): chèn thô nhưng có classHistory + history stamp, hóa đơn hợp lệ', async () => {
@@ -186,6 +197,7 @@ describe('seed:demo qua service thật + seed:large (W3-L3, D28)', () => {
     expect(await m().Invoice.countDocuments({ classId: { $in: ids } })).toBeGreaterThan(0);
     await assertSeatedHistory(t.conn);
     await assertInvoiceInvariants(t.conn);
+    expect(await assertAttendanceStartAt(t.conn)).toBeGreaterThan(0);
     // currentSize matches ENROLLED seats.
     for (const c of large) {
       expect(await m().Enrollment.countDocuments({ classId: c._id, status: EnrollmentStatus.ENROLLED })).toBe(c.currentSize);

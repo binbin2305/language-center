@@ -69,6 +69,17 @@ describe('FR-ATT-01 FR-ATT-02 Điểm danh', () => {
     expect(String(rows[0]!.recordedBy)).toBe(String(s.teacher.user._id));
   });
 
+  it('FR-ATT-01 R12 bản ghi điểm danh mang startAt của buổi (denormalized khi ghi)', async () => {
+    const s = await seed(2);
+    expect((await put(s.id, s.teacher.token, s.records())).status).toBe(200);
+    const rows = await t.conn.model('Attendance').find({ sessionId: s.id }).lean<{ startAt?: Date; classId: Types.ObjectId }[]>();
+    expect(rows).toHaveLength(2);
+    for (const r of rows) {
+      expect(r.startAt).toEqual(START);
+      expect(String(r.classId)).toBe(String(s.cls._id));
+    }
+  });
+
   it('FR-ATT-01 GV dạy thay (session.teacherId) -> 200 và GV đó thấy buổi', async () => {
     const sub = await loginAs(t, Role.TEACHER);
     const s = await seed(2, { teacherId: sub.user._id });

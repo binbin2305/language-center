@@ -15,6 +15,8 @@ export interface AttendanceHistoryEntry {
 export interface Attendance {
   sessionId: Types.ObjectId;
   classId: Types.ObjectId;
+  /** R12: copy of the session's startAt, set at write time and kept in sync when the session moves. */
+  startAt: Date;
   studentId: Types.ObjectId;
   enrollmentId: Types.ObjectId;
   status: AttendanceStatus;
@@ -38,6 +40,7 @@ export const AttendanceSchema = new Schema<Attendance>(
   {
     sessionId: { type: Schema.Types.ObjectId, ref: Models.Session, required: true },
     classId: { type: Schema.Types.ObjectId, ref: Models.Class, required: true },
+    startAt: { type: Date, required: true },
     studentId: { type: Schema.Types.ObjectId, ref: Models.Student, required: true },
     enrollmentId: { type: Schema.Types.ObjectId, ref: Models.Enrollment, required: true },
     status: { type: String, enum: ALL_ATTENDANCE_STATUSES, required: true },
@@ -50,5 +53,9 @@ export const AttendanceSchema = new Schema<Attendance>(
 AttendanceSchema.index({ sessionId: 1, studentId: 1 }, { unique: true });
 AttendanceSchema.index({ studentId: 1, createdAt: -1 });
 AttendanceSchema.index({ classId: 1, status: 1 });
+// R12 GET /attendance: filter by session time and page through the index (staff / teacher / student scope).
+AttendanceSchema.index({ startAt: -1, _id: -1 });
+AttendanceSchema.index({ classId: 1, startAt: -1, _id: -1 });
+AttendanceSchema.index({ studentId: 1, startAt: -1, _id: -1 });
 
 export type AttendanceDoc = HydratedDocument<Attendance>;

@@ -37,7 +37,7 @@ describe('FR-ATT-04 Lịch sử và tổng hợp điểm danh', () => {
       const startAt = new Date(base + i * 86_400_000);
       const se = await makeSession(t.conn, { classId: cls._id, startAt, endAt: new Date(startAt.getTime() + 7_200_000) });
       await models(t.conn).Attendance.create({
-        sessionId: se._id, classId: cls._id, studentId: st._id, enrollmentId: enr._id, status: statuses[i],
+        sessionId: se._id, classId: cls._id, studentId: st._id, enrollmentId: enr._id, status: statuses[i], startAt,
       });
       sessions.push(se);
     }
@@ -71,6 +71,7 @@ describe('FR-ATT-04 Lịch sử và tổng hợp điểm danh', () => {
     });
     await models(t.conn).Attendance.create({
       sessionId: cancelled._id, classId: x.cls._id, studentId: x.st._id, enrollmentId: x.enr._id, status: S.UNEXCUSED,
+      startAt: cancelled.startAt,
     });
     const sum = await get(`/summary?groupBy=class&classId=${x.cls._id}`, await staff());
     expect(sum.body.data[0]).toMatchObject({ total: 1, PRESENT: 1, UNEXCUSED: 0, attendanceRate: 1 });
@@ -137,7 +138,7 @@ describe('FR-ATT-04 Lịch sử và tổng hợp điểm danh', () => {
     const mk = async (iso: string, status: AttendanceStatus) => {
       const startAt = new Date(iso);
       const se = await makeSession(t.conn, { classId: x.cls._id, startAt, endAt: new Date(startAt.getTime() + 3_600_000) });
-      await models(t.conn).Attendance.create({ sessionId: se._id, classId: x.cls._id, studentId: x.st._id, enrollmentId: x.enr._id, status });
+      await models(t.conn).Attendance.create({ sessionId: se._id, classId: x.cls._id, studentId: x.st._id, enrollmentId: x.enr._id, status, startAt });
       return se;
     };
     const inside = await mk('2026-01-14T11:00:00Z', S.LATE);

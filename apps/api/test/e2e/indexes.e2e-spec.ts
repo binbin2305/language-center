@@ -144,8 +144,9 @@ describe('schema indexes & factories', () => {
     ).rejects.toThrow();
     await expect(makeClass(t.conn, { maxCapacity: 5, currentSize: 6 })).rejects.toThrow();
   });
-  describe('NFR-02 list endpoint không COLLSCAN (CR L-HARDENING-2)', () => {
+  describe('NFR-02 list endpoint không COLLSCAN (CR L-HARDENING-2 CR L-HARDENING-3)', () => {
     let token: string;
+    let classId: string;
     beforeAll(async () => {
       token = (await loginAs(t, Role.MANAGER)).token;
       for (let i = 0; i < 3; i++) {
@@ -155,6 +156,7 @@ describe('schema indexes & factories', () => {
         await makeEnrollment(t.conn, { status: 'WAITING_CLASS' });
       }
       const s = await makeSession(t.conn, { startAt: new Date('2026-01-06T01:00:00Z'), endAt: new Date('2026-01-06T02:30:00Z') });
+      classId = String(s.classId);
       await makeAttendance(t.conn, { sessionId: s._id });
     });
 
@@ -164,6 +166,10 @@ describe('schema indexes & factories', () => {
       ['classes', { createdAt: -1, _id: -1 }],
       ['invoices', { createdAt: -1, _id: -1 }],
       ['sessions', { startAt: 1, _id: 1 }],
+      ['sessions', { status: 1, startAt: 1, _id: 1 }],
+      ['attendances', { startAt: -1, _id: -1 }],
+      ['attendances', { classId: 1, startAt: -1, _id: -1 }],
+      ['attendances', { studentId: 1, startAt: -1, _id: -1 }],
     ])('%s có index %j', async (col, key) => {
       expect(find(await indexes(t.conn, col), key)).toBeDefined();
     });
@@ -177,11 +183,22 @@ describe('schema indexes & factories', () => {
       '/enrollments/waiting',
       '/invoices',
       '/invoices?overdue=true',
+      '/attendance?from=2026-01-01&to=2026-01-31',
+      '/attendance',
+      '/attendance/summary?groupBy=class&from=2026-01-01&to=2026-01-31',
     ];
 
     it.each(endpoints())('GET %s: mọi read có plan không COLLSCAN', async (path) => {
       const scans = await collscansOf(t.conn, async () => {
         const res = await t.http().get(`/api/v1${path}`).set('Authorization', `Bearer ${token}`);
+        expect(res.status).toBe(200);
+      });
+      expect(scans).toEqual([]);
+    });
+
+    it('GET /results?classId: mọi read có plan không COLLSCAN', async () => {
+      const scans = await collscansOf(t.conn, async () => {
+        const res = await t.http().get(`/api/v1/results?classId=${classId}`).set('Authorization', `Bearer ${token}`);
         expect(res.status).toBe(200);
       });
       expect(scans).toEqual([]);
