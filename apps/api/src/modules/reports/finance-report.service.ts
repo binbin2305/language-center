@@ -16,6 +16,9 @@ type Row = FinanceReportDto['rows'][number];
 const zero = (): Totals => ({ revenue: 0, totalDue: 0, outstanding: 0, overdue: 0, totalDiscount: 0 });
 const NONE = 'none';
 
+/** '2026-10' → 'Tháng 10/2026'. */
+const monthLabel = (key: string) => `Tháng ${key.slice(5, 7)}/${key.slice(0, 4)}`;
+
 /** FR-RPT-04 (D26). Read-only aggregation over invoices and payments. */
 @Injectable()
 export class FinanceReportService {
@@ -80,7 +83,7 @@ export class FinanceReportService {
 
     const labels = await this.labels(q.groupBy, [...acc.keys()]);
     const rows: Row[] = [...acc.entries()]
-      .map(([key, v]) => ({ key, label: labels.get(key) ?? (key === NONE ? 'Khác' : key), ...v }))
+      .map(([key, v]) => ({ key, label: labels.get(key) ?? (key === NONE ? 'Khác' : q.groupBy === 'month' ? monthLabel(key) : key), ...v }))
       .sort((a, b) => (q.groupBy === 'month' ? a.key.localeCompare(b.key) : a.label.localeCompare(b.label)));
     const totals = rows.reduce<Totals>((s, r) => {
       for (const k of Object.keys(s) as (keyof Totals)[]) s[k] += r[k];

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces';
-import type { ExportReportQuery, ReportTypeParam } from '@lc/shared';
+import { formatVnd, type ExportReportQuery, type ReportTypeParam } from '@lc/shared';
 import { PdfService } from '../../common/pdf/pdf.service';
 import { AcademicReportService } from './academic-report.service';
 import { AdmissionsReportService } from './admissions-report.service';
@@ -13,6 +13,8 @@ interface Table {
   title: string;
   headers: string[];
   rows: Cell[][];
+  /** Column indexes holding VND amounts: formatted in the PDF, kept numeric in xlsx. */
+  money?: number[];
 }
 
 const EMPTY = 'Không có dữ liệu';
@@ -69,7 +71,10 @@ export class ExportService {
         return {
           title: 'Báo cáo học tập',
           headers: ['Lớp', 'Giáo viên', 'Số học viên', 'Điểm trung bình', 'Tỷ lệ đạt'],
-          rows: r.rows.map((x) => [x.classCode, x.teacherName ?? '', x.students, x.averageScore ?? '', pct(x.passRate)]),
+          // The API lists every matching class; with nothing graded in range (all 0 students) export the empty row.
+          rows: r.rows.every((x) => x.students === 0)
+            ? []
+            : r.rows.map((x) => [x.classCode, x.teacherName ?? '', x.students, x.averageScore ?? '', pct(x.passRate)]),
         };
       }
       case 'finance': {
@@ -78,6 +83,7 @@ export class ExportService {
           title: 'Báo cáo tài chính',
           headers: ['Nhóm', 'Doanh thu', 'Tổng phải thu', 'Còn nợ', 'Quá hạn', 'Giảm giá'],
           rows: r.rows.map((x) => [x.label, x.revenue, x.totalDue, x.outstanding, x.overdue, x.totalDiscount]),
+          money: [1, 2, 3, 4, 5],
         };
       }
     }
@@ -99,7 +105,7 @@ export class ExportService {
           table: {
             headerRows: 1,
             widths: t.headers.map(() => '*'),
-            body: [t.headers.map((h) => ({ text: h, bold: true })), ...t.rows.map((r) => r.map(String))],
+            body: [t.headers.map((h) => ({ text: h, bold: true })), ...t.rows.map((r) => r.map((c, i) => (typeof c === 'number' && t.money?.includes(i) ? formatVnd(c) : String(c))))],
           },
         }
       : { table: { headerRows: 1, widths: ['*'], body: [[{ text: t.headers[0], bold: true }], [EMPTY]] } };

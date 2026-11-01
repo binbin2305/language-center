@@ -1,6 +1,6 @@
 import * as ExcelJS from 'exceljs';
 import { ALL_ROLES, Role } from '@lc/shared';
-import { makeCourse, makeLead } from '../factories';
+import { makeClass, makeCourse, makeInvoice, makeLead, makePayment } from '../factories';
 import { loginAs } from '../helpers/auth';
 import { pdfText } from '../helpers/pdf-text';
 import { createTestApp, TestApp } from '../helpers/test-app';
@@ -33,6 +33,11 @@ describe('FR-RPT-05 Xuất báo cáo (GET /reports/:type/export)', () => {
     const c2 = await makeCourse(t.conn);
     await makeLead(t.conn, { interestedCourseId: c1._id, createdAt: new Date('2026-02-10T03:00:00Z') } as never);
     await makeLead(t.conn, { interestedCourseId: c2._id, createdAt: new Date('2026-02-11T03:00:00Z') } as never);
+    // a class with no graded assessment in range: the academic report still lists it with 0 students
+    await makeClass(t.conn, { courseId: c1._id });
+    const inv = await makeInvoice(t.conn, { courseId: c1._id, amountDue: 1_234_500, finalAmount: 1_234_500, balance: 1_234_500 });
+    await t.conn.collection('invoices').updateOne({ _id: inv._id }, { $set: { createdAt: new Date('2026-02-12T03:00:00Z') } });
+    await makePayment(t.conn, { invoiceId: inv._id, amount: 234_500, paidAt: new Date('2026-02-13T03:00:00Z') });
   });
   afterAll(() => t.close());
 
@@ -77,6 +82,28 @@ describe('FR-RPT-05 Xuất báo cáo (GET /reports/:type/export)', () => {
     expect(ws.getRow(2).getCell(1).value).toBe('Không có dữ liệu');
     const p = await exp(manager, 'attendance', `format=pdf&${q}`);
     expect(await pdfText(p.body as Buffer)).toContain('Không có dữ liệu');
+  });
+
+  it('FR-RPT-03/05 học tập: lớp không có điểm trong khoảng (students 0) → xuất "Không có dữ liệu"', async () => {
+    const json = await t.http().get(`/api/v1/reports/academic?from=${FROM}&to=${TO}`).set(auth(manager));
+    expect(json.body.data.rows.length).toBeGreaterThan(0);
+    expect(json.body.data.rows.every((r: { students: number }) => r.students === 0)).toBe(true);
+    const ws = await sheet((await exp(manager, 'academic', `format=xlsx&from=${FROM}&to=${TO}`)).body as Buffer);
+    expect(ws.rowCount).toBe(2);
+    expect(ws.getRow(2).getCell(1).value).toBe('Không có dữ liệu');
+    const p = await exp(manager, 'academic', `format=pdf&from=${FROM}&to=${TO}`);
+    expect(await pdfText(p.body as Buffer)).toContain('Không có dữ liệu');
+  });
+
+  it('FR-RPT-04/05 tài chính: pdf định dạng tiền VND, xlsx giữ số', async () => {
+    const p = await exp(manager, 'finance', `format=pdf&from=${FROM}&to=${TO}`);
+    const text = await pdfText(p.body as Buffer);
+    expect(text).toContain('1.234.500');
+    expect(text).toContain('234.500');
+    expect(text).not.toContain('1234500');
+    const ws = await sheet((await exp(manager, 'finance', `format=xlsx&from=${FROM}&to=${TO}`)).body as Buffer);
+    expect(ws.getRow(2).getCell(2).value).toBe(234_500); // Doanh thu
+    expect(ws.getRow(2).getCell(3).value).toBe(1_234_500); // Tổng phải thu
   });
 
   it('FR-RPT-05 type lạ → 400, lỗi vẫn là JSON', async () => {

@@ -66,6 +66,7 @@ describe('FR-RPT-04 Báo cáo tài chính (GET /reports/finance)', () => {
     expect(by['2026-01'].totalDue).toBe(2_500_000 + 1_500_000); // inv1 + inv4, không VOID
     expect(by['2026-02'].totalDue).toBe(1_000_000);
     expect(r.body.data.rows.map((x: { key: string }) => x.key)).toEqual(['2026-01', '2026-02']);
+    expect(r.body.data.rows.map((x: { label: string }) => x.label)).toEqual(['Tháng 01/2026', 'Tháng 02/2026']);
   });
 
   it('FR-RPT-04 payment VOIDED không tính revenue', async () => {
