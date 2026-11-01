@@ -7,14 +7,13 @@ import { setupOpenApi } from './openapi/setup-openapi';
 
 export function setupApp(app: NestExpressApplication): void {
   // Behind a reverse proxy set TRUST_PROXY so req.ip (login rate limit) is the client, not the proxy.
-  app.set('trust proxy', loadEnv().TRUST_PROXY);
+  const env = loadEnv();
+  app.set('trust proxy', env.TRUST_PROXY);
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new HttpErrorFilter());
   app.use(helmet());
   app.use(cookieParser());
-  app.enableCors({
-    origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
-    credentials: true,
-  });
-  setupOpenApi(app, loadEnv());
+  // An array makes `cors` reflect only a matching Origin; any other origin gets no ACAO header.
+  app.enableCors({ origin: [env.WEB_ORIGIN], credentials: true });
+  setupOpenApi(app, env);
 }
