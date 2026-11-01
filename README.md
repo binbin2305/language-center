@@ -67,4 +67,14 @@ pnpm --filter api seed:demo          # tạo nếu chưa có
 pnpm --filter api seed:demo --reset  # xóa dữ liệu (giữ tài khoản ADMIN) rồi tạo lại
 ```
 
-Mật khẩu chung `Password1`: `manager@center.local`, `staff1@center.local`, `staff2@center.local`, `teacher1..5@center.local`, học viên `HV202600001`…`HV202600060`. Gồm 3 khóa, 6 phòng, 8 lớp (đang học / chờ mở / đã kết thúc), ~200 buổi học, điểm danh và điểm cho buổi đã qua, hóa đơn đủ trạng thái, 15 lead, 1 đợt kiểm tra đầu vào, vài thông báo. Script ghi thẳng vào DB (không qua service); bản seed chính thức qua service là việc của W3-L3.
+Seed chạy qua service thật (Nest application context, đồng hồ được điều khiển đi từ 06/2026 tới ngày demo **2026-11-02**, thứ Hai): lead → chuyển hồ sơ → kiểm tra đầu vào → xếp lớp (có `classHistory`, history gắn lớp, hóa đơn qua InvoiceCreator) → lịch theo tuần → điểm danh, điểm, thu tiền. Chỉ mật khẩu demo được ghi thẳng.
+
+Mật khẩu chung `Password1`: `manager@center.local`, `staff1@center.local`, `staff2@center.local`, `teacher1..5@center.local`, học viên `HV202600001`…`HV202600060`; nếu DB chưa có ADMIN, seed tạo `admin@center.local` (cũng `Password1`). Gồm 3 khóa, 6 phòng, 8 lớp (5 đang học, 1 chờ mở, 1 tạm ngưng, 1 đã kết thúc), lịch 8 tuần cho lớp đang học (4 tuần đã điểm danh, 1 buổi bị hủy), 2 bài đã công bố điểm mỗi lớp đang học, hóa đơn chưa thu / thu một phần / đã thu / quá hạn, HV chờ xếp lớp và 1 đợt kiểm tra đầu vào sắp tới, 15 lead đang theo dõi.
+
+Dữ liệu lớn (NFR-02, chèn thô nhưng đủ field W2):
+
+```bash
+SEED_STUDENTS=5000 SEED_CLASSES=200 pnpm --filter api seed:large   # mặc định 5000 / 200; lớp mã L-xxxx, HV mã HVLxxxxxx
+```
+
+Học viên đăng nhập bằng mã HV hoặc bằng email hồ sơ (không phân biệt hoa/thường). Nếu nhiều HV dùng chung một email (vd. email phụ huynh), đăng nhập bằng email bị từ chối (401) — dùng mã HV. Nhân viên đăng nhập bằng email như cũ.

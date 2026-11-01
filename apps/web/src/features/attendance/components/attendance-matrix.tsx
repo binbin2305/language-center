@@ -1,4 +1,4 @@
-import type { AttendanceDto, SessionDto } from '@lc/shared';
+import type { AttendanceDto, ClassStudentDto, SessionDto } from '@lc/shared';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { STATUS_LABELS } from '@/lib/status';
 import { formatSessionStart } from '../format';
@@ -11,9 +11,18 @@ const TONE: Record<string, string> = {
   UNEXCUSED: 'bg-destructive/15 text-destructive',
 };
 
-/** Rows = students (from the records), columns = the class's sessions; no record = empty cell. */
-export function AttendanceMatrix({ sessions, records }: { sessions: SessionDto[]; records: AttendanceDto[] }) {
+/** Rows = class roster ∪ students with records, columns = the class's sessions; no record = empty cell. */
+export function AttendanceMatrix({
+  sessions,
+  records,
+  roster = [],
+}: {
+  sessions: SessionDto[];
+  records: AttendanceDto[];
+  roster?: ClassStudentDto[];
+}) {
   const students = new Map<string, string>();
+  for (const s of roster) students.set(s.studentId, s.fullName);
   const cell = new Map<string, AttendanceDto['status']>();
   for (const r of records) {
     students.set(r.studentId, r.studentName ?? r.studentId);

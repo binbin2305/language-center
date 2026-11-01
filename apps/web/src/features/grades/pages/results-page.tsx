@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { ResultDto } from '@lc/shared';
 import { DataTable } from '@/components/common/data-table';
+import { EntitySelect } from '@/components/common/entity-select';
 import { OptionSelect } from '@/components/common/option-select';
 import { PageHeader } from '@/components/common/page-header';
 import { useClasses } from '@/features/classes/hooks';
@@ -12,9 +13,11 @@ const LIMIT = 20;
 
 export default function ResultsPage() {
   const [classId, setClassId] = useState('');
+  const [courseId, setCourseId] = useState('');
+  const [studentId, setStudentId] = useState('');
   const [page, setPage] = useState(1);
   const classes = useClasses({ limit: 100 });
-  const q = useResults({ classId: classId || undefined, page, limit: LIMIT });
+  const q = useResults({ classId: classId || undefined, courseId: courseId || undefined, studentId: studentId || undefined, page, limit: LIMIT });
   const rows = useMemo(() => q.data?.data ?? [], [q.data]);
 
   const columns = useMemo<ColumnDef<ResultDto>[]>(() => {
@@ -43,7 +46,8 @@ export default function ResultsPage() {
   return (
     <section>
       <PageHeader title="Kết quả học tập" />
-      <div className="mb-4 w-full max-w-xs">
+      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="w-full max-w-xs">
         <OptionSelect
           aria-label="Lớp"
           allLabel="Tất cả lớp"
@@ -54,6 +58,31 @@ export default function ResultsPage() {
           }}
           options={(classes.data?.data ?? []).map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` }))}
         />
+      </div>
+      <div className="w-full max-w-xs">
+        <EntitySelect
+          entity="course"
+          aria-label="Khóa học"
+          placeholder="Tất cả khóa"
+          value={courseId || null}
+          onChange={(id) => {
+            setCourseId(id ?? '');
+            setPage(1);
+          }}
+        />
+      </div>
+      <div className="w-full max-w-xs">
+        <EntitySelect
+          entity="student"
+          aria-label="Học viên"
+          placeholder="Tất cả học viên"
+          value={studentId || null}
+          onChange={(id) => {
+            setStudentId(id ?? '');
+            setPage(1);
+          }}
+        />
+      </div>
       </div>
       <DataTable
         columns={columns}

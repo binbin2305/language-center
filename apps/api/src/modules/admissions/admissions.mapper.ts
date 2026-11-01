@@ -28,7 +28,7 @@ export function toLeadDto(l: LeadLean, createdByName?: string): LeadDto {
 
 export type StudentLean = Student & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 
-export function toStudentDto(s: StudentLean): StudentDto {
+export function toStudentDto(s: StudentLean, currentClasses: StudentDto['currentClasses']): StudentDto {
   return {
     id: s._id.toString(),
     code: s.code,
@@ -50,14 +50,14 @@ export function toStudentDto(s: StudentLean): StudentDto {
       uploadedBy: d.uploadedBy.toString(),
     })),
     note: s.note ?? null,
-    currentClasses: [], // D24: filled by StudentsService (L-01)
+    currentClasses,
     createdAt: s.createdAt.toISOString(),
     updatedAt: s.updatedAt.toISOString(),
   };
 }
 
-export function toStudentBriefDto(s: StudentLean): StudentBriefDto {
-  return { id: s._id.toString(), code: s.code, fullName: s.fullName, dob: toDateOnly(s.dob), phone: s.phone, status: s.status, currentClasses: [] };
+export function toStudentBriefDto(s: StudentLean, currentClasses: StudentDto['currentClasses']): StudentBriefDto {
+  return { id: s._id.toString(), code: s.code, fullName: s.fullName, dob: toDateOnly(s.dob), phone: s.phone, status: s.status, currentClasses };
 }
 
 export type EnrollmentLean = Enrollment & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };

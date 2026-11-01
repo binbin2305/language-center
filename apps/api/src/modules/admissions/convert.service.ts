@@ -97,7 +97,7 @@ export class ConvertService {
     });
 
     return {
-      student: toStudentDto(result.student),
+      student: toStudentDto(result.student, []),
       tempPassword: result.tempPassword,
       enrollmentId: result.enrollmentId.toString(),
     };

@@ -11,7 +11,8 @@
     "seed": "ts-node scripts/seed.ts",
     "dev:mongo": "ts-node scripts/dev-mongo.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "seed:demo": "ts-node scripts/seed-demo.ts"
+    "seed:demo": "ts-node scripts/seed-demo.ts",
+    "seed:large": "ts-node scripts/seed-large.ts"
   },
   "dependencies": {
     "@lc/shared": "workspace:^",

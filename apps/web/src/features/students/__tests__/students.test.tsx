@@ -29,6 +29,7 @@ const student = (over: Record<string, unknown> = {}) => ({
     },
   ],
   note: null,
+  currentClasses: [],
   createdAt: '2026-10-01T01:00:00.000Z',
   updatedAt: '2026-10-01T01:00:00.000Z',
   enrollments: [],
@@ -43,6 +44,7 @@ const brief = {
   dob: '2005-03-14',
   phone: '0912345678',
   status: 'ACTIVE',
+  currentClasses: [],
 };
 
 beforeAll(() => {
@@ -79,6 +81,27 @@ describe('danh sách học viên (FR-ADM-05)', () => {
       vi.useRealTimers();
     }
     await waitFor(() => expect(queries).toEqual([null, 'ngu']));
+  });
+
+  it('/students có cột "Lớp hiện tại" hiển thị "IELTS-01, JPN-N5-01" (R26)', async () => {
+    server.use(
+      http.get('*/api/v1/students', () =>
+        HttpResponse.json(
+          page([
+            student({
+              currentClasses: [
+                { classId: '65000000000000000000c001', code: 'IELTS-01' },
+                { classId: '65000000000000000000c002', code: 'JPN-N5-01' },
+              ],
+            }),
+          ]),
+        ),
+      ),
+      http.get('*/api/v1/courses', () => HttpResponse.json(page([]))),
+    );
+    renderApp({ user: makeUser(Role.ACADEMIC_STAFF), route: '/students' });
+    expect(await screen.findByRole('columnheader', { name: 'Lớp hiện tại' })).toBeInTheDocument();
+    expect(await screen.findByText('IELTS-01, JPN-N5-01')).toBeInTheDocument();
   });
 
   it('GV thấy danh sách rút gọn và không có nút Sửa ở hồ sơ', async () => {

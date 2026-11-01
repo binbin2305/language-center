@@ -46,6 +46,12 @@ export default function StudentsPage() {
       },
       { id: 'dob', header: 'Ngày sinh', meta: { hideOnMobile: true }, cell: ({ row }) => formatDate(row.original.dob) },
       { accessorKey: 'phone', header: 'SĐT' },
+      {
+        id: 'currentClasses',
+        header: 'Lớp hiện tại',
+        meta: { hideOnMobile: true },
+        cell: ({ row }) => row.original.currentClasses.map((c) => c.code).join(', ') || '—',
+      },
       { id: 'status', header: 'Trạng thái', cell: ({ row }) => <StatusBadge group="student" value={row.original.status} /> },
     ],
     [],
