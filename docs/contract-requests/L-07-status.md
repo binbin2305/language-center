@@ -18,7 +18,10 @@ The CR files live on `lane/L-HARDENING`. Their "Fixed in" lines are recorded her
 - **/results:** when the class list is known (`classId`, or the teacher's or student's classes), `$or: [{classId:{$in}}, {classHistory:{$in}}]` runs first. The exact `cid` match after `$unwind` is kept.
 
 ## Deploy note
-Run `pnpm --filter api migrate:attendance-start-at` once, after deploying. Until it runs, legacy attendance rows have no `startAt` and do not show up in `/attendance` date filters.
+`pnpm --filter api migrate:attendance-start-at` is a **pre-traffic step**. Run it right after deploying, at a low-traffic time; it scans every attendance row once. Until it has run:
+- legacy rows without `startAt` **are missing from every date-filtered query**: `GET /attendance?from|to` and `GET /attendance/summary?from|to`, totals included;
+- in an **unranged** `GET /attendance` they are counted and listed (no 500), with `sessionStartAt` read from their session (page rows only). They sort after every migrated row, because a missing `startAt` sorts last in descending order;
+- an unranged `/attendance/summary` counts them.
 
 ## For Task M (L-HARDENING)
 - Flip the two `it.failing` tests `CR L-HARDENING-1 …` in `apps/api/test/security/headers.security-spec.ts` to `it`.

@@ -68,6 +68,8 @@ describe('FR-ATT-04 Lịch sử và tổng hợp điểm danh', () => {
     const cancelled = await makeSession(t.conn, {
       classId: x.cls._id, startAt: new Date('2026-03-02T11:00:00Z'), endAt: new Date('2026-03-02T13:00:00Z'),
       status: SessionStatus.CANCELLED, cancelReason: 'nghỉ lễ',
+      // Realistic: attendance on a cancelled session only exists when it was taken (early window) before the cancel.
+      attendanceTakenAt: new Date('2026-03-02T10:50:00Z'),
     });
     await models(t.conn).Attendance.create({
       sessionId: cancelled._id, classId: x.cls._id, studentId: x.st._id, enrollmentId: x.enr._id, status: S.UNEXCUSED,
@@ -89,6 +91,32 @@ describe('FR-ATT-04 Lịch sử và tổng hợp điểm danh', () => {
       studentName: x.st.fullName, classCode: x.cls.code, sessionStartAt: x.sessions[2]!.startAt.toISOString(),
     });
     expect(res.body.data[0]._id).toBeUndefined();
+  });
+
+  it('FR-ATT-04 R12 bản ghi kiểu cũ (chưa migrate, không có startAt) → danh sách không lọc ngày vẫn 200 với sessionStartAt đúng', async () => {
+    const x = await seed([S.PRESENT]);
+    const se = await makeSession(t.conn, { classId: x.cls._id, startAt: new Date('2026-02-20T11:00:00Z'), endAt: new Date('2026-02-20T13:00:00Z') });
+    await t.conn.collection('attendances').insertOne({
+      sessionId: se._id, classId: x.cls._id, studentId: x.st._id, enrollmentId: x.enr._id, status: S.LATE, history: [],
+    });
+    const res = await get(`?classId=${x.cls._id}`, await staff());
+    expect(res.status).toBe(200);
+    expect(res.body.meta.total).toBe(2);
+    const legacy = res.body.data.find((r: { sessionId: string }) => r.sessionId === String(se._id));
+    expect(legacy).toMatchObject({ status: S.LATE, sessionStartAt: '2026-02-20T11:00:00.000Z' });
+  });
+
+  it('FR-ATT-04 R11 GV (bộ lọc phạm vi không rỗng) khi có bản ghi lớp khác → meta.total = số bản ghi lớp mình', async () => {
+    const teacher = await loginAs(t, Role.TEACHER);
+    const mine = await seed([S.PRESENT, S.LATE, S.EXCUSED]);
+    await models(t.conn).Class.updateOne({ _id: mine.cls._id }, { teacherId: teacher.user._id });
+    await seed([S.PRESENT, S.PRESENT]);
+    const all = await models(t.conn).Attendance.countDocuments();
+    const res = await get('', teacher.token);
+    expect(res.status).toBe(200);
+    expect(all).toBeGreaterThan(3);
+    expect(res.body.meta.total).toBe(3);
+    expect(res.body.data).toHaveLength(3);
   });
 
   it('FR-ATT-04 HV chỉ thấy của mình (studentId người khác trong query → bị ghi đè, không lộ)', async () => {

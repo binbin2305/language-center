@@ -53,6 +53,7 @@ describe('FR-SCH-04 FR-SCH-05 Sửa và hủy buổi học', () => {
 
     it('FR-SCH-04 R12 đổi giờ buổi đã có bản ghi điểm danh -> attendance.startAt cập nhật cùng transaction', async () => {
       const s = await seed();
+      // Raw rows on a never-taken session: the API locks taken sessions, so the sync guards legacy/never-taken rows.
       const base = { sessionId: s.session._id, classId: s.cls._id, enrollmentId: new Types.ObjectId(), status: 'PRESENT', history: [] };
       await t.conn.collection('attendances').insertMany([
         { ...base, studentId: new Types.ObjectId(), startAt: s.session.startAt },
