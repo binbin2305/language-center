@@ -16,10 +16,10 @@ import { AcademicContent, AdmissionsContent, AttendanceContent, FinanceContent }
 import { useAcademicReport, useAdmissionsReport, useAttendanceReport, useFinanceReport } from '../hooks';
 import { PRESETS, presetRange, type Preset } from '../range';
 
-const TABS: { value: ReportTypeParam; label: string; course: boolean; cls: boolean }[] = [
+const TABS: { value: ReportTypeParam; label: string; course: boolean; cls: boolean; teacher?: boolean }[] = [
   { value: 'admissions', label: 'Tuyển sinh', course: true, cls: false },
   { value: 'attendance', label: 'Chuyên cần', course: true, cls: true },
-  { value: 'academic', label: 'Học tập', course: true, cls: true },
+  { value: 'academic', label: 'Học tập', course: true, cls: true, teacher: true },
   { value: 'finance', label: 'Tài chính', course: true, cls: true },
 ];
 
@@ -45,16 +45,20 @@ export default function ReportsPage() {
   const [custom, setCustom] = useState({ from: '', to: '' });
   const [courseId, setCourseId] = useState<string | null>(null);
   const [classId, setClassId] = useState<string | null>(null);
+  const [teacherId, setTeacherId] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<'month' | 'course' | 'class'>('month');
 
   const range = preset === 'custom' ? custom : presetRange(preset, new Date());
-  const ready = Boolean(range.from && range.to) && range.to >= range.from;
+  const rangeFilled = Boolean(range.from && range.to);
+  const rangeInvalid = rangeFilled && range.to < range.from;
+  const ready = rangeFilled && !rangeInvalid;
   const cfg = TABS.find((t) => t.value === tab)!;
   const params: ReportParams = {
     from: range.from,
     to: range.to,
     courseId: courseId ?? undefined,
     classId: cfg.cls ? classId ?? undefined : undefined,
+    teacherId: cfg.teacher ? teacherId ?? undefined : undefined,
     groupBy: tab === 'finance' ? groupBy : undefined,
   };
   const on = allowed && ready;
@@ -92,12 +96,16 @@ export default function ReportsPage() {
         {preset === 'custom' ? (
           <>
             <Input type="date" aria-label="Từ ngày" className="w-40" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
-            <Input type="date" aria-label="Đến ngày" className="w-40" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+            <Input type="date" aria-label="Đến ngày" className="w-40" aria-invalid={rangeInvalid ? true : undefined} aria-describedby={rangeInvalid ? 'range-error' : undefined} value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
+            {rangeInvalid ? <p id="range-error" className="w-full text-sm text-destructive">Ngày kết thúc phải sau hoặc bằng ngày bắt đầu</p> : null}
           </>
         ) : null}
         <div className="w-56"><EntitySelect entity="course" value={courseId} onChange={setCourseId} placeholder="Khóa học" aria-label="Lọc theo khóa học" /></div>
         {cfg.cls ? (
           <div className="w-56"><EntitySelect entity="class" value={classId} onChange={setClassId} placeholder="Lớp" aria-label="Lọc theo lớp" /></div>
+        ) : null}
+        {cfg.teacher ? (
+          <div className="w-56"><EntitySelect entity="teacher" value={teacherId} onChange={setTeacherId} placeholder="Giáo viên" aria-label="Lọc theo giáo viên" /></div>
         ) : null}
         {tab === 'finance' ? (
           <OptionSelect
@@ -110,7 +118,7 @@ export default function ReportsPage() {
         ) : null}
       </FilterBar>
       <div className="mt-4">
-        {!ready ? <p className="text-sm text-muted-foreground">Chọn khoảng thời gian hợp lệ.</p> : null}
+        {!ready && !rangeInvalid ? <p className="text-sm text-muted-foreground">Chọn khoảng thời gian hợp lệ.</p> : null}
         {ready && tab === 'admissions' ? <AdmissionsContent q={admissions} /> : null}
         {ready && tab === 'attendance' ? <AttendanceContent q={attendance} /> : null}
         {ready && tab === 'academic' ? <AcademicContent q={academic} /> : null}

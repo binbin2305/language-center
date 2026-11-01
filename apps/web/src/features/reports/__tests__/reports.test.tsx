@@ -16,6 +16,8 @@ vi.mock('recharts', async (orig) => {
   };
 });
 
+Element.prototype.hasPointerCapture ??= () => false;
+
 const T = { timeout: 10_000 };
 const COURSE = '65000000000000000000c001';
 const EMPTY = 'Không có dữ liệu thống kê cho khoảng thời gian này';
@@ -217,5 +219,148 @@ describe('báo cáo - các tab', () => {
     }
     expect(screen.getByRole('img', { name: /Biểu đồ/ })).toBeInTheDocument();
     expect(calls[0].get('groupBy')).toBe('month');
+  });
+});
+
+const TEACHER = '65000000000000000000d001';
+const CLASS = '65000000000000000000e001';
+const academicBody = {
+  rows: [{ classId: 'a', courseId: COURSE, teacherId: TEACHER, classCode: 'LOP-H1', teacherName: 'Cô Lan', students: 12, averageScore: 7.5, passRate: 0.8 }],
+  distribution: { EXCELLENT: 1, GOOD: 2, FAIR: 3, AVERAGE: 4, FAIL: 5 },
+  passRate: 0.8,
+  failRate: 0.2,
+};
+const attendanceBody = {
+  byClass: [{ classId: CLASS, classCode: 'LOP-A1', sessions: 4, records: 40, attendanceRate: 0.9 }],
+  byStudent: [],
+  overThreshold: [],
+};
+const page = (data: unknown[]) => HttpResponse.json({ data, meta: { page: 1, limit: 20, total: data.length } });
+
+describe('báo cáo - bộ lọc bổ sung và bảo vệ (L-03)', () => {
+  it('FR-RPT-03 tab Học tập có bộ lọc GV → gửi teacherId', async () => {
+    spy('*/api/v1/reports/admissions', admissions);
+    const calls = spy('*/api/v1/reports/academic', academicBody);
+    server.use(http.get('*/api/v1/teachers', () => page([{ id: TEACHER, code: 'GV001', fullName: 'Cô Lan' }])));
+    open();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Học tập' }, T));
+    await screen.findByRole('cell', { name: 'LOP-H1' }, T);
+    expect(calls[0].get('teacherId')).toBeNull();
+    await userEvent.click(screen.getByRole('combobox', { name: 'Lọc theo giáo viên' }));
+    await userEvent.click(await screen.findByRole('option', { name: /Cô Lan/ }, T));
+    await waitFor(() => expect(calls.at(-1)!.get('teacherId')).toBe(TEACHER));
+  });
+
+  it('FR-RPT-02 lọc lớp → classId', async () => {
+    spy('*/api/v1/reports/admissions', admissions);
+    const calls = spy('*/api/v1/reports/attendance', attendanceBody);
+    server.use(http.get('*/api/v1/classes', () => page([{ id: CLASS, code: 'LOP-A1', name: 'Lớp A1' }])));
+    open();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Chuyên cần' }, T));
+    await screen.findByRole('cell', { name: 'LOP-A1' }, T);
+    await userEvent.click(screen.getByRole('combobox', { name: 'Lọc theo lớp' }));
+    await userEvent.click(await screen.findByRole('option', { name: /LOP-A1/ }, T));
+    await waitFor(() => expect(calls.at(-1)!.get('classId')).toBe(CLASS));
+  });
+
+  it('FR-RPT-04 chọn nhóm "Theo khóa" → groupBy=course', async () => {
+    spy('*/api/v1/reports/admissions', admissions);
+    const calls = spy('*/api/v1/reports/finance', finance);
+    open();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Tài chính' }, T));
+    await screen.findByTestId('stat-Doanh thu', {}, T);
+    await userEvent.click(screen.getByRole('combobox', { name: 'Nhóm theo' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Theo khóa' }, T));
+    await waitFor(() => expect(calls.at(-1)!.get('groupBy')).toBe('course'));
+  });
+
+  it('FR-RPT-05 xuất Excel tab Chuyên cần → reports/attendance/export?format=xlsx…', async () => {
+    spy('*/api/v1/reports/admissions', admissions);
+    spy('*/api/v1/reports/attendance', attendanceBody);
+    const hits: URL[] = [];
+    server.use(
+      http.get('*/api/v1/reports/attendance/export', ({ request }) => {
+        hits.push(new URL(request.url));
+        return new HttpResponse(new Uint8Array([80, 75]), { headers: { 'Content-Type': 'application/octet-stream' } });
+      }),
+    );
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    open();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Chuyên cần' }, T));
+    await screen.findByRole('cell', { name: 'LOP-A1' }, T);
+    await userEvent.click(screen.getByRole('button', { name: 'Xuất Excel' }));
+    await waitFor(() => expect(hits).toHaveLength(1));
+    expect(hits[0].pathname).toMatch(/reports\/attendance\/export$/);
+    expect([hits[0].searchParams.get('format'), hits[0].searchParams.get('from'), hits[0].searchParams.get('to')]).toEqual(['xlsx', '2026-11-01', '2026-11-18']);
+  });
+
+  it('lỗi 500 → thông báo lỗi + nút "Thử lại" gọi lại', async () => {
+    let n = 0;
+    server.use(
+      http.get('*/api/v1/reports/admissions', () => {
+        n += 1;
+        return n === 1
+          ? HttpResponse.json({ error: { code: 'INTERNAL', message: 'x' } }, { status: 500 })
+          : HttpResponse.json({ data: admissions });
+      }),
+    );
+    open();
+    expect(await screen.findByRole('alert', {}, T)).toHaveTextContent('Không tải được dữ liệu');
+    await userEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(await screen.findByRole('cell', { name: 'IELTS Foundation' }, T)).toBeInTheDocument();
+    expect(n).toBe(2);
+  });
+
+  it('to < from → lỗi tại trường "Đến ngày", không gửi request', async () => {
+    const calls = spy('*/api/v1/reports/admissions', admissions);
+    open();
+    await screen.findByRole('cell', { name: 'IELTS Foundation' }, T);
+    const before = calls.length;
+    await userEvent.click(screen.getByRole('button', { name: 'Tùy chọn' }));
+    fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-04-10' } });
+    fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-03-05' } });
+    const to = screen.getByLabelText('Đến ngày');
+    await waitFor(() => expect(to).toHaveAttribute('aria-invalid', 'true'));
+    expect(screen.getByText('Ngày kết thúc phải sau hoặc bằng ngày bắt đầu')).toBeInTheDocument();
+    expect(to).toHaveAccessibleDescription('Ngày kết thúc phải sau hoặc bằng ngày bắt đầu');
+    await new Promise((r) => setTimeout(r, 100));
+    expect(calls).toHaveLength(before);
+  });
+
+  it('TEACHER vào /reports → chuyển về /', async () => {
+    const calls = spy('*/api/v1/reports/admissions', admissions);
+    renderApp({ route: '/reports', user: makeUser('TEACHER') });
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: 'Báo cáo' })).toBeNull());
+    expect(calls).toHaveLength(0);
+  });
+
+  it('thẻ "Quá hạn" có chú thích "trên hóa đơn tạo trong khoảng"', async () => {
+    spy('*/api/v1/reports/admissions', admissions);
+    spy('*/api/v1/reports/finance', finance);
+    open();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Tài chính' }, T));
+    const card = await screen.findByTestId('stat-Quá hạn', {}, T);
+    expect(within(card).getByText(/trên hóa đơn tạo trong khoảng/)).toBeInTheDocument();
+  });
+
+  it('R8 hàng courseId "none"/"Khác" hiển thị như hàng thường', async () => {
+    spy('*/api/v1/reports/admissions', {
+      ...admissions,
+      rows: [...admissions.rows, { courseId: 'none', courseName: 'Khác', leads: 0, newProfiles: 2, conversionRate: 0, enrolled: 0, waiting: 0 }],
+    });
+    open();
+    expect(await screen.findByRole('cell', { name: 'Khác' }, T)).toBeInTheDocument();
+    expect(document.querySelector('a[href*="none"]')).toBeNull();
+  });
+
+  it('series biểu đồ (reports) dùng fill "var(--chart-N)", không có mã hex', async () => {
+    spy('*/api/v1/reports/admissions', admissions);
+    open();
+    await screen.findByRole('cell', { name: 'IELTS Foundation' }, T);
+    const chart = screen.getByRole('img', { name: /Biểu đồ/ });
+    expect(chart.innerHTML).toMatch(/var\(--chart-1\)/);
+    expect(chart.innerHTML).not.toMatch(/#[0-9a-fA-F]{6}\b/);
   });
 });

@@ -31,6 +31,12 @@
     --info: 192 91% 36%;
     --info-foreground: 0 0% 100%;
     --radius: 0.5rem;
+    /* Chart series: full colours (used as var(--chart-N) in SVG fill/stroke). */
+    --chart-1: #2563eb;
+    --chart-2: #d97706;
+    --chart-3: #059669;
+    --chart-4: #7c3aed;
+    --chart-5: #e11d48;
   }
 
   .dark {
@@ -59,6 +65,11 @@
     --warning-foreground: 220 49% 8%;
     --info: 189 94% 43%;
     --info-foreground: 220 49% 8%;
+    --chart-1: #60a5fa;
+    --chart-2: #fbbf24;
+    --chart-3: #34d399;
+    --chart-4: #a78bfa;
+    --chart-5: #fb7185;
   }
 
   * {
