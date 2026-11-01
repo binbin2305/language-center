@@ -173,6 +173,22 @@ describe('FR-FEE-06 FR-FEE-07 Tra cứu hóa đơn, phụ thu, phiếu thu', () 
     await get(`/payments/${p._id}/receipt.pdf`, admin.token).expect(403);
   });
 
+  it('FR-FEE-07: receipt lỗi 403/404 -> Content-Type application/json, body là error envelope', async () => {
+    const a = await student();
+    const b = await student();
+    const inv = await makeInvoice(t.conn, { studentId: a.st._id });
+    const p = await makePayment(t.conn, { invoiceId: inv._id });
+    const notMine = await get(`/payments/${p._id}/receipt.pdf`, b.token).expect(404);
+    expect(notMine.headers['content-type']).toMatch(/^application\/json/);
+    expect(notMine.body.error.code).toBe('NOT_FOUND');
+    const missing = await get(`/payments/${new Types.ObjectId()}/receipt.pdf`, staff.token).expect(404);
+    expect(missing.headers['content-type']).toMatch(/^application\/json/);
+    expect(missing.body.error.code).toBe('NOT_FOUND');
+    const forbidden = await get(`/payments/${p._id}/receipt.pdf`, teacher.token).expect(403);
+    expect(forbidden.headers['content-type']).toMatch(/^application\/json/);
+    expect(forbidden.body.error.code).toBe('FORBIDDEN');
+  });
+
   it('FR-FEE-06 FR-FEE-07: A mọi route -> 403; T/H không tạo phụ thu', async () => {
     const inv = await makeInvoice(t.conn);
     const body = { studentId: String(inv.studentId), description: 'x', amountDue: 1000, dueDate: '2026-01-20' };
