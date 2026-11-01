@@ -176,3 +176,5 @@ Final review: 0 Critical, 1 Important (NODE_ENV fail-open guards), minors; ONE f
 Final fix wave done (cc3288e..3325b65); gate green per report (security 319, web 534, e2e 942, pnpm e2e 34); re-review dispatched
 Final fix wave: re-review all 4 addressed, no new breakage. Controller merge-gate verification started on 3325b65.
 STOPPED by user request 2026-11-02 before controller gate verification/tag/push. Handoff: docs/superpowers/handoff-wave4-final.md
+RESUMED: controller gate on 3325b65 under caffeinate → EXIT 0: shared 103, api unit 56, web 534, api e2e 942 (64 suites), security 319 (7 suites), merge-gate tests ok, fr-coverage --strict 68/68. (coverage 98.89/95.33, pnpm e2e 34/34 ×2, perf PASS from Task M on cc3288e; fix wave re-ran pnpm e2e 34.)
+Wave 4 done: TASK.md W4 ticked, tag w4, pushed. Remaining minors → post-W4 backlog (handoff-post-w4.md).

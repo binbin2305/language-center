@@ -202,19 +202,19 @@ Sở hữu: `features/home` (trang chủ GV & HV). Các trang `/me/*` thuộc la
 
 ### L-E2E — Playwright
 Sở hữu: `e2e/**` trừ `e2e/a11y/**` (D32). Chạy với Mongo tạm qua `dev-mongo.ts` + seed + build thật (D29, không docker).
-- [~] **X-01** NVHV: tiếp nhận → phát hiện trùng → tạo hồ sơ → HV đăng nhập lần đầu đổi mật khẩu.
-- [~] **X-02** NVHV: tạo đợt kiểm tra → GV chấm → NVHV xếp lớp từ danh sách chờ → HV xác nhận lớp.
-- [~] **X-03** NVHV: tạo lớp → tạo lịch lặp (gặp xung đột, sửa giờ) → GV thấy lịch dạy.
-- [~] **X-04** GV (viewport 375): điểm danh buổi hôm nay → sửa một HV → HV thấy lịch sử.
-- [~] **X-05** GV: tạo bài, nhập nháp, xác nhận → HV xem kết quả + tải phiếu điểm.
-- [~] **X-06** NVHV: đề xuất giảm giá → QL duyệt → NVHV thu tiền 2 lần → PAID → QL xem báo cáo tài chính và xuất Excel.
+- [x] **X-01** NVHV: tiếp nhận → phát hiện trùng → tạo hồ sơ → HV đăng nhập lần đầu đổi mật khẩu.
+- [x] **X-02** NVHV: tạo đợt kiểm tra → GV chấm → NVHV xếp lớp từ danh sách chờ → HV xác nhận lớp.
+- [x] **X-03** NVHV: tạo lớp → tạo lịch lặp (gặp xung đột, sửa giờ) → GV thấy lịch dạy.
+- [x] **X-04** GV (viewport 375): điểm danh buổi hôm nay → sửa một HV → HV thấy lịch sử.
+- [x] **X-05** GV: tạo bài, nhập nháp, xác nhận → HV xem kết quả + tải phiếu điểm.
+- [x] **X-06** NVHV: đề xuất giảm giá → QL duyệt → NVHV thu tiền 2 lần → PAID → QL xem báo cáo tài chính và xuất Excel.
 
 ### L-HARDENING
 Sở hữu: `apps/api/test/security/**`, `apps/api/test/perf/**`, `apps/api/src/openapi/**`, `e2e/a11y/**`, `README.md`, `docs/hardening/**`; `docs/DECISIONS.md` chỉ thêm dưới `## Wave 4 hardening notes` (D32).
-- [~] **H-01 Bảo mật:** test tự động duyệt mọi route đã đăng ký (`DiscoveryService`) và khẳng định: không có route thiếu `@Roles`; gọi không token → 401; HV gọi mọi route GET có `:id` với id của HV khác → 404/403 (không 200). Rate limit login. Header helmet.
-- [~] **H-02 Hiệu năng (NFR-02):** `seed:large` + script đo p95 cho 10 endpoint danh sách chính; `explain()` xác nhận dùng index (không COLLSCAN).
-- [~] **H-03 Accessibility:** `@axe-core/playwright` trên 10 màn hình chính, 0 lỗi serious/critical.
-- [~] **H-04 Tài liệu:** `README.md` (cài đặt, chạy, tài khoản seed), cập nhật `docs/DECISIONS.md`, Postman/OpenAPI (`@nestjs/swagger` sinh từ zod qua `zod-to-openapi`) tại `/api/docs`.
+- [x] **H-01 Bảo mật:** test tự động duyệt mọi route đã đăng ký (`DiscoveryService`) và khẳng định: không có route thiếu `@Roles`; gọi không token → 401; HV gọi mọi route GET có `:id` với id của HV khác → 404/403 (không 200). Rate limit login. Header helmet.
+- [x] **H-02 Hiệu năng (NFR-02):** `seed:large` + script đo p95 cho 10 endpoint danh sách chính; `explain()` xác nhận dùng index (không COLLSCAN).
+- [x] **H-03 Accessibility:** `@axe-core/playwright` trên 10 màn hình chính, 0 lỗi serious/critical.
+- [x] **H-04 Tài liệu:** `README.md` (cài đặt, chạy, tài khoản seed), cập nhật `docs/DECISIONS.md`, Postman/OpenAPI (`@nestjs/swagger` sinh từ zod qua `zod-to-openapi`) tại `/api/docs`.
 
 **Merge gate cuối:** toàn bộ test (unit, integration, FE, E2E, security) xanh; coverage đạt NFR-07; mọi FR trong PRD có ít nhất một test chứa mã FR (script `scripts/fr-coverage.sh` grep mã FR trong PRD và trong `**/*.spec.ts|*.test.tsx|e2e` → liệt kê FR thiếu = 0).
 
