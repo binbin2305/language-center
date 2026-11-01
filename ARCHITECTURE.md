@@ -154,7 +154,8 @@ Một helper duy nhất mỗi module: `scopeFilter(user): FilterQuery`. Ví dụ
 - `studentClassIds(user, mode)`:
   - `mode='current'` → lớp có enrollment `ENROLLED` của HV. Dùng cho: lịch học (buổi tương lai), xác nhận lớp, danh sách lớp hiện tại.
   - `mode='history'` → lớp có bất kỳ enrollment nào của HV với `classId != null` (ENROLLED, TRANSFERRED, RESERVED, COMPLETED, CANCELLED). Dùng cho: lịch sử điểm danh, kết quả học tập, phiếu điểm, hóa đơn, buổi học đã qua.
-- `teacherStudentIds(user)` = HV có enrollment `ENROLLED` hoặc `COMPLETED` trong `teacherClassIds(user)`.
+- `teacherStudentIds(user)` (D38, R7, R9) = HV có enrollment (`ENROLLED`|`COMPLETED`|`TRANSFERRED` **và** `classId ∈ teacherClassIds(user)`) **hoặc** (≠ `CANCELLED` **và** `classHistory ∩ teacherClassIds(user) ≠ ∅`). Dùng cho: hồ sơ / danh sách học viên.
+- `teacherCurrentStudentIds(user)` (R9) = HV có enrollment `ENROLLED` hoặc `COMPLETED` với `classId ∈ teacherClassIds(user)`. Dùng cho: tra cứu hóa đơn của GV (FR-FEE-06).
 
 ### 4.7 Thời gian
 `ClockService.now()` là nguồn thời gian duy nhất (test override). Lưu `Date` UTC. "Ngày" (dueDate, khóa điểm, "hôm nay") tính theo `Asia/Ho_Chi_Minh` qua helper `vnDay()` trong shared.

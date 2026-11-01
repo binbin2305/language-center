@@ -72,6 +72,26 @@ describe('FR-FEE-06/07 Tra cứu hóa đơn, phụ thu, phiếu thu', () => {
     }
   });
 
+  it('FR-FEE-06 R9: HV chuyển A→B — GV lớp cũ A không thấy hóa đơn (404/rỗng), GV lớp B thấy (chỉ status/balance)', async () => {
+    const teacherA = await loginAs(t, Role.TEACHER);
+    const teacherB = await loginAs(t, Role.TEACHER);
+    const clsA = await makeClass(t.conn, { teacherId: teacherA.user._id });
+    const clsB = await makeClass(t.conn, { courseId: clsA.courseId, teacherId: teacherB.user._id });
+    const st = await makeStudent(t.conn);
+    const old = await makeEnrollment(t.conn, { studentId: st._id, courseId: clsA.courseId, classId: clsA._id, classHistory: [clsA._id], status: 'TRANSFERRED' });
+    await makeEnrollment(t.conn, { studentId: st._id, courseId: clsA.courseId, classId: clsB._id, classHistory: [clsB._id], status: 'ENROLLED', transferredFromId: old._id });
+    const inv = await makeInvoice(t.conn, { studentId: st._id, enrollmentId: old._id, classId: clsA._id, amountDue: 2_000_000 });
+
+    const listA = await get('/invoices', teacherA.token).expect(200);
+    expect(listA.body.data.map((x: { id: string }) => x.id)).not.toContain(String(inv._id));
+    await get(`/invoices/${inv._id}`, teacherA.token).expect(404);
+
+    const one = (await get(`/invoices/${inv._id}`, teacherB.token).expect(200)).body.data;
+    expect(one).toMatchObject({ id: String(inv._id), balance: 2_000_000 });
+    expect(one).toHaveProperty('status');
+    for (const k of ['payments', 'amountPaid', 'discount', 'amountDue', 'finalAmount']) expect(one).not.toHaveProperty(k);
+  });
+
   it('FR-FEE-06: GV xem hóa đơn HV ngoài lớp -> 404', async () => {
     const inv = await makeInvoice(t.conn);
     await get(`/invoices/${inv._id}`, teacher.token).expect(404);

@@ -13,14 +13,17 @@ function dedupe(list: Array<Types.ObjectId | null | undefined>): Types.ObjectId[
 }
 
 /**
- * D38 (Ruling R7): ENROLLED|COMPLETED|TRANSFERRED enrollments seated now (`classId`) or ever (`classHistory`, R22)
- * in one of the classes — a transferred-out row keeps `classId` = the old class, so its teacher keeps the student.
- * Both branches are indexed ({ classId, status } and { classHistory }).
+ * D38 (Rulings R7, R9) — profile/list scope: (ENROLLED|COMPLETED|TRANSFERRED and `classId` ∈ classes) or
+ * (not CANCELLED and `classHistory` ∩ classes ≠ ∅, R22). A transferred-out row keeps `classId` = the old class;
+ * a RESERVED / resumed (WAITING_CLASS, classId null) stint keeps its class in classHistory.
+ * Branches use { classId, status } and { classHistory } respectively.
  */
 export function teacherStudentsFilter(classIds: Types.ObjectId[]): FilterQuery<Enrollment> {
   return {
-    status: { $in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED, EnrollmentStatus.TRANSFERRED] },
-    $or: [{ classId: { $in: classIds } }, { classHistory: { $in: classIds } }],
+    $or: [
+      { classId: { $in: classIds }, status: { $in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED, EnrollmentStatus.TRANSFERRED] } },
+      { classHistory: { $in: classIds }, status: { $ne: EnrollmentStatus.CANCELLED } },
+    ],
   };
 }
 
@@ -64,11 +67,21 @@ export class ScopeService {
     return dedupe(rows.flatMap((r) => [r.classId, ...(r.classHistory ?? [])]));
   }
 
-  /** D38/R7: students ENROLLED, COMPLETED or TRANSFERRED out of the teacher's classes, including classes they were seated in before (R22). */
+  /** D38/R9: students the teacher may open (profile, /students list) — current or former students of their classes. */
   async teacherStudentIds(userId: Types.ObjectId): Promise<Types.ObjectId[]> {
     const classIds = await this.teacherClassIds(userId);
     if (classIds.length === 0) return [];
     const rows = await this.enrollments.find(teacherStudentsFilter(classIds), { studentId: 1 }).lean();
+    return dedupe(rows.map((r) => r.studentId));
+  }
+
+  /** R9 (FR-FEE-06 "HV lớp mình"): students ENROLLED or COMPLETED with `classId` in the teacher's classes — invoices. */
+  async teacherCurrentStudentIds(userId: Types.ObjectId): Promise<Types.ObjectId[]> {
+    const classIds = await this.teacherClassIds(userId);
+    if (classIds.length === 0) return [];
+    const rows = await this.enrollments
+      .find({ classId: { $in: classIds }, status: { $in: [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED] } }, { studentId: 1 })
+      .lean();
     return dedupe(rows.map((r) => r.studentId));
   }
 }

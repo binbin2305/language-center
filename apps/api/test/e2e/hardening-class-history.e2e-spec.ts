@@ -115,6 +115,14 @@ describe('FR-CLS-12 R22 backfill classHistory', () => {
     await m().Enrollment.deleteOne({ _id: enrollmentId });
   });
 
+  it('classHistory null (dữ liệu hỏng) → sau migrate = [classId], chạy lại updated 0', async () => {
+    const cls = new Types.ObjectId();
+    const id = await legacy({ classId: cls, classHistory: null });
+    await runMigrateClassHistory(t.conn);
+    expect(ids((await raw().findOne({ _id: id }))?.classHistory)).toEqual([String(cls)]);
+    expect((await runMigrateClassHistory(t.conn)).updated).toBe(0);
+  });
+
   it('enrollments có index { classHistory: 1 }', async () => {
     const list = (await raw().indexes()) as Array<{ key: Record<string, number> }>;
     expect(list.some((i) => JSON.stringify(i.key) === JSON.stringify({ classHistory: 1 }))).toBe(true);
@@ -170,7 +178,7 @@ describe('FR-STU-01 D38 GV thấy HV đã chuyển khỏi lớp mình', () => {
     expect((res.body.data as Array<{ id: string }>).map((s) => s.id)).toContain(String(st._id));
   });
 
-  it('HV có enrollment CANCELLED/WAITING_CLASS với classHistory lớp GV → vẫn 404', async () => {
+  it('R9 HV có enrollment CANCELLED với classHistory lớp GV → vẫn 404', async () => {
     const teacher = await loginAs(t, Role.TEACHER);
     const cls = await makeClass(t.conn, { teacherId: teacher.user._id });
     const st = await makeStudent(t.conn);
@@ -211,12 +219,57 @@ describe('FR-STU-01 D38 GV thấy HV đã chuyển khỏi lớp mình', () => {
     expect((await t.http().get(`/api/v1/students/${st._id}`).set(auth(other.token))).status).toBe(404);
   });
 
-  it('truy vấn HV của GV dùng index (không COLLSCAN)', async () => {
-    const plan = await models(t.conn)
+  it('R9 assign A → bảo lưu (RESERVED) → GV lớp A 200; học lại (WAITING_CLASS) → vẫn 200', async () => {
+    const staff = auth((await loginAs(t, Role.ACADEMIC_STAFF)).token);
+    const teacherA = await loginAs(t, Role.TEACHER);
+    const clsA = await makeClass(t.conn, { teacherId: teacherA.user._id });
+    const st = await makeStudent(t.conn);
+    const e = await makeEnrollment(t.conn, {
+      studentId: st._id,
+      courseId: clsA.courseId,
+      status: EnrollmentStatus.WAITING_CLASS,
+      placementLevel: 'A1',
+      waitingSince: t.clock.now(),
+    });
+    const act = (action: string, body: object = {}) => t.http().post(`/api/v1/enrollments/${e._id}/${action}`).set(staff).send(body);
+    const detail = async () => (await t.http().get(`/api/v1/students/${st._id}`).set(auth(teacherA.token))).status;
+    await act('assign', { classId: String(clsA._id) }).expect(201);
+    await act('withdraw', { status: EnrollmentStatus.RESERVED, reason: 'Bảo lưu vì công tác' }).expect(201);
+    expect(await detail()).toBe(200);
+    await act('resume').expect(201);
+    expect((await models(t.conn).Enrollment.findById(e._id).lean())).toMatchObject({ status: EnrollmentStatus.WAITING_CLASS, classId: null });
+    expect(await detail()).toBe(200);
+  });
+
+  it('truy vấn HV của GV: OR dùng classId_1_status_1 và classHistory_1 (không COLLSCAN)', async () => {
+    // Enough ENROLLED rows in other classes that a status-only plan is not competitive.
+    const docs = Array.from({ length: 600 }, () => {
+      const other = new Types.ObjectId();
+      return {
+        studentId: new Types.ObjectId(),
+        courseId: new Types.ObjectId(),
+        classId: other,
+        classHistory: [other],
+        status: EnrollmentStatus.ENROLLED,
+        history: [],
+      };
+    });
+    await t.conn.collection('enrollments').insertMany(docs);
+    const plan = (await models(t.conn)
       .Enrollment.find(teacherStudentsFilter([new Types.ObjectId(), new Types.ObjectId()]), { studentId: 1 })
-      .explain('queryPlanner');
-    const text = JSON.stringify(plan);
-    expect(text).toContain('IXSCAN');
-    expect(text).not.toContain('COLLSCAN');
+      .explain('queryPlanner')) as unknown as { queryPlanner: { winningPlan: unknown } };
+    const stages: Array<{ stage: string; indexName?: string }> = [];
+    const walk = (n: unknown): void => {
+      if (!n || typeof n !== 'object') return;
+      const node = n as { stage?: string; indexName?: string; inputStage?: unknown; inputStages?: unknown[] };
+      if (node.stage) stages.push({ stage: node.stage, indexName: node.indexName });
+      walk(node.inputStage);
+      (node.inputStages ?? []).forEach(walk);
+    };
+    walk(plan.queryPlanner.winningPlan);
+    expect(stages.map((x) => x.stage)).toContain('OR');
+    expect(stages.map((x) => x.stage)).not.toContain('COLLSCAN');
+    const used = stages.filter((x) => x.stage === 'IXSCAN').map((x) => x.indexName).sort();
+    expect(used).toEqual(['classHistory_1', 'classId_1_status_1']);
   });
 });
