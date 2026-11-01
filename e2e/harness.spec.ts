@@ -2,12 +2,24 @@ import { vnDay } from '../packages/shared/src/time';
 import { ACCOUNTS, DEMO_TODAY } from './fixtures/accounts';
 import { apiAs, findTeacherWithUntakenSessionToday } from './fixtures/api';
 import { loginAs } from './fixtures/auth';
-import { expect, test } from './fixtures/clock';
+import { expect, mobile, newClockedContext, test } from './fixtures/clock';
 
 test.describe('Harness E2E', () => {
   test('M đăng nhập thấy dashboard h1', async ({ page }) => {
-    await loginAs(page, ACCOUNTS.manager);
+    await loginAs(page, ACCOUNTS.manager, { expectHome: 'Tổng quan' });
     await expect(page.getByRole('heading', { level: 1, name: 'Tổng quan' })).toBeVisible();
+  });
+
+  test('context thứ hai từ newClockedContext (GV 375px) cũng có vnDay(Date.now()) = DEMO_TODAY', async ({ browser }) => {
+    const ctx = await newClockedContext(browser, mobile);
+    try {
+      const page = await ctx.newPage();
+      await loginAs(page, ACCOUNTS.teacher1, { expectHome: 'Hôm nay của tôi' });
+      const browserNow = await page.evaluate(() => Date.now());
+      expect(vnDay(new Date(browserNow))).toBe(DEMO_TODAY);
+    } finally {
+      await ctx.close();
+    }
   });
 
   test('ngày trong trình duyệt (vnDay(Date.now())) = DEMO_TODAY và dashboard có ≥ 1 buổi hôm nay', async ({ page }) => {
