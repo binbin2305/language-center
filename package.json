@@ -11,7 +11,7 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm -r --if-present test:e2e",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && tsc -p e2e/tsconfig.json",
     "test:scripts": "bash scripts/__tests__/merge-gate.test.sh",
     "fr-coverage": "bash scripts/fr-coverage.sh",
     "test:security": "pnpm -r --if-present test:security",

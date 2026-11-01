@@ -1,18 +1,25 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Browser, type BrowserContext, type BrowserContextOptions, type Page } from '@playwright/test';
 import { CLOCK_START } from './accounts';
 
 /**
- * Base test for every E2E spec (D30): the page clock starts at CLOCK_START — the same instant as the
- * api's APP_CLOCK_START — before any navigation, and keeps running (not paused).
+ * Base test for every E2E spec (D30): the `context` fixture (and so `page`) gets a clock starting at
+ * CLOCK_START — the api's APP_CLOCK_START — before any navigation; the clock keeps running (not paused).
  */
 export const test = base.extend({
-  page: async ({ page }, use) => {
-    await page.clock.install({ time: new Date(CLOCK_START) });
-    await use(page);
+  context: async ({ context }, use) => {
+    await context.clock.install({ time: new Date(CLOCK_START) });
+    await use(context);
   },
 });
 
 export { expect };
+
+/** Extra context (multi-role specs) with the same clock as the `context` fixture; the caller closes it. */
+export async function newClockedContext(browser: Browser, opts?: BrowserContextOptions): Promise<BrowserContext> {
+  const ctx = await browser.newContext(opts);
+  await ctx.clock.install({ time: new Date(CLOCK_START) });
+  return ctx;
+}
 
 /** D31: teacher/student specs — `test.use(mobile)`. */
 export const mobile = { viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true };

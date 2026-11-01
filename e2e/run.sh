@@ -16,7 +16,9 @@ cd "$ROOT"
 MONGO_PORT=27027
 API_PORT=3100
 WEB_PORT=4173
-CLOCK_START='2026-11-02T13:00:00Z' # keep in sync with e2e/fixtures/accounts.ts CLOCK_START (D30)
+# Single source of truth for the controlled clock (D30): e2e/fixtures/accounts.ts CLOCK_START.
+CLOCK_START="$(sed -n "s/^export const CLOCK_START = '\([^']*\)';.*/\1/p" e2e/fixtures/accounts.ts)"
+[ -n "$CLOCK_START" ] || { echo "e2e: cannot read CLOCK_START from e2e/fixtures/accounts.ts" >&2; exit 1; }
 
 for port in "$MONGO_PORT" "$API_PORT" "$WEB_PORT"; do
   if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -31,6 +33,7 @@ mkdir -p "$TMP/mongo" "$TMP/uploads"
 MONGO_PID=''
 API_PID=''
 WEB_PID=''
+FG_PID=''
 
 # Background jobs get their own process group, so a whole tree (pnpm/vite children) can be signalled.
 set -m
@@ -49,6 +52,7 @@ stop() {
 cleanup() {
   local rc=$?
   set +e
+  stop "$FG_PID"
   stop "$WEB_PID"
   stop "$API_PID"
   stop "$MONGO_PID"
@@ -64,12 +68,29 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# wait_for <seconds> <description> <command...>
+# Foreground step run as a background job + wait, so the INT/TERM traps fire at once and cleanup can
+# signal its whole process group (under set -m a true foreground child would not get our TERM).
+run_fg() {
+  "$@" &
+  FG_PID=$!
+  local rc=0
+  wait "$FG_PID" || rc=$?
+  FG_PID=''
+  return "$rc"
+}
+
+# wait_for <seconds> <description> "<pids that must stay alive>" <command...>
 wait_for() {
-  local secs="$1" what="$2"
-  shift 2
+  local secs="$1" what="$2" pids="$3"
+  shift 3
   for _ in $(seq 1 $((secs * 2))); do
     if "$@" >/dev/null 2>&1; then return 0; fi
+    for pid in $pids; do
+      if ! kill -0 "$pid" 2>/dev/null; then
+        echo "e2e: process $pid exited while waiting for $what" >&2
+        return 1
+      fi
+    done
     sleep 0.5
   done
   echo "e2e: timed out after ${secs}s waiting for $what" >&2
@@ -89,30 +110,28 @@ export TRUST_PROXY=false
 echo "e2e: [1/5] mongod :$MONGO_PORT (data $TMP/mongo)"
 (cd apps/api && MONGO_DEV_PORT="$MONGO_PORT" MONGO_DATA_DIR="$TMP/mongo" exec ./node_modules/.bin/ts-node scripts/dev-mongo.ts) >"$TMP/mongo.log" 2>&1 &
 MONGO_PID=$!
-wait_for 180 "MongoDB ready" grep -q 'MongoDB ready' "$TMP/mongo.log"
+wait_for 180 "MongoDB ready" "$MONGO_PID" grep -q 'MongoDB ready' "$TMP/mongo.log"
 MONGODB_URI="$(sed -n 's/^MONGODB_URI=//p' "$TMP/mongo.log" | head -n 1)"
 [ -n "$MONGODB_URI" ] || { echo "e2e: no MONGODB_URI in mongo.log" >&2; exit 1; }
 export MONGODB_URI
 echo "e2e:       $MONGODB_URI"
 
 echo "e2e: [2/5] seed:demo --reset"
-pnpm --filter api seed:demo --reset
+run_fg pnpm --filter api seed:demo --reset
 
 echo "e2e: [3/5] clean real build"
 rm -rf apps/api/dist apps/web/dist
-env -u NODE_ENV pnpm build # NODE_ENV=e2e would make vite bundle React in development mode
+run_fg env -u NODE_ENV pnpm build # NODE_ENV=e2e would make vite bundle React in development mode
 
 echo "e2e: [4/5] api :$API_PORT, web preview :$WEB_PORT"
 (cd apps/api && PORT="$API_PORT" exec node dist/main) >"$TMP/api.log" 2>&1 &
 API_PID=$!
 (cd apps/web && API_PROXY_TARGET="http://localhost:$API_PORT" exec env -u NODE_ENV ./node_modules/.bin/vite preview --port "$WEB_PORT" --strictPort) >"$TMP/web.log" 2>&1 &
 WEB_PID=$!
-wait_for 90 "http://localhost:$WEB_PORT/api/v1/health" curl -sf "http://localhost:$WEB_PORT/api/v1/health"
+wait_for 90 "http://localhost:$WEB_PORT/api/v1/health" "$MONGO_PID $API_PID $WEB_PID" curl -sf "http://localhost:$WEB_PORT/api/v1/health"
 
 echo "e2e: [5/5] playwright test $*"
-set +e
-pnpm exec playwright test -c e2e/playwright.config.ts "$@"
-PW_RC=$?
-set -e
+PW_RC=0
+run_fg pnpm exec playwright test -c e2e/playwright.config.ts "$@" || PW_RC=$?
 PW_DONE=1
 exit "$PW_RC"

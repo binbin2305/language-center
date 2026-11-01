@@ -3,17 +3,17 @@ export const runId: string = `${Date.now().toString(36)}${Math.floor(Math.random
   .toString(36)
   .padStart(2, '0')}`;
 
-let seq = 0;
+/** 5 digits fixed for this run (seed-demo/seed-large use 07/08/09 prefixes; e2e uses 03). */
+const RUN_DIGITS = String(Number.parseInt(runId, 36) % 100_000).padStart(5, '0');
+let phoneSeq = 0;
+let emailSeq = 0;
 
-/** Vietnamese mobile number (0 + 9 digits), unique within this run. */
+/** VN mobile `03` + 5 run digits + 3-digit counter: unique within a run (max 1000 per run, then throws). */
 export const uniquePhone = (): string => {
-  seq += 1;
-  const n = (Date.now() * 100 + seq) % 1_000_000_00;
-  return `08${String(n).padStart(8, '0')}`;
+  if (phoneSeq >= 1000) throw new Error('uniquePhone: more than 1000 phones in one run');
+  const n = phoneSeq++;
+  return `03${RUN_DIGITS}${String(n).padStart(3, '0')}`;
 };
 
-/** `<prefix>.<runId>.<seq>@e2e.local` */
-export const uniqueEmail = (p: string): string => {
-  seq += 1;
-  return `${p}.${runId}.${seq}@e2e.local`;
-};
+/** `<prefix>.<runId>.<n>@e2e.local` */
+export const uniqueEmail = (p: string): string => `${p}.${runId}.${++emailSeq}@e2e.local`;
